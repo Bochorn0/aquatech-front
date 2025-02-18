@@ -58,7 +58,7 @@ function ProductTableList() {
               <TableCell>
                 <Box display="flex" alignItems="center">
                   <img
-                    src={`https://images.tuya.com/${product.icon}`}
+                    src={`https://images.tuyacn.com/${product.icon}`}
                     alt={product.name}
                     style={{ width: '40px', height: '40px', marginRight: '10px' }}
                   />
