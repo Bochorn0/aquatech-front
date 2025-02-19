@@ -9,17 +9,9 @@ import {
   CircularProgress,
   Paper,
   Chip,
-  Divider,
 } from '@mui/material';
 import axios from 'axios';
-import {
-  WaterDrop as WaterIcon,
-  Speed as SpeedIcon,
-  FilterList as FilterIcon,
-  Cloud as CloudIcon,
-} from '@mui/icons-material';
-
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://164.92.95.176:3009/api';
+import {API_BASE_URL, ICON_URL} from '../config/config';
 
 function ProductDetails() {
   const { id } = useParams();
@@ -30,7 +22,7 @@ function ProductDetails() {
     const fetchProductDetails = async () => {
       try {
         const response = await axios.get(`${API_BASE_URL}/products/${id}`);
-        setProduct(response.data.result);
+        setProduct(response.data);
       } catch (error) {
         console.error('Error fetching product details:', error);
       } finally {
@@ -79,6 +71,11 @@ function ProductDetails() {
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom>
         {product.name} ({product.product_name})
+        <img
+          src={`${ICON_URL}/${product.icon}`}
+          alt={product.name}
+          style={{ width: '40px', height: '40px', marginRight: '10px' }}
+        />
       </Typography>
 
       {/* General Product Info */}

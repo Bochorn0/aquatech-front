@@ -17,9 +17,8 @@ import {
   Timer as TimerIcon,
 } from '@mui/icons-material';
 import axios from 'axios';
+import {API_BASE_URL, ICON_URL} from '../config/config';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://164.92.95.176:3009/api';
-const ICON_URL = 'https://images.tuyacn.com';
 
 function Dashboard() {
   const [products, setProducts] = useState([]);

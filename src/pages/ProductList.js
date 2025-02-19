@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography, Chip, CircularProgress, Box } from '@mui/material';
 import axios from 'axios';
-
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://164.92.95.176:3009/api';
+import {API_BASE_URL, ICON_URL} from '../config/config';
 
 function ProductTableList() {
   const [products, setProducts] = useState([]);
@@ -58,7 +57,7 @@ function ProductTableList() {
               <TableCell>
                 <Box display="flex" alignItems="center">
                   <img
-                    src={`https://images.tuyacn.com/${product.icon}`}
+                    src={`${ICON_URL}/${product.icon}`}
                     alt={product.name}
                     style={{ width: '40px', height: '40px', marginRight: '10px' }}
                   />
