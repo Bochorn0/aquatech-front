@@ -19,7 +19,7 @@ import {
   Cloud as CloudIcon,
 } from '@mui/icons-material';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3009/api';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://164.92.95.176:3009/api';
 
 function ProductDetails() {
   const { id } = useParams();

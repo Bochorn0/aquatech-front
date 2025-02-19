@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography, Chip, CircularProgress, Box } from '@mui/material';
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3009/api';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://164.92.95.176:3009/api';
 
 function ProductTableList() {
   const [products, setProducts] = useState([]);
