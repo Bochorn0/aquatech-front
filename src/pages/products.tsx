@@ -1,23 +1,15 @@
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+
+import Button from '@mui/material/Button';
 import React, { useState, useEffect } from 'react';
 
-import {
-  Box,
-  Grid,
-  Card,
-  Chip,
-  Button,
-  Typography,
-  CardContent,
-  CardActions,
-  CircularProgress,
-} from '@mui/material';
+import { Box, Chip, Table, Paper, TableRow, TableCell, TableBody, TableHead, Typography, TableContainer, CircularProgress } from '@mui/material';
 
 import {ICON_URL, API_BASE_URL} from '../config/config';
 
 
-function Products() {
+function ProductTableList() {
   const [products, setProducts] = useState([{id: '1', name: '', online: true, icon: '', status: [{value:'offline'}]}]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -42,83 +34,75 @@ function Products() {
 
   if (loading) {
     return (
-      <Box
-        display="flex"
-        justifyContent="center"
-        alignItems="center"
-        minHeight="80vh"
-      >
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
         <CircularProgress />
       </Box>
     );
   }
 
   return (
-    <Grid container spacing={3}>
-      {products.map((product) => (
-        <Grid item xs={12} sm={6} md={4} key={product.id}>
-          <Card>
-            <CardContent>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                {/* Product name and status */}
-                <Typography variant="h6" component="div">
-                  {product.name}
-                </Typography>
+    <TableContainer component={Paper}>
+      <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
+        Product List
+      </Typography>
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableCell>Product</TableCell>
+            <TableCell>Status</TableCell>
+            <TableCell>TDS Level</TableCell>
+            <TableCell>Water Flow</TableCell>
+            <TableCell>Filter Life</TableCell>
+            <TableCell>Action</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {products.map((product) => (
+            <TableRow key={product.id}>
+              <TableCell>
+                <Box display="flex" alignItems="center">
+                  <img
+                    src={`${ICON_URL}/${product.icon}`}
+                    alt={product.name}
+                    style={{ width: '40px', height: '40px', marginRight: '10px' }}
+                  />
+                  <Typography variant="body1">{product.name}</Typography>
+                </Box>
+              </TableCell>
+              <TableCell>
                 <Chip
                   label={product.online ? 'Online' : 'Offline'}
                   color={product.online ? 'success' : 'error'}
                   size="small"
                 />
-              </Box>
-
-              {/* Product Icon */}
-              <Box display="flex" justifyContent="center" mb={2}>
-                <img
-                  src={`${ICON_URL}/${product.icon}`}  // Ensure this is a full URL
-                  alt={product.name}
-                  style={{ width: '60px', height: '60px' }}
-                />
-              </Box>
-
-              {/* Metrics */}
-              <Grid container spacing={2}>
-                <Grid item xs={4}>
-                  <Box display="flex" flexDirection="column" alignItems="center">
-                    <Typography variant="body2" color="text.secondary">
-                      TDS: {product.status?.[0]?.value || 'N/A'}
-                    </Typography>
-                  </Box>
-                </Grid>
-                <Grid item xs={4}>
-                  <Box display="flex" flexDirection="column" alignItems="center">
-                    <Typography variant="body2" color="text.secondary">
-                      Flow: {product.status?.[1]?.value || 'N/A'}
-                    </Typography>
-                  </Box>
-                </Grid>
-                <Grid item xs={4}>
-                  <Box display="flex" flexDirection="column" alignItems="center">
-                    <Typography variant="body2" color="text.secondary">
-                      Filter Life: {product.status?.[2]?.value || 'N/A'}%
-                    </Typography>
-                  </Box>
-                </Grid>
-              </Grid>
-            </CardContent>
-            <CardActions>
+              </TableCell>
+              <TableCell>
+                {/* Check if status array exists and has data */}
+                {product.status && product.status[0] ? `${product.status[0]?.value || 'N/A'} ppm` : 'N/A'}
+              </TableCell>
+              <TableCell>
+                {/* Check if status array exists and has data */}
+                {product.status && product.status[1] ? `${product.status[1]?.value || 'N/A'} L/min` : 'N/A'}
+              </TableCell>
+              <TableCell>
+                {/* Check if status array exists and has data */}
+                {product.status && product.status[2] ? `${product.status[2]?.value || 'N/A'}%` : 'N/A'}
+              </TableCell>
+              <TableCell>
               <Button
-                size="small"
-                color="primary"
-                onClick={() => navigate(`/Productos/${product.id}`)}
-              >
-                View Details
-              </Button>
-            </CardActions>
-          </Card>
-        </Grid>
-      ))}
-    </Grid>
+              variant="contained"
+              color="inherit"
+              onClick={() => navigate(`/Productos/${product.id}`)}
+            >
+              Detalles
+            </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 }
 
-export default Products;
+export default ProductTableList;

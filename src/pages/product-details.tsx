@@ -1,6 +1,7 @@
 import axios from 'axios';
 import PropTypes from 'prop-types';
-import { useParams } from 'react-router-dom';
+import Button from '@mui/material/Button';
+import { useParams, useNavigate } from 'react-router-dom';
 import React, { useState, useEffect } from 'react';
 
 import {
@@ -55,6 +56,7 @@ MetricCard.propTypes = {
 };
 
 function ProductDetails() {
+  const navigate = useNavigate();
   const { id } = useParams();
   const [product, setProduct] = useState({
     product_id: '',
@@ -220,6 +222,15 @@ function ProductDetails() {
               title="Work Error"
               value={product.status.find((s) => s.code === 'work_error')?.value === 1 ? 'Error' : 'No Error'}
             />
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Button
+              variant="contained"
+              color="inherit"
+              onClick={() => navigate(`/Productos/Logs/${id}`)}
+            >
+              Detalles
+            </Button>
           </Grid>
         </Grid>
       </Paper>
