@@ -1,11 +1,9 @@
 import Grid from '@mui/material/Unstable_Grid2';
 import Typography from '@mui/material/Typography';
 
-import { _tasks, _posts, _timeline } from 'src/_mock';
 import { DashboardContent } from 'src/layouts/dashboard';
 
 import { AnalyticsCurrentVisits } from '../analytics-current-visits';
-import { AnalyticsOrderTimeline } from '../analytics-order-timeline';
 import { AnalyticsWebsiteVisits } from '../analytics-website-visits';
 import { AnalyticsWidgetSummary } from '../analytics-widget-summary';
 import { AnalyticsTrafficBySite } from '../analytics-traffic-by-site';
@@ -146,7 +144,6 @@ export function OverviewAnalyticsView() {
 
         <Grid xs={12} md={6} lg={8}>
           <h4>Proximamente ...</h4>
-          {/* <AnalyticsTasks title="Tasks" list={_tasks} /> */}
         </Grid>
       </Grid>
     </DashboardContent>

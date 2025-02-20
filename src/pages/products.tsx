@@ -1,18 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+
 import {
+  Box,
   Grid,
   Card,
-  CardContent,
-  CardActions,
+  Chip,
   Button,
   Typography,
-  Chip,
-  Box,
+  CardContent,
+  CardActions,
   CircularProgress,
 } from '@mui/material';
-import axios from 'axios';
-import {API_BASE_URL, ICON_URL} from '../config/config';
+
+import {ICON_URL, API_BASE_URL} from '../config/config';
 
 
 function Products() {
