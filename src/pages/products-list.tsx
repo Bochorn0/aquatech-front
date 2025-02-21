@@ -3,7 +3,7 @@ import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { Box, Chip, Table, Paper, Button, TableRow, TableCell, TableBody, TextField, TableHead, Typography, TableContainer, TablePagination, CircularProgress } from '@mui/material';
+import { Box, Chip, Table, Paper, Stack, Button, Switch, TableRow, TableCell, TableBody, TextField, TableHead, Typography, TableContainer, TablePagination, CircularProgress } from '@mui/material';
 
 import { CONFIG } from 'src/config-global';
 
@@ -26,6 +26,8 @@ function ProductTableList() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
+  const [processing, setProcessing] = useState<Record<string, boolean>>({});
+  const [switchState, setSwitchState] = useState<Record<string, boolean>>({});
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -44,6 +46,35 @@ function ProductTableList() {
     const interval = setInterval(fetchProducts, 300000);
     return () => clearInterval(interval);
   }, []);
+  
+  const handleToggle = async (productId: string) => {
+    if (processing[productId]) return; // Prevent multiple clicks
+  
+    // Show confirmation prompt
+    const confirmFlush = window.confirm('Estas a punto de forzar un flush. estas seguro?');
+  
+    if (!confirmFlush) return; // If the user cancels, do nothing
+  
+    setProcessing((prev) => ({ ...prev, [productId]: true }));
+    setSwitchState((prev) => ({ ...prev, [productId]: true })); // Turn switch ON
+  
+    try {
+      const requestData = { 
+        id: productId,
+        commands: [{ "code": "water_wash", "value": true }]
+      };
+  
+      await axios.post(`${CONFIG.API_BASE_URL}/products/sendCommand`, requestData);
+  
+      console.log(`Command executed for ${productId}`);
+    } catch (error) {
+      console.error('Error executing commands:', error);
+    } finally {
+      setProcessing((prev) => ({ ...prev, [productId]: false }));
+      setSwitchState((prev) => ({ ...prev, [productId]: false })); // Reset switch OFF
+    }
+  };
+  
 
   const handleChangePage = (event: React.MouseEvent<HTMLButtonElement> | null, newPage: number) => {
     setPage(newPage);
@@ -121,7 +152,7 @@ function ProductTableList() {
               <TableCell>Filter Life 3</TableCell>
               <TableCell>Filter Life 4</TableCell>
               <TableCell>Temperature</TableCell>
-              <TableCell>Action</TableCell>
+              <TableCell>Actiones</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -176,13 +207,28 @@ function ProductTableList() {
                 </TableCell>
 
                 <TableCell>
-                  <Button
-                    variant="contained"
-                    color="inherit"
-                    onClick={() => navigate(`/Productos/${product.id}`)}
-                  >
-                    Detalles
-                  </Button>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Chip
+                        label="Flush"
+                        color={(switchState[product.id] || false) ? 'primary' : 'default'}
+                        sx={{ display: 'flex', alignItems: 'center', padding: '5px' }}
+                        icon={
+                          <Switch
+                            title="Force flush"
+                            checked={switchState[product.id] || false} 
+                            onChange={() => handleToggle(product.id)}
+                            disabled={processing[product.id] || false} 
+                          />
+                        }
+                      />
+                      <Button
+                        variant="contained"
+                        color="inherit"
+                        onClick={() => navigate(`/Productos/${product.id}`)}
+                      >
+                      Detalles
+                    </Button>
+                  </Stack>
                 </TableCell>
               </TableRow>
             ))}
