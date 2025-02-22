@@ -64,9 +64,17 @@ function ProductTableList() {
         commands: [{ "code": "water_wash", "value": true }]
       };
   
-      await axios.post(`${CONFIG.API_BASE_URL}/products/sendCommand`, requestData);
-  
-      console.log(`Command executed for ${productId}`);
+      const response = await axios.post(`${CONFIG.API_BASE_URL}/products/sendCommand`, requestData);
+      const { deviceData } = response.data;
+      setProducts((prevProducts) =>  // ✅ Rename callback param to avoid shadowing
+      prevProducts.map((product) =>
+        product.id === deviceData.id ? { ...product, ...deviceData } : product
+      )
+    );
+      
+      console.log('Command executed:', response.data);
+      
+      // console.log(`Command executed for ${productId}`);
     } catch (error) {
       console.error('Error executing commands:', error);
     } finally {
@@ -95,14 +103,14 @@ function ProductTableList() {
       product.name,
       product.online ? 'Online' : 'Offline',
       `${product.status.find(s => s.code === 'tds_out')?.value || 'N/A'} ppm`,
-      `${product.status.find(s => s.code === 'flowrate_total_1')?.value || 'N/A'} L/min`,
-      `${product.status.find(s => s.code === 'flowrate_total_2')?.value || 'N/A'} L/min`,
-      `${product.status.find(s => s.code === 'flowrate_speed_1')?.value || 'N/A'} L/min`,
-      `${product.status.find(s => s.code === 'flowrate_speed_2')?.value || 'N/A'} L/min`,
-      `${product.status.find(s => s.code === 'filter_element_1')?.value || 'N/A'} Days`,
-      `${product.status.find(s => s.code === 'filter_element_2')?.value || 'N/A'} Days`,
-      `${product.status.find(s => s.code === 'filter_element_3')?.value || 'N/A'} Days`,
-      `${product.status.find(s => s.code === 'filter_element_4')?.value || 'N/A'} Days`,
+      `${product.status.find(s => s.code === 'flowrate_total_1')?.value || 'N/A'} L`,
+      `${product.status.find(s => s.code === 'flowrate_total_2')?.value || 'N/A'} L`,
+      `${product.status.find(s => s.code === 'flowrate_speed_1')?.value || 'N/A'} L`,
+      `${product.status.find(s => s.code === 'flowrate_speed_2')?.value || 'N/A'} L`,
+      `${product.status.find(s => s.code === 'filter_element_1')?.value || 'N/A'} H`,
+      `${product.status.find(s => s.code === 'filter_element_2')?.value || 'N/A'} H`,
+      `${product.status.find(s => s.code === 'filter_element_3')?.value || 'N/A'} H`,
+      `${product.status.find(s => s.code === 'filter_element_4')?.value || 'N/A'} H`,
       product.status.find(s => s.code === 'water_overflow')?.value ? 'Yes' : 'No',
       product.status.find(s => s.code === 'water_wash')?.value ? 'Yes' : 'No',
       `${product.status.find(s => s.code === 'temperature')?.value || 'N/A'} °C`
@@ -142,16 +150,16 @@ function ProductTableList() {
             <TableRow>
               <TableCell>Product</TableCell>
               <TableCell>Status</TableCell>
-              <TableCell>TDS Level</TableCell>
-              <TableCell>Flow Permeate</TableCell>
-              <TableCell>Flow Drain</TableCell>
-              <TableCell>Flow Rate Speed 1</TableCell>
-              <TableCell>Flow Rate Speed 2</TableCell>
-              <TableCell>Filter Life 1</TableCell>
-              <TableCell>Filter Life 2</TableCell>
-              <TableCell>Filter Life 3</TableCell>
-              <TableCell>Filter Life 4</TableCell>
-              <TableCell>Temperature</TableCell>
+              <TableCell>TDS</TableCell>
+              <TableCell>Volument Total Producto</TableCell>
+              <TableCell>Volumen Rechazo</TableCell>
+              <TableCell>Flujo Caudal</TableCell>
+              <TableCell>Flujo Rechazo</TableCell>
+              <TableCell>F. Sedimentos</TableCell>
+              <TableCell>F. Carbon Granular</TableCell>
+              <TableCell>F. Carbon Bloque</TableCell>
+              <TableCell>Membrana OI</TableCell>
+              <TableCell>Temp</TableCell>
               <TableCell>Actiones</TableCell>
             </TableRow>
           </TableHead>
@@ -179,28 +187,28 @@ function ProductTableList() {
                   {product.status.find(s => s.code === 'tds_out')?.value || 'N/A'} ppm
                 </TableCell>
                 <TableCell>
-                  {product.status.find(s => s.code === 'flowrate_total_1')?.value || 'N/A'} L/min
+                  {product.status.find(s => s.code === 'flowrate_total_1')?.value || 'N/A'} L
                 </TableCell>
                 <TableCell>
-                  {product.status.find(s => s.code === 'flowrate_total_2')?.value || 'N/A'} L/min
+                  {product.status.find(s => s.code === 'flowrate_total_2')?.value || 'N/A'} L
                 </TableCell>
                 <TableCell>
-                  {product.status.find(s => s.code === 'flowrate_speed_1')?.value || 'N/A'} L/min
+                  {product.status.find(s => s.code === 'flowrate_speed_1')?.value || 'N/A'} L
                 </TableCell>
                 <TableCell>
-                  {product.status.find(s => s.code === 'flowrate_speed_2')?.value || 'N/A'} L/min
+                  {product.status.find(s => s.code === 'flowrate_speed_2')?.value || 'N/A'} L
                 </TableCell>
                 <TableCell>
-                  {product.status.find(s => s.code === 'filter_element_1')?.value || 'N/A'} Days
+                  {product.status.find(s => s.code === 'filter_element_1')?.value || 'N/A'} H
                 </TableCell>
                 <TableCell>
-                  {product.status.find(s => s.code === 'filter_element_2')?.value || 'N/A'} Days
+                  {product.status.find(s => s.code === 'filter_element_2')?.value || 'N/A'} H
                 </TableCell>
                 <TableCell>
-                  {product.status.find(s => s.code === 'filter_element_3')?.value || 'N/A'} Days
+                  {product.status.find(s => s.code === 'filter_element_3')?.value || 'N/A'} H
                 </TableCell>
                 <TableCell>
-                  {product.status.find(s => s.code === 'filter_element_4')?.value || 'N/A'} Days
+                  {product.status.find(s => s.code === 'filter_element_4')?.value || 'N/A'} H
                 </TableCell>
                 <TableCell>
                   {product.status.find(s => s.code === 'temperature')?.value || 'N/A'} °C
