@@ -26,18 +26,28 @@ export const navData = [
   {
     title: 'Productos',
     path: '/productos',
-    icon: icon('ic-cart'),
+    icon: icon('ic-products'),
     info: (
       <Label color="error" variant="inverted">
         +1000
       </Label>
     ),
   },
-  // {
-  //   title: 'Blog',
-  //   path: '/blog',
-  //   icon: icon('ic-blog'),
-  // },
+  {
+    title: 'Reportes',
+    path: '/reportes',
+    icon: icon('ic-analytics'),
+  },
+  {
+    title: 'Regiones',
+    path: '/Regiones',
+    icon: icon('ic-map'),
+    info: (
+      <Label color="error" variant="inverted">
+        +8000
+      </Label>
+    ),
+  },
   {
     title: 'Registrarse',
     path: '/registrarse',
