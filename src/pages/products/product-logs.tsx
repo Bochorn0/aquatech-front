@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 
-import { Box, Chip, Card, Grid, Table, Paper, Checkbox, TableRow, TableCell, TableBody, TableHead, Typography, CardContent, TableContainer, CircularProgress, FormControlLabel } from '@mui/material';
+import { Box, Chip, Card, Grid, Table, Paper, Checkbox, TableRow, TableCell, TableBody, TableHead, Typography, CardContent, TableContainer, CircularProgress, FormControlLabel, TextField, TablePagination } from '@mui/material';
 
 import { CONFIG } from 'src/config-global';
 
@@ -30,12 +30,12 @@ interface DisplayFields {
 }
 
 const defaultFields: DisplayFields = {
-  tds_out: true,
+  tds_out: false,
   flowrate_total_1: false,
   flowrate_total_2: false,
   flowrate_speed_1: true,
   flowrate_speed_2: true,
-  temperature: true
+  temperature: false
 };
 
 // Separate MetricCard Component
@@ -84,7 +84,9 @@ const ProductDetail: React.FC = () => {
   const [displayFields, setDisplayFields] = useState<DisplayFields>(defaultFields);
   const [startDate, setStartDate] = useState<Dayjs | null>(dayjs().startOf('day')); // Start of the day
   const [endDate, setEndDate] = useState<Dayjs | null>(dayjs()); // Current time
-  
+  const [searchTerm, setSearchTerm] = useState<string>(''); // New search state
+  const [page, setPage] = useState<number>(0); // Pagination page
+  const [rowsPerPage, setRowsPerPage] = useState<number>(10); // Pagination rows per page
 
   useEffect(() => {
     const fetchLogs = async () => {
@@ -95,7 +97,9 @@ const ProductDetail: React.FC = () => {
           end_date: endDate ? endDate.valueOf() : dayjs().valueOf(),
           fields: Object.keys(displayFields)
             .filter((key) => displayFields[key as keyof DisplayFields])
-            .join(',')
+            .join(','),
+          page, // Send page to the API
+          limit: rowsPerPage // Send limit for pagination
         };
         console.log('params', params);
         const response = await axios.get(`${CONFIG.API_BASE_URL}/products/${id}/logs`, { params });
@@ -114,7 +118,23 @@ const ProductDetail: React.FC = () => {
     }, 30000); // Refresh every 30 seconds
 
     return () => clearInterval(interval);
-  }, [id, startDate, endDate, displayFields]);
+  }, [id, startDate, endDate, displayFields, page, rowsPerPage]);
+
+  // Filter logs based on search term
+  const filteredLogs = logs.filter((log) => log.code.toLowerCase().includes(searchTerm.toLowerCase()));
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+  };
+
+  const handleChangePage = (event: unknown, newPage: number) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0); // Reset to the first page when rows per page change
+  };
 
   if (loading) {
     return (
@@ -134,12 +154,12 @@ const ProductDetail: React.FC = () => {
           <LocalizationProvider dateAdapter={AdapterDayjs}>
             <Grid container spacing={3}>
               <Grid item xs={12} sm={6} md={4}>
-              <DateTimePicker
-                label="Start Date"
-                value={startDate}
-                onChange={(newValue) => setStartDate(newValue)}
-                slotProps={{ textField: { fullWidth: true } }} 
-              />
+                <DateTimePicker
+                  label="Start Date"
+                  value={startDate}
+                  onChange={(newValue) => setStartDate(newValue)}
+                  slotProps={{ textField: { fullWidth: true } }} 
+                />
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
                 <DateTimePicker
@@ -169,6 +189,13 @@ const ProductDetail: React.FC = () => {
               </Grid>
             ))}
           </Grid>
+          <TextField
+            label="Search Logs"
+            value={searchTerm}
+            onChange={handleSearchChange}
+            fullWidth
+            sx={{ mt: 2 }}
+          />
         </Paper>
 
         <TableContainer component={Paper} sx={{ mt: 4 }}>
@@ -180,22 +207,39 @@ const ProductDetail: React.FC = () => {
               <TableRow>
                 <TableCell>Event Time</TableCell>
                 <TableCell>Code</TableCell>
-                <TableCell>Flow Rate (L/min)</TableCell>
+                <TableCell>Flow Rate (L)</TableCell>
                 <TableCell>Value</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {logs.length > 0 ? (
-                logs.map((log, index) => {
-                  const isFlowRate = log.code.includes('flowrate_speed');
-                  const value = isFlowRate ? `${log.value} L/min` : `${log.value / 10} L/min`;
+              {filteredLogs.length > 0 ? (
+                filteredLogs.map((log, index) => {
+                  const isFlowRate = log.code.includes('flowrate');
+                  const isTemperature = log.code.includes('temperature');
+                  const isTds = log.code === 'tds_out'; // Check for tds_out field
+                  
+                  // For flow rate, always divide by 10
+                  let value = log.value;
+                  if (isFlowRate) {
+                    value = log.value / 10;
+                  }
+
+                  // For temperature, display in °C
+                  let displayValue = '';
+                  if (isTemperature) {
+                    displayValue = `${value} °C`;
+                  } else if (isTds) {
+                    displayValue = `${value} ppm`; // Display tds_out in ppm
+                  } else {
+                    displayValue = `${value} L`; // Default to L for other cases
+                  }
 
                   return (
                     <TableRow key={index}>
                       <TableCell>{new Date(log.event_time).toLocaleString()}</TableCell>
                       <TableCell>{log.code}</TableCell>
                       <TableCell>
-                        <Chip label={value} color={isFlowRate ? 'secondary' : 'primary'} size="small" />
+                        <Chip label={displayValue} color={isFlowRate ? 'secondary' : isTemperature ? 'primary' : 'default'} size="small" />
                       </TableCell>
                       <TableCell>{log.value}</TableCell>
                     </TableRow>
@@ -209,7 +253,17 @@ const ProductDetail: React.FC = () => {
                 </TableRow>
               )}
             </TableBody>
+
           </Table>
+          <TablePagination
+            rowsPerPageOptions={[5, 10, 25]}
+            component="div"
+            count={logs.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handleChangePage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+          />
         </TableContainer>
       </Box>
     </>
