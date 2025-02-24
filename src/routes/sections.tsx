@@ -13,10 +13,10 @@ import { DashboardLayout } from 'src/layouts/dashboard';
 export const HomePage = lazy(() => import('src/pages/home'));
 export const UserPage = lazy(() => import('src/pages/users'));
 export const SignInPage = lazy(() => import('src/pages/sing-in'));
-export const ProductsPage = lazy(() => import('src/pages/products-list'));
+export const ProductsPage = lazy(() => import('src/pages/products'));
 export const ReportGenerator = lazy(() => import('src/pages/reports'));
 export const MapsPage = lazy(() => import('src/pages/maps'));
-export const ProductsDetailPage = lazy(() => import('src/pages/product-details'));
+export const ProductsDetailPage = lazy(() => import('src/pages/products/product-details'));
 export const Page404 = lazy(() => import('src/pages/not_fund'));
 
 // ----------------------------------------------------------------------

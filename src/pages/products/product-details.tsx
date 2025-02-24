@@ -4,9 +4,15 @@ import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 
-import { Box, Chip, Card, Grid, Table, Paper, TableRow, TableCell, TableBody, TableHead, Typography, CardContent, TableContainer, CircularProgress } from '@mui/material';
+import { Box, Chip, Card, Grid, Table, Paper, Checkbox, TableRow, TableCell, TableBody, TableHead, Typography, CardContent, TableContainer, CircularProgress, FormControlLabel } from '@mui/material';
+
+import ProductLogs from './product-logs';
 
 import { CONFIG } from 'src/config-global';
+
+import dayjs, { Dayjs } from 'dayjs';
+import { LocalizationProvider, DateTimePicker } from '@mui/x-date-pickers';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 
 // Interfaces for TypeScript
 
@@ -31,10 +37,6 @@ interface Product {
   time_zone: string;
 }
 
-interface Log {
-  event_time: string;
-  value: number;
-}
 
 interface MetricCardProps {
   title: string;
@@ -102,8 +104,7 @@ const ProductDetail: React.FC = () => {
     model: '',
     time_zone: '',
   });
-  const [logs, setLogs] = useState<Log[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(true); 
 
   useEffect(() => {
     const fetchProductDetails = async () => {
@@ -117,21 +118,10 @@ const ProductDetail: React.FC = () => {
       }
     };
 
-    const fetchLogs = async () => {
-      try {
-        const response = await axios.get(`${CONFIG.API_BASE_URL}/products/${id}/logs`);
-        setLogs(response.data?.list || []);
-      } catch (error) {
-        console.error('Error fetching logs:', error);
-      }
-    };
-
     fetchProductDetails();
-    fetchLogs();
 
     const interval = setInterval(() => {
       fetchProductDetails();
-      fetchLogs();
     }, 30000); // Refresh every 30 seconds
 
     return () => clearInterval(interval);
@@ -271,37 +261,7 @@ const ProductDetail: React.FC = () => {
           </Grid>
         </Paper>
 
-        <TableContainer component={Paper} sx={{ mt: 4 }}>
-          <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
-            Product Logs
-          </Typography>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Event Time</TableCell>
-                <TableCell>Flow Rate (L/min)</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {logs.length > 0 ? (
-                logs.map((log, index) => (
-                  <TableRow key={index}>
-                    <TableCell>{new Date(log.event_time).toLocaleString()}</TableCell>
-                    <TableCell>
-                      <Chip label={`${log.value / 10} L/min`} color="primary" size="small" />
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={2} align="center">
-                    No logs available
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <ProductLogs  />
       </Box>
     </>
   );
