@@ -1,42 +1,114 @@
-import React, { useState } from 'react';
+import axios from 'axios';
+import React, { useState, useEffect } from 'react';
 import { Marker, Geography, Geographies, ComposableMap } from 'react-simple-maps';
+
+import { Box, CircularProgress } from '@mui/material';
+
+import { CONFIG } from 'src/config-global';
+
+const citiesCoordinates = [
+  { name: "Tijuana", lat: 32.5149, long: -117.0172 },
+  { name: "Culiacan", lat: 25.4387, long: -107.3896 },
+  { name: "Cd. Juarez", lat: 31.7619, long: -106.4877 },
+  { name: "Hermosillo", lat: 29.072967, long: -110.9773 },
+];
 
 interface MarkerType {
   name: string;
   total: number;
-  active: number;
-  pending: number;
-  failing: number;
-  coordinates: [number, number]; // Latitude, Longitude
+  activos: number;
+  fallando: number;
+  coordinates: [number, number];
+}
+
+interface Status {
+  code: string;
+  value: any;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  city: string;
+  drive: string;
+  online: boolean;
+  icon: string;
+  status: Status[];
+  [key: string]: any;
 }
 
 const geoUrl = 'https://raw.githubusercontent.com/strotgen/mexico-leaflet/refs/heads/master/states.geojson';
 
-const markers: MarkerType[] = [
-  { name: "Hermosillo", total: 800, active: 700, pending: 50, failing: 50, coordinates: [-110.9773, 29.072967] },
-  { name: "Sinaloa", total: 400, active: 350, pending: 30, failing: 20, coordinates: [-107.3896, 25.4387] },
-  { name: "CDMX", total: 600, active: 500, pending: 60, failing: 40, coordinates: [-99.1332, 19.4326] },
-  { name: "Guadalajara", total: 750, active: 650, pending: 50, failing: 50, coordinates: [-103.3496, 20.6597] },
-  { name: "Monterrey", total: 900, active: 800, pending: 70, failing: 30, coordinates: [-100.3161, 25.6718] },
-];
-
 const MexicoMap: React.FC = () => {
   const [selectedState, setSelectedState] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [markers, setMarkers] = useState<MarkerType[]>([]);
 
-  // Handle state selection
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const response = await axios.get(`${CONFIG.API_BASE_URL}/products/mocked`);
+        const products: Product[] = response.data;
+
+        const newMarkers: MarkerType[] = [];
+
+        citiesCoordinates.forEach((city) => {
+          const cityProducts = products.filter((product) => product.city === city.name);
+
+          if (cityProducts.length > 0) {
+            const activeCount = cityProducts.filter((product) => product.online).length;
+            const failingCount = cityProducts.filter((product) => {
+              const flowrate = product.status.find(s => s.code === 'flowrate_total_2')?.value;
+              return flowrate && flowrate < 2.5;
+            }).length;
+
+            if (city.lat !== undefined && city.long !== undefined) {
+              newMarkers.push({
+                name: city.name,
+                total: cityProducts.length,
+                activos: activeCount,
+                fallando: failingCount,
+                coordinates: [city.long, city.lat], // Ensure correct order [longitude, latitude]
+              });
+            }
+          }
+        });
+
+        console.log('Markers:', newMarkers);
+        setMarkers(newMarkers);
+      } catch (error) {
+        console.error('Error fetching products:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+    const interval = setInterval(fetchProducts, 300000);
+    return () => clearInterval(interval);
+  }, []); // Dependency array remains empty to prevent infinite loops
+
   const handleStateClick = (stateName: string) => {
-    setSelectedState(selectedState === stateName ? null : stateName); // Toggle selection
+    setSelectedState(selectedState === stateName ? null : stateName);
   };
+
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
       <ComposableMap
-        width={600} // Adjusted map size
+        width={600}
         height={450}
         projection="geoMercator"
         projectionConfig={{
-          scale: 1000, // Adjusted scale for the map
-          center: [-102.5528, 23.6345], // Center of Mexico
+          scale: 1000,
+          center: [-102.5528, 23.6345],
         }}
       >
         <Geographies geography={geoUrl}>
@@ -45,14 +117,13 @@ const MexicoMap: React.FC = () => {
               <Geography
                 key={geo.rsmKey}
                 geography={geo}
-                fill="#ddd"
+                fill={selectedState === geo.properties.name ? '#FF5733' : '#ddd'}
                 stroke="#fff"
                 strokeWidth={0.5}
-                onClick={() => handleStateClick(geo.properties.name)} // On Geography click
+                onClick={() => handleStateClick(geo.properties.name)}
                 style={{
                   default: {
                     cursor: 'pointer',
-                    fill: selectedState === geo.properties.name ? '#FF5733' : '#ddd',
                   },
                 }}
               />
@@ -60,19 +131,17 @@ const MexicoMap: React.FC = () => {
           }
         </Geographies>
 
-        {markers
-          .filter((marker) => !selectedState || marker.name === selectedState) // Render only the selected state's marker
-          .map((marker, index) => (
-            <Marker key={index} coordinates={marker.coordinates}>
-              <circle r={5} fill="#FF5733" />
-              <text textAnchor="middle" y={-20} style={{ fontSize: 12, fontFamily: 'Arial', fontWeight: 'bold' }}>
-                {marker.name}
-              </text>
-              <text textAnchor="middle" y={-5} style={{ fontSize: 10, fontFamily: 'Arial' }}>
-                Total: {marker.total}, Active: {marker.active}, Pending: {marker.pending}, Failing: {marker.failing}
-              </text>
-            </Marker>
-          ))}
+        {markers.map((marker, index) => (
+          <Marker key={index} coordinates={marker.coordinates}>
+            <circle r={5} fill="#008F39" />
+            <text textAnchor="middle" y={-20} style={{ fontSize: 12, fontFamily: 'Arial', fontWeight: 'bold' }}>
+              {marker.name}
+            </text>
+            <text textAnchor="middle" y={-5} style={{ fontSize: 10, fontFamily: 'Arial' }}>
+              Total: {marker.total}, Activos: {marker.activos}, `Volumen - 2.5`: {marker.fallando}
+            </text>
+          </Marker>
+        ))}
       </ComposableMap>
     </div>
   );

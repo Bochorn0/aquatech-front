@@ -14,16 +14,6 @@ export const navData = [
     icon: icon('ic-analytics'),
   },
   {
-    title: 'Usuarios',
-    path: '/usuarios',
-    icon: icon('ic-user'),
-    info: (
-      <Label color="error" variant="inverted">
-        +1
-      </Label>
-    ),
-  },
-  {
     title: 'Productos',
     path: '/productos',
     icon: icon('ic-products'),
@@ -34,17 +24,27 @@ export const navData = [
     ),
   },
   {
-    title: 'Reportes',
-    path: '/reportes',
-    icon: icon('ic-analytics'),
-  },
-  {
     title: 'Regiones',
     path: '/Regiones',
     icon: icon('ic-map'),
     info: (
       <Label color="error" variant="inverted">
         +8000
+      </Label>
+    ),
+  },
+  {
+    title: 'Reportes',
+    path: '/reportes',
+    icon: icon('ic-analytics'),
+  },
+  {
+    title: 'Usuarios',
+    path: '/usuarios',
+    icon: icon('ic-user'),
+    info: (
+      <Label color="error" variant="inverted">
+        +1
       </Label>
     ),
   },
