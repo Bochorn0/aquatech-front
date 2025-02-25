@@ -59,26 +59,26 @@ function ReportGenerator() {
     );
   };
 
-  const generateReportData = () => {
-    return products.map((product) => {
-      const rowData: Record<string, string | number | boolean> = {};
-      selectedFields.forEach((field) => {
-        if (field === 'name') rowData['Product'] = product.name;
-        else if (field === 'tds_out') rowData['TDS'] = product.status.find(s => s.code === 'tds_out')?.value || 'N/A';
-        else if (field === 'flowrate_total_1') rowData['Flowrate Total 1'] = product.status.find(s => s.code === 'flowrate_total_1')?.value || 'N/A';
-        else if (field === 'flowrate_total_2') rowData['Flowrate Total 2'] = product.status.find(s => s.code === 'flowrate_total_2')?.value || 'N/A';
-        else if (field === 'flowrate_speed_1') rowData['Flowrate Speed 1'] = product.status.find(s => s.code === 'flowrate_speed_1')?.value || 'N/A';
-        else if (field === 'flowrate_speed_2') rowData['Flowrate Speed 2'] = product.status.find(s => s.code === 'flowrate_speed_2')?.value || 'N/A';
-        else if (field === 'filter_element_1') rowData['Filter Element 1'] = product.status.find(s => s.code === 'filter_element_1')?.value || 'N/A';
-        else if (field === 'filter_element_2') rowData['Filter Element 2'] = product.status.find(s => s.code === 'filter_element_2')?.value || 'N/A';
-        else if (field === 'filter_element_3') rowData['Filter Element 3'] = product.status.find(s => s.code === 'filter_element_3')?.value || 'N/A';
-        else if (field === 'filter_element_4') rowData['Filter Element 4'] = product.status.find(s => s.code === 'filter_element_4')?.value || 'N/A';
-        else if (field === 'temperature') rowData['Temperature'] = product.status.find(s => s.code === 'temperature')?.value || 'N/A';
-        else if (field === 'online') rowData['Online Status'] = product.online ? 'Online' : 'Offline';
-      });
-      return rowData;
+  const generateReportData = () => 
+    products.map((product) => {
+    const rowData: Record<string, string | number | boolean> = {};
+    selectedFields.forEach((field) => {
+      if (field === 'name') rowData.Product = product.name;
+      else if (field === 'tds_out') rowData.TDS = product.status.find(s => s.code === 'tds_out')?.value || 'N/A';
+      else if (field === 'flowrate_total_1') rowData['Flowrate Total 1'] = product.status.find(s => s.code === 'flowrate_total_1')?.value || 'N/A';
+      else if (field === 'flowrate_total_2') rowData['Flowrate Total 2'] = product.status.find(s => s.code === 'flowrate_total_2')?.value || 'N/A';
+      else if (field === 'flowrate_speed_1') rowData['Flowrate Speed 1'] = product.status.find(s => s.code === 'flowrate_speed_1')?.value || 'N/A';
+      else if (field === 'flowrate_speed_2') rowData['Flowrate Speed 2'] = product.status.find(s => s.code === 'flowrate_speed_2')?.value || 'N/A';
+      else if (field === 'filter_element_1') rowData['Filter Element 1'] = product.status.find(s => s.code === 'filter_element_1')?.value || 'N/A';
+      else if (field === 'filter_element_2') rowData['Filter Element 2'] = product.status.find(s => s.code === 'filter_element_2')?.value || 'N/A';
+      else if (field === 'filter_element_3') rowData['Filter Element 3'] = product.status.find(s => s.code === 'filter_element_3')?.value || 'N/A';
+      else if (field === 'filter_element_4') rowData['Filter Element 4'] = product.status.find(s => s.code === 'filter_element_4')?.value || 'N/A';
+      else if (field === 'temperature') rowData.Temperature = product.status.find(s => s.code === 'temperature')?.value || 'N/A';
+      else if (field === 'online') rowData['Online Status'] = product.online ? 'Online' : 'Offline';
     });
-  };
+    return rowData;
+  });
+  
 
   return (
     <Box sx={{ p: 2 }}>

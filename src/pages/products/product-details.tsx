@@ -4,18 +4,13 @@ import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 
-import { Box, Chip, Card, Grid, Table, Paper, Checkbox, TableRow, TableCell, TableBody, TableHead, Typography, CardContent, TableContainer, CircularProgress, FormControlLabel } from '@mui/material';
-
-import ProductLogs from './product-logs';
+import { Box, Chip, Card, Grid, Paper, Typography, CardContent, CircularProgress } from '@mui/material';
 
 import { CONFIG } from 'src/config-global';
 
-import dayjs, { Dayjs } from 'dayjs';
-import { LocalizationProvider, DateTimePicker } from '@mui/x-date-pickers';
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import ProductLogs from './product-logs';
 
 // Interfaces for TypeScript
-
 interface ProductStatus {
   code: string;
   value: string | number;

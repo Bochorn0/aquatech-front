@@ -3,7 +3,8 @@ import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { Box, Chip, Table, Paper, Stack, Button, Switch, Checkbox, TableRow, TableCell, TableBody, TextField, TableHead, Typography, TableContainer, TablePagination, CircularProgress, FormControlLabel } from '@mui/material';
+import { styled } from '@mui/material/styles';
+import { Box, Chip, Grid, Table, Paper, Stack, Button, Switch, Checkbox, TableRow, TableCell, TableBody, TextField, TableHead, Typography, TableContainer, TablePagination, CircularProgress, FormControlLabel } from '@mui/material';
 
 import { CONFIG } from 'src/config-global';
 
@@ -39,6 +40,31 @@ interface DisplayFields {
   temperature: boolean;
 }
 
+const StyledTableContainer = styled(TableContainer)({
+  borderRadius: '12px',
+  boxShadow: '0px 4px 10px rgba(0, 0, 0, 0.1)',
+  overflow: 'hidden',
+});
+
+const StyledTableRow = styled(TableRow)(({ theme }) => ({
+  '&:nth-of-type(odd)': {
+    backgroundColor: theme.palette.action.hover,
+  },
+  '&:hover': {
+    backgroundColor: theme.palette.action.selected,
+  },
+}));
+
+const StyledTableCell = styled(TableCell)({
+  padding: '12px',
+  fontSize: '14px',
+});
+const StyledTableCellHeader = styled(TableCell)({
+  padding: '12px',
+  fontSize: '14px',
+  fontWeight: 'bold',
+});
+
 function ProductTableList() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,10 +84,10 @@ function ProductTableList() {
     volumeReject: true,
     flowRate: true,
     rejectFlow: true,
-    sedimentFilter: true,
-    granularCarbonFilter: true,
-    blockCarbonFilter: true,
-    oiMembrane: true,
+    sedimentFilter: false,
+    granularCarbonFilter: false,
+    blockCarbonFilter: false,
+    oiMembrane: false,
     temperature: true,
   });
   const navigate = useNavigate();
@@ -77,7 +103,6 @@ function ProductTableList() {
         setLoading(false);
       }
     };
-
     fetchProducts();
     const interval = setInterval(fetchProducts, 300000);
     return () => clearInterval(interval);
@@ -116,19 +141,6 @@ function ProductTableList() {
     }
   };
 
-  const handleChangePage = (event: React.MouseEvent<HTMLButtonElement> | null, newPage: number) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
-
-  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(event.target.value);
-    setPage(0);
-  };
 
   const handleFieldToggle = (field: keyof DisplayFields) => {
     setDisplayFields((prev) => ({
@@ -174,78 +186,84 @@ function ProductTableList() {
         <title> {`Productos - ${CONFIG.appName}`}</title>
       </Helmet>
       <Box sx={{ p: 2 }}>
-        <TextField
-          label="Buscar productos"
-          variant="outlined"
-          fullWidth
-          value={searchQuery}
-          onChange={handleSearchChange}
-        />
+        <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
+          Filtrar Productos
+        </Typography>
+        <Chip
+          label="Ver lista de campos disponibles"
+          color='default'
+          sx={{ display: 'flex', alignItems: 'center', padding: '5px' }}
+          icon={
+            <Switch
+            title="Seleccionar Campos a mostrar"
+            checked={showDisplayFields} 
+            onChange={() => setShowDiplayFields(!showDisplayFields)}
+            />
+            }
+          />
       </Box>
-      <Box sx={{ p: 2 }}>
-      <Chip
-        label="Seleccionar Campos a mostrar"
-        color='default'
-        sx={{ display: 'flex', alignItems: 'center', padding: '5px' }}
-        icon={
-          <Switch
-          title="Seleccionar Campos a mostrar"
-          checked={showDisplayFields} 
-          onChange={() => setShowDiplayFields(!showDisplayFields)}
-        />
-        }
-      />
-
-      </Box>
-
-      {/* Field Toggle Section */}
       <Box sx={{ p: 2 }} style={{ display: showDisplayFields ? 'block' : 'none' }}>
         {Object.keys(displayFields).map((field) => (
-          <FormControlLabel
-            key={field}
-            control={
-              <Checkbox
-                id={`checkbox-${field}`}
-                checked={displayFields[field as keyof DisplayFields]}
-                onChange={() => handleFieldToggle(field as keyof DisplayFields)}
-                color="primary" // You can customize the color here
+        <FormControlLabel
+          key={field}
+          control={
+            <Checkbox
+              id={`checkbox-${field}`}
+              checked={displayFields[field as keyof DisplayFields]}
+              onChange={() => handleFieldToggle(field as keyof DisplayFields)}
+              color="primary" // You can customize the color here
+            />
+          }
+          label={field}
+        />
+      ))}
+    </Box>
+    <StyledTableContainer> 
+      <Paper elevation={3}>
+        <Grid container>
+          <Grid item xs={12} sm={6} md={4}>
+            <Typography variant="h5" gutterBottom sx={{ p: 4 }}>
+              Product List
+            </Typography>
+          </Grid>
+          <Grid item xs={12} sm={6} md={8}>
+            <Box sx={{ p: 2 }}>
+              <TextField
+                label="Buscar productos"
+                variant="outlined"
+                fullWidth
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                sx={{ mb: 2 }}
               />
-            }
-            label={field}
-          />
-        ))}
-      </Box>
-
-
-      <TableContainer component={Paper}>
-        <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
-          Product List
-        </Typography>
+            </Box>
+          </Grid>
+        </Grid>
         <Table>
           <TableHead>
-            <TableRow>
-              {displayFields.product && <TableCell>Product</TableCell>}
-              {displayFields.status && <TableCell>Status</TableCell>}
-              {displayFields.city && <TableCell>Ciudad</TableCell>}
-              {displayFields.drive && <TableCell>Drive</TableCell>}
-              {displayFields.tds && <TableCell>TDS</TableCell>}
-              {displayFields.volumeTotal && <TableCell>Volument Total Producto</TableCell>}
-              {displayFields.volumeReject && <TableCell>Volumen Rechazo</TableCell>}
-              {displayFields.flowRate && <TableCell>Flujo Caudal</TableCell>}
-              {displayFields.rejectFlow && <TableCell>Flujo Rechazo</TableCell>}
-              {displayFields.sedimentFilter && <TableCell>F. Sedimentos</TableCell>}
-              {displayFields.granularCarbonFilter && <TableCell>F. Carbon Granular</TableCell>}
-              {displayFields.blockCarbonFilter && <TableCell>F. Carbon Bloque</TableCell>}
-              {displayFields.oiMembrane && <TableCell>Membrana OI</TableCell>}
-              {displayFields.temperature && <TableCell>Temp</TableCell>}
-              <TableCell>Acciones</TableCell>
+            <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
+            {displayFields.product && <StyledTableCellHeader> Product</StyledTableCellHeader>}
+            {displayFields.status && <StyledTableCellHeader>Status</StyledTableCellHeader>}
+            {displayFields.city && <StyledTableCellHeader>Ciudad</StyledTableCellHeader>}
+            {displayFields.drive && <StyledTableCellHeader>Drive</StyledTableCellHeader>}
+            {displayFields.tds && <StyledTableCellHeader>TDS</StyledTableCellHeader>}
+            {displayFields.volumeTotal && <StyledTableCellHeader>Volumen Total Prod.</StyledTableCellHeader>}
+            {displayFields.volumeReject && <StyledTableCellHeader>Volumen Rechazo</StyledTableCellHeader>}
+            {displayFields.flowRate && <StyledTableCellHeader>Flujo Caudal</StyledTableCellHeader>}
+            {displayFields.rejectFlow && <StyledTableCellHeader>Flujo rechazo</StyledTableCellHeader>}
+            {displayFields.sedimentFilter && <StyledTableCellHeader>F. Sedimentos</StyledTableCellHeader>}
+            {displayFields.granularCarbonFilter && <StyledTableCellHeader>F. Carbon Granular</StyledTableCellHeader>}
+            {displayFields.blockCarbonFilter && <StyledTableCellHeader>F. Carbon Bloque</StyledTableCellHeader>}
+            {displayFields.oiMembrane && <StyledTableCellHeader>Membrana</StyledTableCellHeader>}
+            {displayFields.temperature && <StyledTableCellHeader>Temp</StyledTableCellHeader>}
+            <StyledTableCellHeader>Actions</StyledTableCellHeader>
             </TableRow>
           </TableHead>
           <TableBody>
             {filteredProducts.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((product) => (
-              <TableRow key={product.id}>
+              <StyledTableRow key={product.id}>
                 {displayFields.product && (
-                  <TableCell>
+                  <StyledTableCell>
                     <Box display="flex" alignItems="center">
                       <img
                         src={`${CONFIG.ICON_URL}/${product.icon}`}
@@ -254,58 +272,58 @@ function ProductTableList() {
                       />
                       <Typography variant="body1">{product.name}</Typography>
                     </Box>
-                  </TableCell>
+                  </StyledTableCell>
                 )}
                 {displayFields.status && (
-                  <TableCell>
+                  <StyledTableCell>
                     <Chip
                       label={product.online ? 'Online' : 'Offline'}
                       color={product.online ? 'success' : 'error'}
                       size="small"
                     />
-                  </TableCell>
+                  </StyledTableCell>
                 )}
                 {displayFields.city && (
-                  <TableCell>
+                  <StyledTableCell>
                     {product.city}
-                  </TableCell>
+                  </StyledTableCell>
                 )}
                 {displayFields.drive && (
-                  <TableCell>
+                  <StyledTableCell>
                     {product.drive}
-                  </TableCell>
+                  </StyledTableCell>
                 )}
                 {displayFields.tds && (
-                  <TableCell>{product.status.find(s => s.code === 'tds_out')?.value || 'N/A'} ppm</TableCell>
+                  <StyledTableCell>{product.status.find(s => s.code === 'tds_out')?.value || 'N/A'} ppm</StyledTableCell>
                 )}
                 {displayFields.volumeTotal && (
-                  <TableCell>{product.status.find(s => s.code === 'flowrate_total_1')?.value || 'N/A'} L</TableCell>
+                  <StyledTableCell>{product.status.find(s => s.code === 'flowrate_total_1')?.value || 'N/A'} L</StyledTableCell>
                 )}
                 {displayFields.volumeReject && (
-                  <TableCell>{product.status.find(s => s.code === 'flowrate_total_2')?.value || 'N/A'} L</TableCell>
+                  <StyledTableCell>{product.status.find(s => s.code === 'flowrate_total_2')?.value || 'N/A'} L</StyledTableCell>
                 )}
                 {displayFields.flowRate && (
-                  <TableCell>{product.status.find(s => s.code === 'flowrate_speed_1')?.value || 'N/A'} L</TableCell>
+                  <StyledTableCell>{product.status.find(s => s.code === 'flowrate_speed_1')?.value || 'N/A'} L</StyledTableCell>
                 )}
                 {displayFields.rejectFlow && (
-                  <TableCell>{product.status.find(s => s.code === 'flowrate_speed_2')?.value || 'N/A'} L</TableCell>
+                  <StyledTableCell>{product.status.find(s => s.code === 'flowrate_speed_2')?.value || 'N/A'} L</StyledTableCell>
                 )}
                 {displayFields.sedimentFilter && (
-                  <TableCell>{product.status.find(s => s.code === 'filter_element_1')?.value || 'N/A'} H</TableCell>
+                  <StyledTableCell>{product.status.find(s => s.code === 'filter_element_1')?.value || 'N/A'} H</StyledTableCell>
                 )}
                 {displayFields.granularCarbonFilter && (
-                  <TableCell>{product.status.find(s => s.code === 'filter_element_2')?.value || 'N/A'} H</TableCell>
+                  <StyledTableCell>{product.status.find(s => s.code === 'filter_element_2')?.value || 'N/A'} H</StyledTableCell>
                 )}
                 {displayFields.blockCarbonFilter && (
-                  <TableCell>{product.status.find(s => s.code === 'filter_element_3')?.value || 'N/A'} H</TableCell>
+                  <StyledTableCell>{product.status.find(s => s.code === 'filter_element_3')?.value || 'N/A'} H</StyledTableCell>
                 )}
                 {displayFields.oiMembrane && (
-                  <TableCell>{product.status.find(s => s.code === 'filter_element_4')?.value || 'N/A'} H</TableCell>
+                  <StyledTableCell>{product.status.find(s => s.code === 'filter_element_4')?.value || 'N/A'} H</StyledTableCell>
                 )}
                 {displayFields.temperature && (
-                  <TableCell>{product.status.find(s => s.code === 'temperature')?.value || 'N/A'} °C</TableCell>
+                  <StyledTableCell>{product.status.find(s => s.code === 'temperature')?.value || 'N/A'} °C</StyledTableCell>
                 )}
-                <TableCell>
+                <StyledTableCell>
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Chip
                         label="Flush"
@@ -328,21 +346,21 @@ function ProductTableList() {
                       Detalles
                     </Button>
                   </Stack>
-                </TableCell>
-              </TableRow>
+                </StyledTableCell>
+              </StyledTableRow>
             ))}
           </TableBody>
         </Table>
-      </TableContainer>
-
-      <TablePagination
-        component="div"
-        count={filteredProducts.length}
-        rowsPerPage={rowsPerPage}
-        page={page}
-        onPageChange={handleChangePage}
-        onRowsPerPageChange={handleChangeRowsPerPage}
-      />
+      </Paper>
+    </StyledTableContainer>
+    <TablePagination
+      component="div"
+      count={filteredProducts.length}
+      rowsPerPage={rowsPerPage}
+      page={page}
+      onPageChange={(_, newPage) => setPage(newPage)}
+      onRowsPerPageChange={(e) => setRowsPerPage(parseInt(e.target.value, 10))}
+    />
     </>
   );
 }

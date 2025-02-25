@@ -1,16 +1,15 @@
+import type { Dayjs } from 'dayjs'; // Only import Dayjs as a type
 import axios from 'axios';
+import dayjs from 'dayjs';
 import PropTypes from 'prop-types';
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 
-import { Box, Chip, Card, Grid, Table, Paper, Checkbox, TableRow, TableCell, TableBody, TableHead, Typography, CardContent, TableContainer, CircularProgress, FormControlLabel, TextField, TablePagination } from '@mui/material';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DateTimePicker, LocalizationProvider } from '@mui/x-date-pickers';
+import { Box, Chip, Card, Grid, Table, Paper, Checkbox, TableRow, TextField, TableCell, TableBody, TableHead, Typography, CardContent, TableContainer, TablePagination, CircularProgress, FormControlLabel } from '@mui/material';
 
 import { CONFIG } from 'src/config-global';
-
-import dayjs, { Dayjs } from 'dayjs';
-import { LocalizationProvider, DateTimePicker } from '@mui/x-date-pickers';
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
-
 // Interfaces for TypeScript
 
 interface Log {
@@ -145,7 +144,6 @@ const ProductDetail: React.FC = () => {
   }
 
   return (
-    <>
       <Box sx={{ p: 3 }}>
         <Paper sx={{ p: 3, mb: 4 }}>
           <Typography variant="h6" gutterBottom>
@@ -213,35 +211,33 @@ const ProductDetail: React.FC = () => {
             </TableHead>
             <TableBody>
               {filteredLogs.length > 0 ? (
-                filteredLogs.map((log, index) => {
-                  const isFlowRate = log.code.includes('flowrate');
-                  const isTemperature = log.code.includes('temperature');
-                  const isTds = log.code === 'tds_out'; // Check for tds_out field
-                  
-                  // For flow rate, always divide by 10
-                  let value = log.value;
-                  if (isFlowRate) {
-                    value = log.value / 10;
-                  }
+                filteredLogs.map(({ event_time, code, value }, index) => {
+                  const isFlowRate = code.includes('flowrate');
+                  const isTemperature = code.includes('temperature');
+                  const isTds = code === 'tds_out'; // Check for tds_out field
 
-                  // For temperature, display in °C
-                  let displayValue = '';
-                  if (isTemperature) {
-                    displayValue = `${value} °C`;
-                  } else if (isTds) {
-                    displayValue = `${value} ppm`; // Display tds_out in ppm
-                  } else {
-                    displayValue = `${value} L`; // Default to L for other cases
-                  }
+                  // Adjust value if necessary
+                  const adjustedValue = isFlowRate ? value / 10 : value;
+
+                  // Format display value
+                  const displayValue = isTemperature
+                    ? `${adjustedValue} °C`
+                    : isTds
+                    ? `${adjustedValue} ppm`
+                    : `${adjustedValue} L`; // Default to L for other cases
 
                   return (
                     <TableRow key={index}>
-                      <TableCell>{new Date(log.event_time).toLocaleString()}</TableCell>
-                      <TableCell>{log.code}</TableCell>
+                      <TableCell>{new Date(event_time).toLocaleString()}</TableCell>
+                      <TableCell>{code}</TableCell>
                       <TableCell>
-                        <Chip label={displayValue} color={isFlowRate ? 'secondary' : isTemperature ? 'primary' : 'default'} size="small" />
+                        <Chip
+                          label={displayValue}
+                          color={isFlowRate ? 'secondary' : isTemperature ? 'primary' : 'default'}
+                          size="small"
+                        />
                       </TableCell>
-                      <TableCell>{log.value}</TableCell>
+                      <TableCell>{value}</TableCell>
                     </TableRow>
                   );
                 })
@@ -253,7 +249,6 @@ const ProductDetail: React.FC = () => {
                 </TableRow>
               )}
             </TableBody>
-
           </Table>
           <TablePagination
             rowsPerPageOptions={[5, 10, 25]}
@@ -266,7 +261,6 @@ const ProductDetail: React.FC = () => {
           />
         </TableContainer>
       </Box>
-    </>
   );
 };
 
