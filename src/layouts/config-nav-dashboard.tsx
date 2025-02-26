@@ -29,7 +29,7 @@ export const navData = [
     icon: icon('ic-map'),
     info: (
       <Label color="error" variant="inverted">
-        +8000
+        +1002
       </Label>
     ),
   },
