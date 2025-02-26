@@ -59,7 +59,7 @@ export function AnalyticsWebsiteVisits({ title, subheader, chart, ...other }: Pr
         type="bar"
         series={chart.series}
         options={chartOptions}
-        height={364}
+        height={500}
         sx={{ py: 2.5, pl: 1, pr: 2.5 }}
       />
     </Card>

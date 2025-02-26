@@ -5,7 +5,7 @@ import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
 
 import Grid from '@mui/material/Unstable_Grid2';
-import { Box, Typography, CircularProgress } from '@mui/material';
+import { Box, Paper, Typography, CircularProgress } from '@mui/material';
 
 import { CONFIG } from 'src/config-global';
 import { DashboardContent } from 'src/layouts/dashboard';
@@ -13,9 +13,9 @@ import { DashboardContent } from 'src/layouts/dashboard';
 import { AnalyticsCurrentVisits } from './analytics/analytics-current-visits';
 import { AnalyticsWebsiteVisits } from './analytics/analytics-website-visits';
 import { AnalyticsWidgetSummary } from './analytics/analytics-widget-summary';
-import { AnalyticsTrafficBySite } from './analytics/analytics-traffic-by-site';
-import { AnalyticsCurrentSubject } from './analytics/analytics-current-subject';
-import { AnalyticsConversionRates } from './analytics/analytics-conversion-rates';
+// import { AnalyticsTrafficBySite } from './analytics/analytics-traffic-by-site';
+// import { AnalyticsCurrentSubject } from './analytics/analytics-current-subject';
+// import { AnalyticsConversionRates } from './analytics/analytics-conversion-rates';
 
 // ---------------------- Interfaces ---------------------- //
 interface Metric {
@@ -36,11 +36,11 @@ interface VisitData {
   series: { label: string; value: number }[];
 }
 
-interface TrafficBySite {
-  value: string;
-  label: string;
-  total: number;
-}
+// interface TrafficBySite {
+//   value: string;
+//   label: string;
+//   total: number;
+// }
 
 // ---------------------- Component ---------------------- //
 
@@ -106,6 +106,14 @@ export function DashboardPage() {
             </Grid>
           ))}
 
+          <Grid xs={12} md={12} lg={12}>
+            <AnalyticsWebsiteVisits
+              title="Cobertura de Equipos por Región"
+              subheader="Por region de ciudades y meses"
+              chart={totalValues.serieCovertura as ChartData}
+            />
+          </Grid>
+
           <Grid xs={12} md={6} lg={4}>
             <AnalyticsCurrentVisits
               title={`Productos Online - ${totalValues.totalOnline}`}
@@ -118,15 +126,13 @@ export function DashboardPage() {
               } as VisitData}
             />
           </Grid>
-
           <Grid xs={12} md={6} lg={8}>
-            <AnalyticsWebsiteVisits
-              title="Cobertura de Equipos por Región"
-              subheader="Por region de ciudades y meses"
-              chart={totalValues.serieCovertura as ChartData}
-            />
-          </Grid>
-
+            <Paper elevation={3} sx={{ p: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                Próximamente mas metricas ...
+              </Typography>
+            </Paper>
+          </Grid> 
           {/* <Grid xs={12} md={6} lg={8}>
             <AnalyticsConversionRates
               title="Gráfico de Ventas"
