@@ -1,11 +1,12 @@
 import type { ColorType } from 'src/theme/core/palette';
+import type { SelectChangeEvent } from '@mui/material/Select';
 
 import axios from 'axios';
 import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
 
 import Grid from '@mui/material/Unstable_Grid2';
-import { Box, Paper, Typography, CircularProgress } from '@mui/material';
+import { Box, Paper, Select, Checkbox, MenuItem, InputLabel, Typography, FormControl, ListItemText, CircularProgress } from '@mui/material';
 
 import { CONFIG } from 'src/config-global';
 import { DashboardContent } from 'src/layouts/dashboard';
@@ -18,6 +19,10 @@ import { AnalyticsWidgetSummary } from './analytics/analytics-widget-summary';
 // import { AnalyticsConversionRates } from './analytics/analytics-conversion-rates';
 
 // ---------------------- Interfaces ---------------------- //
+interface City {
+  name: string;
+  initiallyHidden: boolean;
+}
 interface Metric {
   label: string;
   percentage: number;
@@ -47,17 +52,42 @@ interface VisitData {
 export function DashboardPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [metrics, setMetrics] = useState<Metric[]>([]);
-  const [totalValues, setTotalValues] = useState({total: 0, totalOnline: 0, totalOffline: 0, totalRango: 0, totalRangoOnline: 0, totalFueraRango: 0, totalFueraRangoOnline: 0, totalOportunidades: 0, totalOportunidadesOnline: 0, metrics: [], serieCovertura: { categories: [], series: []}});
+  
+  const [totalValues, setTotalValues] = useState({
+    total: 0,
+    totalOnline: 0,
+    totalOffline: 0,
+    totalRango: 0,
+    totalRangoOnline: 0,
+    totalFueraRango: 0,
+    totalFueraRangoOnline: 0,
+    totalOportunidades: 0,
+    totalOportunidadesOnline: 0,
+    metrics: [],
+    serieCovertura: {
+      categories: [] as string[], // Add categories here
+      series: [] as { name: string; data: number[]; initiallyHidden: boolean }[],
+    },
+  });
+
+  const [selectedCities, setSelectedCities] = useState<string[]>([]);
+  const [isInitialFetch, setIsInitialFetch] = useState<boolean>(true);
 
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
         const response = await axios.get(`${CONFIG.API_BASE_URL}/dashboard`);
-        console.log(response, 'response');
         const totValues = response.data;
         setTotalValues(totValues);
         const metric : Metric[] = response.data.metrics;
         setMetrics(metric);
+        // Initialize selectedCities based on initiallyHidden
+        const citiesToSelect = totValues.serieCovertura.series
+          .filter((city: City) => !city.initiallyHidden) // Add the correct type here
+          .map((city: City) => city.name);
+
+        setSelectedCities(citiesToSelect);
+        setIsInitialFetch(false);
       } catch (error) {
         console.error('Error fetching metrics:', error);
       } finally {
@@ -69,7 +99,7 @@ export function DashboardPage() {
     const interval = setInterval(fetchMetrics, 30000); // Refresh every 30 seconds
 
     return () => clearInterval(interval);
-  }, []);
+  }, [isInitialFetch]);
 
   if (loading) {
     return (
@@ -79,10 +109,24 @@ export function DashboardPage() {
     );
   }
 
+  // Event handler to manage the selected cities
+  const handleCityChange = (event: SelectChangeEvent<string[]>) => {
+    setSelectedCities(event.target.value as string[]);
+  };
+
+  // Filter the chart data based on the selected cities
+  const filteredSeries = totalValues.serieCovertura.series.filter((city) => 
+    selectedCities.length === 0 || selectedCities.includes(city.name)
+  );
+
+  const filteredSerieCovertura = {
+    categories: totalValues.serieCovertura.categories, // Access categories from serieCovertura
+    series: filteredSeries,
+  };
   return (
     <>
       <Helmet>
-        <title> {`${CONFIG.appName}`}</title>
+        <title>{`${CONFIG.appName}`}</title>
         <meta name="description" content="Se parte del equipo aquatech" />
         <meta name="keywords" content="react,material,kit,application,dashboard,admin,template" />
       </Helmet>
@@ -105,12 +149,38 @@ export function DashboardPage() {
               />
             </Grid>
           ))}
-
+          <Grid xs={12} md={6} lg={5}>
+            <InputLabel id="city-select-label">Info Segmentos</InputLabel>
+            <Typography variant="h6" gutterBottom>
+              Total Ciudades Monitoreadas: {totalValues.serieCovertura.series.length}
+            </Typography>
+          </Grid>
+          <Grid xs={12} md={6} lg={7}>
+            <Paper elevation={3} sx={{ p: 2 }}>
+              <FormControl fullWidth sx={{ mb: 3 }}>
+                <InputLabel id="city-select-label">Ciudades en Grafico</InputLabel>
+                <Select
+                  labelId="city-select-label"
+                  multiple
+                  value={selectedCities}
+                  onChange={handleCityChange}
+                  renderValue={(selected) => selected.join(', ')}
+                >
+                  {totalValues.serieCovertura.series.map((city) => (
+                    <MenuItem key={city.name} value={city.name}>
+                      <Checkbox checked={selectedCities.indexOf(city.name) > -1} />
+                      <ListItemText primary={city.name} />
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Paper>
+          </Grid> 
           <Grid xs={12} md={12} lg={12}>
             <AnalyticsWebsiteVisits
-              title="Cobertura de Equipos por Región"
+              title="Historico Equipos"
               subheader="Por region de ciudades y meses"
-              chart={totalValues.serieCovertura as ChartData}
+              chart={filteredSerieCovertura as ChartData}
             />
           </Grid>
 
