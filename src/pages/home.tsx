@@ -14,9 +14,7 @@ import { DashboardContent } from 'src/layouts/dashboard';
 import { AnalyticsCurrentVisits } from './analytics/analytics-current-visits';
 import { AnalyticsWebsiteVisits } from './analytics/analytics-website-visits';
 import { AnalyticsWidgetSummary } from './analytics/analytics-widget-summary';
-// import { AnalyticsTrafficBySite } from './analytics/analytics-traffic-by-site';
-// import { AnalyticsCurrentSubject } from './analytics/analytics-current-subject';
-// import { AnalyticsConversionRates } from './analytics/analytics-conversion-rates';
+import { AnalyticsCurrentSubject } from './analytics/analytics-current-subject';
 
 // ---------------------- Interfaces ---------------------- //
 interface City {
@@ -31,21 +29,13 @@ interface Metric {
   icon: string;
   chart?: any; // Adjust type if needed for your chart data
 }
-
 interface ChartData {
   categories: string[];
   series: { name: string; data: number[] }[];
 }
-
 interface VisitData {
   series: { label: string; value: number }[];
 }
-
-// interface TrafficBySite {
-//   value: string;
-//   label: string;
-//   total: number;
-// }
 
 // ---------------------- Component ---------------------- //
 
@@ -71,6 +61,7 @@ export function DashboardPage() {
   });
 
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
   const [isInitialFetch, setIsInitialFetch] = useState<boolean>(true);
 
   useEffect(() => {
@@ -82,12 +73,16 @@ export function DashboardPage() {
         const metric : Metric[] = response.data.metrics;
         setMetrics(metric);
         // Initialize selectedCities based on initiallyHidden
-        const citiesToSelect = totValues.serieCovertura.series
-          .filter((city: City) => !city.initiallyHidden) // Add the correct type here
-          .map((city: City) => city.name);
+        if (isInitialFetch) {
+          // Initialize selectedCities only once
+          const citiesToSelect = totValues.serieCovertura.series
+            .filter((city: City) => !city.initiallyHidden)
+            .map((city: City) => city.name);
 
-        setSelectedCities(citiesToSelect);
-        setIsInitialFetch(false);
+          setSelectedCities(citiesToSelect);
+          setSelectedMonths(totValues.serieCovertura.categories);
+          setIsInitialFetch(false); // Prevent overwriting cities in future fetches
+        }
       } catch (error) {
         console.error('Error fetching metrics:', error);
       } finally {
@@ -113,16 +108,37 @@ export function DashboardPage() {
   const handleCityChange = (event: SelectChangeEvent<string[]>) => {
     setSelectedCities(event.target.value as string[]);
   };
+  // Event handler to manage the selected months
+  const handleMonthChange = (event: SelectChangeEvent<string[]>) => {
+    console.log(event.target);
+    setSelectedMonths(event.target.value as string[]);
+    
+  }
 
-  // Filter the chart data based on the selected cities
-  const filteredSeries = totalValues.serieCovertura.series.filter((city) => 
-    selectedCities.length === 0 || selectedCities.includes(city.name)
+  // Filter the chart data based on the selected months
+  const filteredMonths = totalValues.serieCovertura.categories.filter((category) =>
+    selectedMonths.length === 0 || selectedMonths.includes(category)
   );
-
+  console.log('filteredMonths', filteredMonths);
+  // Get the indexes of the selected months
+  const selectedMonthIndexes = totalValues.serieCovertura.categories
+  .map((category, index) => {
+    const isSelected = selectedMonths.includes(category);
+    return isSelected ? index : -1;
+  })
+  .filter(index => index !== -1);
+  // Filter the series data based on the selected indexes
+  const filteredSeries = totalValues.serieCovertura.series
+    .filter(city => selectedCities.length === 0 || selectedCities.includes(city.name))
+    .map(city => ({
+      ...city,
+      data: city.data.filter((_, index) => selectedMonthIndexes.includes(index)), // Keep only selected months
+    }));
   const filteredSerieCovertura = {
-    categories: totalValues.serieCovertura.categories, // Access categories from serieCovertura
+    categories: filteredMonths,
     series: filteredSeries,
   };
+  console.log('filteredSerieCovertura', filteredSerieCovertura);
   return (
     <>
       <Helmet>
@@ -132,8 +148,8 @@ export function DashboardPage() {
       </Helmet>
 
       <DashboardContent maxWidth="xl">
-        <Typography variant="h4" sx={{ mb: { xs: 3, md: 5 } }}>
-          General Metrics
+        <Typography variant="h3" sx={{ mb: { xs: 3, md: 5 } }}>
+          Metricas Genrales
         </Typography>
 
         <Grid container spacing={3}>
@@ -149,41 +165,61 @@ export function DashboardPage() {
               />
             </Grid>
           ))}
-          <Grid xs={12} md={6} lg={5}>
-            <InputLabel id="city-select-label">Info Segmentos</InputLabel>
-            <Typography variant="h6" gutterBottom>
-              Total Ciudades Monitoreadas: {totalValues.serieCovertura.series.length}
-            </Typography>
-          </Grid>
-          <Grid xs={12} md={6} lg={7}>
-            <Paper elevation={3} sx={{ p: 2 }}>
-              <FormControl fullWidth sx={{ mb: 3 }}>
-                <InputLabel id="city-select-label">Ciudades en Grafico</InputLabel>
-                <Select
-                  labelId="city-select-label"
-                  multiple
-                  value={selectedCities}
-                  onChange={handleCityChange}
-                  renderValue={(selected) => selected.join(', ')}
-                >
-                  {totalValues.serieCovertura.series.map((city) => (
-                    <MenuItem key={city.name} value={city.name}>
-                      <Checkbox checked={selectedCities.indexOf(city.name) > -1} />
-                      <ListItemText primary={city.name} />
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Paper>
-          </Grid> 
           <Grid xs={12} md={12} lg={12}>
-            <AnalyticsWebsiteVisits
-              title="Historico Equipos"
-              subheader="Por region de ciudades y meses"
-              chart={filteredSerieCovertura as ChartData}
-            />
+            <Paper elevation={3} sx={{ p: 2 }}>
+              <Grid container spacing={3}>
+                <Grid xs={12} md={6} lg={5}>
+                  <Typography variant="h4">
+                    <FormControl fullWidth sx={{ p: 3 }}>
+                    <InputLabel id="month-select-label">Meses en Grafico</InputLabel>
+                    <Select
+                      labelId="month-select-label"
+                      multiple
+                      value={selectedMonths}
+                      onChange={handleMonthChange}
+                      renderValue={(selected) => selected.join(', ')}
+                    >
+                      {totalValues.serieCovertura.categories.map((category) => (
+                        <MenuItem key={category} value={category}>
+                          <Checkbox checked={selectedMonths.indexOf(category) > -1} />
+                          <ListItemText primary={category} />
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  </Typography>
+                </Grid>
+                <Grid xs={12} md={6} lg={7}>
+                  <Typography variant="h4">
+                    <FormControl fullWidth sx={{ p: 3 }}>
+                      <InputLabel id="city-select-label">Ciudades en Grafico</InputLabel>
+                      <Select
+                        labelId="city-select-label"
+                        multiple
+                        value={selectedCities}
+                        onChange={handleCityChange}
+                        renderValue={(selected) => selected.join(', ')}
+                      >
+                        {totalValues.serieCovertura.series.map((city) => (
+                          <MenuItem key={city.name} value={city.name}>
+                            <Checkbox checked={selectedCities.indexOf(city.name) > -1} />
+                            <ListItemText primary={city.name} />
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Typography>
+                </Grid> 
+                <Grid xs={12} md={12} lg={12}>
+                  <AnalyticsWebsiteVisits
+                    title="Historico Equipos"
+                    subheader="Por region de ciudades y meses"
+                    chart={filteredSerieCovertura as ChartData}
+                  />
+                </Grid>
+              </Grid>
+            </Paper>
           </Grid>
-
           <Grid xs={12} md={6} lg={4}>
             <AnalyticsCurrentVisits
               title={`Productos Online - ${totalValues.totalOnline}`}
@@ -197,27 +233,6 @@ export function DashboardPage() {
             />
           </Grid>
           <Grid xs={12} md={6} lg={8}>
-            <Paper elevation={3} sx={{ p: 2 }}>
-              <Typography variant="h6" gutterBottom>
-                Próximamente mas metricas ...
-              </Typography>
-            </Paper>
-          </Grid> 
-          {/* <Grid xs={12} md={6} lg={8}>
-            <AnalyticsConversionRates
-              title="Gráfico de Ventas"
-              subheader="Recien logueado"
-              chart={{
-                categories: ['Caffenio', 'Norson', 'Bachoco', 'Prospectos'],
-                series: [
-                  { name: '2024', data: [44, 55, 41, 64] },
-                  { name: '2025', data: [53, 32, 33, 52] },
-                ],
-              } as ChartData}
-            />
-          </Grid>
-
-          <Grid xs={12} md={6} lg={4}>
             <AnalyticsCurrentSubject
               title="Actuales Plataformas"
               chart={{
@@ -230,22 +245,6 @@ export function DashboardPage() {
               } as ChartData}
             />
           </Grid>
-
-          <Grid xs={12} md={6} lg={4}>
-            <AnalyticsTrafficBySite
-              title="Traffic by site"
-              list={[
-                { value: 'facebook', label: 'Facebook', total: 323234 },
-                { value: 'google', label: 'Google', total: 341212 },
-                { value: 'linkedin', label: 'Linkedin', total: 411213 },
-                { value: 'twitter', label: 'Twitter', total: 443232 },
-              ] as TrafficBySite[]}
-            />
-          </Grid>
-
-          <Grid xs={12} md={6} lg={8}>
-            <h4>Próximamente ...</h4>
-          </Grid> */}
         </Grid>
       </DashboardContent>
     </>

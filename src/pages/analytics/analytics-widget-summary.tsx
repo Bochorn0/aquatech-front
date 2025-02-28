@@ -58,6 +58,11 @@ export function AnalyticsWidgetSummary({
     tooltip: {
       y: { formatter: (value: number) => fNumber(value), title: { formatter: () => '' } },
     },
+    plotOptions: {
+      bar: {
+        distributed: true, // Enables different colors for each bar
+      }
+    },
     ...chart.options,
   });
 

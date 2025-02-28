@@ -2,8 +2,8 @@ import type { CardProps } from '@mui/material/Card';
 import type { ChartOptions } from 'src/components/chart';
 
 import Card from '@mui/material/Card';
+import { useTheme } from '@mui/material/styles';
 import CardHeader from '@mui/material/CardHeader';
-import { useTheme, alpha as hexAlpha } from '@mui/material/styles';
 
 import { Chart, useChart } from 'src/components/chart';
 
@@ -26,9 +26,13 @@ type Props = CardProps & {
 export function AnalyticsWebsiteVisits({ title, subheader, chart, ...other }: Props) {
   const theme = useTheme();
 
-  const chartColors = chart.colors ?? [
-    theme.palette.primary.dark,
-    hexAlpha(theme.palette.primary.light, 0.64),
+  const chartColors = [
+    theme.palette.primary.main,
+    theme.palette.secondary.main,
+    theme.palette.success.main,
+    theme.palette.warning.main,
+    theme.palette.error.main,
+    theme.palette.info.main,
   ];
 
   const chartOptions = useChart({

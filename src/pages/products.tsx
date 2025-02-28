@@ -217,6 +217,7 @@ function ProductTableList() {
       </Helmet>
       <Box sx={{ p: 2 }}>
         <Typography variant="h5" gutterBottom>Filtrar Productos</Typography>
+        
         <Chip
           label="Ver lista de campos disponibles"
           color='default'
@@ -291,138 +292,140 @@ function ProductTableList() {
           </Grid>
         </Grid>
       </Box>
-      <StyledTableContainer> 
+      <StyledTableContainer>
         <Paper elevation={3}>
-          <Grid container>
-            <Grid item xs={12} sm={6} md={4}>
-              <Typography variant="h5" gutterBottom sx={{ p: 4 }}>
-                Product List
-              </Typography>
+          <Box sx={{ overflowX: 'auto' }}> {/* Ensures table responsiveness */}
+            <Grid container>
+              <Grid item xs={12} sm={6} md={4}>
+                <Typography variant="h5" gutterBottom sx={{ p: 4 }}>
+                  Product List
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6} md={8} textAlign='right'>
+                <Typography variant="h5" gutterBottom sx={{ p: 4 }}>
+                  Total : {filteredProducts.length} 
+                  <CSVLink data={mappedFilteredData} filename={`Productos_${new Date()}.csv`}>
+                    <Button variant="contained" color="primary" sx={{ml: 2}}>
+                      Exportar
+                    </Button>
+                  </CSVLink>
+                </Typography>
+              </Grid>
             </Grid>
-            <Grid item xs={12} sm={6} md={8} textAlign='right'>
-              <Typography variant="h5" gutterBottom sx={{ p: 4 }}>
-                Total : {filteredProducts.length} 
-                <CSVLink data={mappedFilteredData} filename={`Productos_${new Date()}.csv`}>
-                  <Button variant="contained" color="primary" sx={{ml: 2}}>
-                    Exportar
-                  </Button>
-                </CSVLink>
-              </Typography>
-            </Grid>
-          </Grid>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
-              {displayFields.product && <StyledTableCellHeader> Product</StyledTableCellHeader>}
-              {displayFields.status && <StyledTableCellHeader>Status</StyledTableCellHeader>}
-              {displayFields.city && <StyledTableCellHeader>Ciudad</StyledTableCellHeader>}
-              {displayFields.drive && <StyledTableCellHeader>Drive</StyledTableCellHeader>}
-              {displayFields.tds && <StyledTableCellHeader>TDS</StyledTableCellHeader>}
-              {displayFields.volumeTotal && <StyledTableCellHeader>Volumen Total Prod.</StyledTableCellHeader>}
-              {displayFields.volumeReject && <StyledTableCellHeader>Volumen Rechazo</StyledTableCellHeader>}
-              {displayFields.flowRate && <StyledTableCellHeader>Flujo Caudal</StyledTableCellHeader>}
-              {displayFields.rejectFlow && <StyledTableCellHeader>Flujo rechazo</StyledTableCellHeader>}
-              {displayFields.sedimentFilter && <StyledTableCellHeader>F. Sedimentos</StyledTableCellHeader>}
-              {displayFields.granularCarbonFilter && <StyledTableCellHeader>F. Carbon Granular</StyledTableCellHeader>}
-              {displayFields.blockCarbonFilter && <StyledTableCellHeader>F. Carbon Bloque</StyledTableCellHeader>}
-              {displayFields.oiMembrane && <StyledTableCellHeader>Membrana</StyledTableCellHeader>}
-              {displayFields.temperature && <StyledTableCellHeader>Temp</StyledTableCellHeader>}
-              <StyledTableCellHeader>Actions</StyledTableCellHeader>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredProducts.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((product) => (
-                <StyledTableRow key={product.id}>
-                  {displayFields.product && (
-                    <StyledTableCell>
-                      <Box display="flex" alignItems="center">
-                        <img
-                          src={`${CONFIG.ICON_URL}/${product.icon}`}
-                          alt={product.name}
-                          style={{ width: '40px', height: '40px', marginRight: '10px' }}
-                        />
-                        <Typography variant="body1">{product.name}</Typography>
-                      </Box>
-                    </StyledTableCell>
-                  )}
-                  {displayFields.status && (
-                    <StyledTableCell>
-                      <Chip
-                        label={product.online ? 'Online' : 'Offline'}
-                        color={product.online ? 'success' : 'error'}
-                        size="small"
-                      />
-                    </StyledTableCell>
-                  )}
-                  {displayFields.city && (
-                    <StyledTableCell>
-                      {product.city}
-                    </StyledTableCell>
-                  )}
-                  {displayFields.drive && (
-                    <StyledTableCell>
-                      {product.drive}
-                    </StyledTableCell>
-                  )}
-                  {displayFields.tds && (
-                    <StyledTableCell>{product.status.find(s => s.code === 'tds_out')?.value || 'N/A'} ppm</StyledTableCell>
-                  )}
-                  {displayFields.volumeTotal && (
-                    <StyledTableCell>{product.status.find(s => s.code === 'flowrate_total_1')?.value || 'N/A'} L</StyledTableCell>
-                  )}
-                  {displayFields.volumeReject && (
-                    <StyledTableCell>{product.status.find(s => s.code === 'flowrate_total_2')?.value || 'N/A'} L</StyledTableCell>
-                  )}
-                  {displayFields.flowRate && (
-                    <StyledTableCell>{product.status.find(s => s.code === 'flowrate_speed_1')?.value || 'N/A'} L</StyledTableCell>
-                  )}
-                  {displayFields.rejectFlow && (
-                    <StyledTableCell>{product.status.find(s => s.code === 'flowrate_speed_2')?.value || 'N/A'} L</StyledTableCell>
-                  )}
-                  {displayFields.sedimentFilter && (
-                    <StyledTableCell>{product.status.find(s => s.code === 'filter_element_1')?.value || 'N/A'} H</StyledTableCell>
-                  )}
-                  {displayFields.granularCarbonFilter && (
-                    <StyledTableCell>{product.status.find(s => s.code === 'filter_element_2')?.value || 'N/A'} H</StyledTableCell>
-                  )}
-                  {displayFields.blockCarbonFilter && (
-                    <StyledTableCell>{product.status.find(s => s.code === 'filter_element_3')?.value || 'N/A'} H</StyledTableCell>
-                  )}
-                  {displayFields.oiMembrane && (
-                    <StyledTableCell>{product.status.find(s => s.code === 'filter_element_4')?.value || 'N/A'} H</StyledTableCell>
-                  )}
-                  {displayFields.temperature && (
-                    <StyledTableCell>{product.status.find(s => s.code === 'temperature')?.value || 'N/A'} °C</StyledTableCell>
-                  )}
-                  <StyledTableCell>
-                    <Stack direction="row" spacing={1} alignItems="center">
+            <Table>
+              <TableHead>
+                <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
+                {displayFields.product && <StyledTableCellHeader> Product</StyledTableCellHeader>}
+                {displayFields.status && <StyledTableCellHeader>Status</StyledTableCellHeader>}
+                {displayFields.city && <StyledTableCellHeader>Ciudad</StyledTableCellHeader>}
+                {displayFields.drive && <StyledTableCellHeader>Drive</StyledTableCellHeader>}
+                {displayFields.tds && <StyledTableCellHeader>TDS</StyledTableCellHeader>}
+                {displayFields.volumeTotal && <StyledTableCellHeader>Volumen Total Prod.</StyledTableCellHeader>}
+                {displayFields.volumeReject && <StyledTableCellHeader>Volumen Rechazo</StyledTableCellHeader>}
+                {displayFields.flowRate && <StyledTableCellHeader>Flujo Caudal</StyledTableCellHeader>}
+                {displayFields.rejectFlow && <StyledTableCellHeader>Flujo rechazo</StyledTableCellHeader>}
+                {displayFields.sedimentFilter && <StyledTableCellHeader>F. Sedimentos</StyledTableCellHeader>}
+                {displayFields.granularCarbonFilter && <StyledTableCellHeader>F. Carbon Granular</StyledTableCellHeader>}
+                {displayFields.blockCarbonFilter && <StyledTableCellHeader>F. Carbon Bloque</StyledTableCellHeader>}
+                {displayFields.oiMembrane && <StyledTableCellHeader>Membrana</StyledTableCellHeader>}
+                {displayFields.temperature && <StyledTableCellHeader>Temp</StyledTableCellHeader>}
+                <StyledTableCellHeader>Actions</StyledTableCellHeader>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredProducts.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((product) => (
+                  <StyledTableRow key={product.id}>
+                    {displayFields.product && (
+                      <StyledTableCell>
+                        <Box display="flex" alignItems="center">
+                          <img
+                            src={`${CONFIG.ICON_URL}/${product.icon}`}
+                            alt={product.name}
+                            style={{ width: '40px', height: '40px', marginRight: '10px' }}
+                          />
+                          <Typography variant="body1">{product.name}</Typography>
+                        </Box>
+                      </StyledTableCell>
+                    )}
+                    {displayFields.status && (
+                      <StyledTableCell>
                         <Chip
-                          label="Flush"
-                          disabled={!product.online}
-                          color={(switchState[product.id] || false) ? 'primary' : 'default'}
-                          sx={{ display: 'flex', alignItems: 'center', padding: '5px' }}
-                          icon={
-                            <Switch
-                              title="Forzar flush"
-                              checked={switchState[product.id] || false} 
-                              onChange={() => handleToggle(product.id)}
-                              disabled={processing[product.id] || false} 
-                            />
-                          }
+                          label={product.online ? 'Online' : 'Offline'}
+                          color={product.online ? 'success' : 'error'}
+                          size="small"
                         />
-                        <Button
-                          variant="contained"
-                          color="inherit"
-                          onClick={() => navigate(`/Productos/${product.id}`)}
-                        >
-                        Detalles
-                      </Button>
-                    </Stack>
-                  </StyledTableCell>
-                </StyledTableRow>
-              ))}
-            </TableBody>
-          </Table>
+                      </StyledTableCell>
+                    )}
+                    {displayFields.city && (
+                      <StyledTableCell>
+                        {product.city}
+                      </StyledTableCell>
+                    )}
+                    {displayFields.drive && (
+                      <StyledTableCell>
+                        {product.drive}
+                      </StyledTableCell>
+                    )}
+                    {displayFields.tds && (
+                      <StyledTableCell>{product.status.find(s => s.code === 'tds_out')?.value || 'N/A'} ppm</StyledTableCell>
+                    )}
+                    {displayFields.volumeTotal && (
+                      <StyledTableCell>{product.status.find(s => s.code === 'flowrate_total_1')?.value || 'N/A'} L</StyledTableCell>
+                    )}
+                    {displayFields.volumeReject && (
+                      <StyledTableCell>{product.status.find(s => s.code === 'flowrate_total_2')?.value || 'N/A'} L</StyledTableCell>
+                    )}
+                    {displayFields.flowRate && (
+                      <StyledTableCell>{product.status.find(s => s.code === 'flowrate_speed_1')?.value || 'N/A'} L</StyledTableCell>
+                    )}
+                    {displayFields.rejectFlow && (
+                      <StyledTableCell>{product.status.find(s => s.code === 'flowrate_speed_2')?.value || 'N/A'} L</StyledTableCell>
+                    )}
+                    {displayFields.sedimentFilter && (
+                      <StyledTableCell>{product.status.find(s => s.code === 'filter_element_1')?.value || 'N/A'} H</StyledTableCell>
+                    )}
+                    {displayFields.granularCarbonFilter && (
+                      <StyledTableCell>{product.status.find(s => s.code === 'filter_element_2')?.value || 'N/A'} H</StyledTableCell>
+                    )}
+                    {displayFields.blockCarbonFilter && (
+                      <StyledTableCell>{product.status.find(s => s.code === 'filter_element_3')?.value || 'N/A'} H</StyledTableCell>
+                    )}
+                    {displayFields.oiMembrane && (
+                      <StyledTableCell>{product.status.find(s => s.code === 'filter_element_4')?.value || 'N/A'} H</StyledTableCell>
+                    )}
+                    {displayFields.temperature && (
+                      <StyledTableCell>{product.status.find(s => s.code === 'temperature')?.value || 'N/A'} °C</StyledTableCell>
+                    )}
+                    <StyledTableCell>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                          <Chip
+                            label="Flush"
+                            disabled={!product.online}
+                            color={(switchState[product.id] || false) ? 'primary' : 'default'}
+                            sx={{ display: 'flex', alignItems: 'center', padding: '5px' }}
+                            icon={
+                              <Switch
+                                title="Forzar flush"
+                                checked={switchState[product.id] || false} 
+                                onChange={() => handleToggle(product.id)}
+                                disabled={processing[product.id] || false} 
+                              />
+                            }
+                          />
+                          <Button
+                            variant="contained"
+                            color="inherit"
+                            onClick={() => navigate(`/Productos/${product.id}`)}
+                          >
+                          Detalles
+                        </Button>
+                      </Stack>
+                    </StyledTableCell>
+                  </StyledTableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Box>
         </Paper>
       </StyledTableContainer>
       <TablePagination

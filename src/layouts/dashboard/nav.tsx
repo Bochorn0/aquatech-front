@@ -61,7 +61,7 @@ export function NavDesktop({
         ...sx,
       }}
     >
-      <NavContent data={data} slots={slots}  />
+      <NavContent data={data} slots={slots} sx={{mt:4}} />
     </Box>
   );
 }
