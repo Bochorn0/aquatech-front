@@ -14,7 +14,8 @@ import { DashboardContent } from 'src/layouts/dashboard';
 import { AnalyticsCurrentVisits } from './analytics/analytics-current-visits';
 import { AnalyticsWebsiteVisits } from './analytics/analytics-website-visits';
 import { AnalyticsWidgetSummary } from './analytics/analytics-widget-summary';
-import { AnalyticsCurrentSubject } from './analytics/analytics-current-subject';
+import { AnalyticsConversionRates } from './analytics/analytics-conversion-rates';
+
 
 // ---------------------- Interfaces ---------------------- //
 interface City {
@@ -55,6 +56,10 @@ export function DashboardPage() {
     totalOportunidadesOnline: 0,
     metrics: [],
     serieCovertura: {
+      categories: [] as string[], // Add categories here
+      series: [] as { name: string; data: number[]; initiallyHidden: boolean }[],
+    },
+    serieCliente: {
       categories: [] as string[], // Add categories here
       series: [] as { name: string; data: number[]; initiallyHidden: boolean }[],
     },
@@ -138,6 +143,7 @@ export function DashboardPage() {
     categories: filteredMonths,
     series: filteredSeries,
   };
+  const { serieCliente } = totalValues;
   console.log('filteredSerieCovertura', filteredSerieCovertura);
   return (
     <>
@@ -213,7 +219,7 @@ export function DashboardPage() {
                 <Grid xs={12} md={12} lg={12}>
                   <AnalyticsWebsiteVisits
                     title="Historico Equipos"
-                    subheader="Por region de ciudades y meses"
+                    subheader="Instalaciones por mes"
                     chart={filteredSerieCovertura as ChartData}
                   />
                 </Grid>
@@ -222,7 +228,7 @@ export function DashboardPage() {
           </Grid>
           <Grid xs={12} md={6} lg={4}>
             <AnalyticsCurrentVisits
-              title={`Productos Online - ${totalValues.totalOnline}`}
+              title={`Equipos Global - ${totalValues.totalOnline}`}
               chart={{
                 series: [
                   { label: 'En Rango', value: totalValues.totalRangoOnline },
@@ -233,16 +239,9 @@ export function DashboardPage() {
             />
           </Grid>
           <Grid xs={12} md={6} lg={8}>
-            <AnalyticsCurrentSubject
-              title="Actuales Plataformas"
-              chart={{
-                categories: ['Equipos Monitoreados', 'Historico', 'Cotizaciones', 'Ordenes de Compra', 'Usuarios', 'Productos'],
-                series: [
-                  { name: 'Caffenio', data: [80, 50, 30, 40, 100, 20] },
-                  { name: 'Bachoco', data: [20, 30, 40, 80, 20, 80] },
-                  { name: 'Norson', data: [44, 76, 78, 13, 43, 10] },
-                ],
-              } as ChartData}
+            <AnalyticsConversionRates
+              title="Rango de equipos por cliente"
+              chart={serieCliente as ChartData}
             />
           </Grid>
         </Grid>

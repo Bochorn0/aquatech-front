@@ -55,8 +55,10 @@ export function AnalyticsCurrentVisits({ title, subheader, chart, ...other }: Pr
 
   return (
     <Card {...other}>
-      <CardHeader title={title} subheader={subheader} />
+      <CardHeader title={title} subheader={subheader} sx={{p: 2}}/>
 
+      <Divider sx={{ borderStyle: 'dashed' }} />
+      
       <Chart
         type="pie"
         series={chartSeries}

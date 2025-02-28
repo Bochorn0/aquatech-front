@@ -2,8 +2,9 @@ import type { CardProps } from '@mui/material/Card';
 import type { ChartOptions } from 'src/components/chart';
 
 import Card from '@mui/material/Card';
+import Divider from '@mui/material/Divider';
+import { useTheme } from '@mui/material/styles';
 import CardHeader from '@mui/material/CardHeader';
-import { useTheme, alpha as hexAlpha } from '@mui/material/styles';
 
 import { fNumber } from 'src/utils/format-number';
 
@@ -28,9 +29,13 @@ type Props = CardProps & {
 export function AnalyticsConversionRates({ title, subheader, chart, ...other }: Props) {
   const theme = useTheme();
 
-  const chartColors = chart.colors ?? [
-    theme.palette.primary.dark,
-    hexAlpha(theme.palette.primary.dark, 0.24),
+  const chartColors = [
+    theme.palette.success.main,
+    theme.palette.warning.main,
+    theme.palette.error.main,
+    theme.palette.info.main,
+    theme.palette.primary.main,
+    theme.palette.secondary.main
   ];
 
   const chartOptions = useChart({
@@ -63,13 +68,13 @@ export function AnalyticsConversionRates({ title, subheader, chart, ...other }: 
 
   return (
     <Card {...other}>
-      <CardHeader title={title} subheader={subheader} />
-
+      <CardHeader title={title} subheader={subheader}  sx={{p: 2}}/>
+      <Divider sx={{ borderStyle: 'dashed' }} />
       <Chart
         type="bar"
         series={chart.series}
         options={chartOptions}
-        height={360}
+        height={425}
         sx={{ py: 2.5, pl: 1, pr: 2.5 }}
       />
     </Card>

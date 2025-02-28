@@ -39,19 +39,25 @@ export function AnalyticsCurrentSubject({ title, subheader, chart, ...other }: P
     fill: { opacity: 0.48 },
     xaxis: {
       categories: chart.categories,
-      labels: { style: { colors: [...Array(6)].map(() => theme.palette.text.secondary) } },
+      labels: { style: { colors: [...Array(4)].map(() => theme.palette.text.secondary) } },
+    },
+    yaxis: {
+      max: 150, // Set radar chart maximum scale
     },
     ...chart.options,
   });
 
   return (
     <Card {...other}>
-      <CardHeader title={title} subheader={subheader} />
+      <CardHeader title={title} subheader={subheader}  sx={{p: 2}}/>
+
+      <Divider sx={{ borderStyle: 'dashed' }} />
 
       <Chart
         type="radar"
         series={chart.series}
         options={chartOptions}
+        
         width={300}
         height={300}
         sx={{ my: 1, mx: 'auto' }}

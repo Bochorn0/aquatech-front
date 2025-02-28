@@ -18,6 +18,7 @@ interface Product {
   id: string;
   name: string;
   city: string;
+  cliente: string;
   drive: string;
   online: boolean;
   icon: string;
@@ -29,6 +30,7 @@ interface Product {
 interface DisplayFields {
   product: boolean;
   city: boolean;
+  cliente: boolean;
   drive: boolean;
   status: boolean;
   tds: boolean;
@@ -76,6 +78,7 @@ function ProductTableList() {
   const [searchQuery, setSearchQuery] = useState('');
   const [cityFilter, setCityFilter] = useState('');
   const [driveFilter, setDriveFilter] = useState('');
+  const [clienteFilter, setClienteFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [processing, setProcessing] = useState<Record<string, boolean>>({});
   const [switchState, setSwitchState] = useState<Record<string, boolean>>({});
@@ -84,6 +87,7 @@ function ProductTableList() {
     product: true,
     status: true,
     city: true,
+    cliente: true,
     drive: true,
     tds: true,
     volumeTotal: true,
@@ -160,6 +164,7 @@ function ProductTableList() {
     const productValues = [
       product.name,
       product.city,
+      product.cliente,
       product.drive,
       product.online ? 'Online' : 'Offline',
       `${product.status.find(s => s.code === 'tds_out')?.value || ''} ppm`,
@@ -179,7 +184,10 @@ function ProductTableList() {
   
     // City filter (exact match)
     const matchesCityFilter = cityFilter === '' || product.city.toLowerCase() === cityFilter.toLowerCase();
-    
+
+    // Drive filter (exact match)
+    const matchesClienteFilter = clienteFilter === '' || product.cliente.toLowerCase() === clienteFilter.toLowerCase();
+
     // Drive filter (exact match)
     const matchesDriveFilter = driveFilter === '' || product.drive.toLowerCase() === driveFilter.toLowerCase();
 
@@ -187,7 +195,7 @@ function ProductTableList() {
     const matchesStatusFilter = statusFilter === '' || (statusFilter === 'online' ? product.online : !product.online);
   
     // Combine all filter conditions
-    return matchesSearchQuery && matchesCityFilter  && matchesDriveFilter && matchesStatusFilter;
+    return matchesSearchQuery && matchesCityFilter && matchesClienteFilter && matchesDriveFilter && matchesStatusFilter;
   });
 
   const mappedFilteredData = filteredProducts.map((product: Product) => {
@@ -271,7 +279,18 @@ function ProductTableList() {
           </Grid>
           <Grid item xs={12} sm={2}>
             <FormControl fullWidth>
-              <InputLabel>Drive</InputLabel>
+              <InputLabel>Empresa</InputLabel>
+              <Select value={clienteFilter} onChange={(e) => setClienteFilter(e.target.value)}>
+                <MenuItem value="">Todos</MenuItem>
+                {[...new Set(products.map((p) => p.cliente))].map((cliente) => (
+                  <MenuItem key={cliente} value={cliente}>{cliente}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} sm={2}>
+            <FormControl fullWidth>
+              <InputLabel>Sucursal</InputLabel>
               <Select value={driveFilter} onChange={(e) => setDriveFilter(e.target.value)}>
                 <MenuItem value="">Todos</MenuItem>
                 {[...new Set(products.map((p) => p.drive))].map((drive) => (
@@ -285,8 +304,8 @@ function ProductTableList() {
               <InputLabel>Status</InputLabel>
               <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                 <MenuItem value="">Todos</MenuItem>
-                <MenuItem value="online">Activos</MenuItem>
-                <MenuItem value="offline">Inactivos</MenuItem>
+                <MenuItem value="online">Online</MenuItem>
+                <MenuItem value="offline">Offline</MenuItem>
               </Select>
             </FormControl>
           </Grid>
@@ -318,6 +337,7 @@ function ProductTableList() {
                 {displayFields.product && <StyledTableCellHeader> Product</StyledTableCellHeader>}
                 {displayFields.status && <StyledTableCellHeader>Status</StyledTableCellHeader>}
                 {displayFields.city && <StyledTableCellHeader>Ciudad</StyledTableCellHeader>}
+                {displayFields.cliente && <StyledTableCellHeader>Empresa</StyledTableCellHeader>}
                 {displayFields.drive && <StyledTableCellHeader>Drive</StyledTableCellHeader>}
                 {displayFields.tds && <StyledTableCellHeader>TDS</StyledTableCellHeader>}
                 {displayFields.volumeTotal && <StyledTableCellHeader>Volumen Total Prod.</StyledTableCellHeader>}
@@ -359,6 +379,11 @@ function ProductTableList() {
                     {displayFields.city && (
                       <StyledTableCell>
                         {product.city}
+                      </StyledTableCell>
+                    )}
+                    {displayFields.cliente && (
+                      <StyledTableCell>
+                        {product.cliente}
                       </StyledTableCell>
                     )}
                     {displayFields.drive && (
