@@ -129,7 +129,7 @@ export function RegisterPage() {
         <Typography variant="h5">Sign in</Typography>
         <Typography variant="body2" color="text.secondary">
           No tienes una cuenta?
-          <Link variant="subtitle2" sx={{ ml: 0.5 }}>
+          <Link variant="subtitle2" sx={{ ml: 0.5 }} href="/Registrarse">
             Solicitar acceso
           </Link>
         </Typography>

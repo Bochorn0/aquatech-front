@@ -15,6 +15,7 @@ import { DashboardLayout } from 'src/layouts/dashboard';
 export const HomePage = lazy(() => import('src/pages/home'));
 export const UserPage = lazy(() => import('src/pages/users'));
 export const SignInPage = lazy(() => import('src/pages/sing-in'));
+export const RegisterPage = lazy(() => import('src/pages/register'));
 export const ProductsPage = lazy(() => import('src/pages/products'));
 export const ReportGenerator = lazy(() => import('src/pages/reports'));
 export const MapsPage = lazy(() => import('src/pages/maps'));
@@ -144,6 +145,14 @@ export function Router() {
       element: (
         <AuthLayout>
           <SignInPage />
+        </AuthLayout>
+      ),
+    },
+    {
+      path: 'Registrarse',
+      element: (
+        <AuthLayout>
+          <RegisterPage />
         </AuthLayout>
       ),
     },
