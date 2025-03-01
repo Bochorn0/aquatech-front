@@ -33,11 +33,11 @@ export const navData = [
       </Label>
     ),
   },
-  {
-    title: 'Reportes',
-    path: '/reportes',
-    icon: icon('ic-analytics'),
-  },
+  // {
+  //   title: 'Reportes',
+  //   path: '/reportes',
+  //   icon: icon('ic-analytics'),
+  // },
   {
     title: 'Usuarios',
     path: '/usuarios',
@@ -48,11 +48,11 @@ export const navData = [
       </Label>
     ),
   },
-  {
-    title: 'Registrarse',
-    path: '/registrarse',
-    icon: icon('ic-lock'),
-  },
+  // {
+  //   title: 'R',
+  //   path: '/login',
+  //   icon: icon('ic-lock'),
+  // },
   // {
   //   title: 'Not found',
   //   path: '/404',

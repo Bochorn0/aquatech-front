@@ -105,6 +105,8 @@ function ProductTableList() {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
+        const token = localStorage.getItem('token');
+        axios.defaults.headers.common.Authorization = `Bearer ${token}`;
         const response = await axios.get(`${CONFIG.API_BASE_URL}/products/mocked`);
         setProducts(response.data);
       } catch (error) {
@@ -117,7 +119,7 @@ function ProductTableList() {
     const interval = setInterval(fetchProducts, 300000);
     return () => clearInterval(interval);
   }, []);
-  
+
   const handleToggle = async (productId: string) => {
     if (processing[productId]) return; // Prevent multiple clicks
   
@@ -145,6 +147,9 @@ function ProductTableList() {
       console.log('Command executed:', response.data);
     } catch (error) {
       console.error('Error executing commands:', error);
+      if (error.response?.status === 401) {
+        localStorage.removeItem('token'); // Remove token if invalid
+      }
     } finally {
       setProcessing((prev) => ({ ...prev, [productId]: false }));
       setSwitchState((prev) => ({ ...prev, [productId]: false })); // Reset switch OFF
@@ -279,7 +284,7 @@ function ProductTableList() {
           </Grid>
           <Grid item xs={12} sm={2}>
             <FormControl fullWidth>
-              <InputLabel>Empresa</InputLabel>
+              <InputLabel>Cliente</InputLabel>
               <Select value={clienteFilter} onChange={(e) => setClienteFilter(e.target.value)}>
                 <MenuItem value="">Todos</MenuItem>
                 {[...new Set(products.map((p) => p.cliente))].map((cliente) => (
@@ -337,7 +342,7 @@ function ProductTableList() {
                 {displayFields.product && <StyledTableCellHeader> Product</StyledTableCellHeader>}
                 {displayFields.status && <StyledTableCellHeader>Status</StyledTableCellHeader>}
                 {displayFields.city && <StyledTableCellHeader>Ciudad</StyledTableCellHeader>}
-                {displayFields.cliente && <StyledTableCellHeader>Empresa</StyledTableCellHeader>}
+                {displayFields.cliente && <StyledTableCellHeader>Cliente</StyledTableCellHeader>}
                 {displayFields.drive && <StyledTableCellHeader>Drive</StyledTableCellHeader>}
                 {displayFields.tds && <StyledTableCellHeader>TDS</StyledTableCellHeader>}
                 {displayFields.volumeTotal && <StyledTableCellHeader>Volumen Total Prod.</StyledTableCellHeader>}

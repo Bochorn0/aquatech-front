@@ -47,6 +47,8 @@ const MexicoMap: React.FC = () => {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
+        const token = localStorage.getItem('token');
+        axios.defaults.headers.common.Authorization = `Bearer ${token}`;
         const response = await axios.get(`${CONFIG.API_BASE_URL}/products/mocked`);
         const products: Product[] = response.data;
         const newMarkers: MarkerType[] = [];
@@ -101,6 +103,9 @@ const MexicoMap: React.FC = () => {
         setMarkers(newMarkers);
       } catch (error) {
         console.error('Error fetching products:', error);
+        if (error.response?.status === 401) {
+          localStorage.removeItem('token'); // Remove token if invalid
+        }
       } finally {
         setLoading(false);
       }

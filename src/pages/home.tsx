@@ -72,6 +72,8 @@ export function DashboardPage() {
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
+        const token = localStorage.getItem('token');
+        axios.defaults.headers.common.Authorization = `Bearer ${token}`;
         const response = await axios.get(`${CONFIG.API_BASE_URL}/dashboard`);
         const totValues = response.data;
         setTotalValues(totValues);
@@ -83,13 +85,15 @@ export function DashboardPage() {
           const citiesToSelect = totValues.serieCovertura.series
             .filter((city: City) => !city.initiallyHidden)
             .map((city: City) => city.name);
-
           setSelectedCities(citiesToSelect);
           setSelectedMonths(totValues.serieCovertura.categories);
           setIsInitialFetch(false); // Prevent overwriting cities in future fetches
         }
       } catch (error) {
         console.error('Error fetching metrics:', error);
+        if (error.response?.status === 401) {
+          localStorage.removeItem('token'); // Remove token if invalid
+        }
       } finally {
         setLoading(false);
       }

@@ -6,18 +6,33 @@ import { Box, Chip, Table, Paper, Avatar, TableRow, TableCell, TableBody, TableH
 
 import { CONFIG } from 'src/config-global';
 
-
+interface User {
+  id: string;
+  nombre: string;
+  email: string;
+  empresa: string;
+  role: string;
+  verified: boolean;
+  puesto: string;
+  status: string;
+  avatar: string;
+}
 export function UserList() {
-  const [users, setUsers] = useState([ {id: '1', name: '', company: true, isVerified: '', avatarUrl:'', status: 'active', 'role': 'Consultor'} ]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     const fetchUsers = async () => {
       try {
+        const token = localStorage.getItem('token');
+        axios.defaults.headers.common.Authorization = `Bearer ${token}`;
         const response = await axios.get(`${CONFIG.API_BASE_URL}/users`);
         console.log(response, 'response');
         setUsers(response.data);
       } catch (error) {
         console.error('Error fetching products:', error);
+        if (error.response?.status === 401) {
+          localStorage.removeItem('token'); // Remove token if invalid
+        }
       } finally {
         setLoading(false);
       }
@@ -50,9 +65,11 @@ export function UserList() {
           <TableHead>
             <TableRow>
               <TableCell>Nombre</TableCell>
+              <TableCell>Correo</TableCell>
               <TableCell>Empresa</TableCell>
               <TableCell>Puesto</TableCell>
-              <TableCell>Vericicado</TableCell>
+              <TableCell>Permisos</TableCell>
+              <TableCell>Verificado</TableCell>
               <TableCell>Estatus</TableCell>
             </TableRow>
           </TableHead>
@@ -62,27 +79,34 @@ export function UserList() {
                 <TableCell>
                   <Box gap={2} display="flex" alignItems="center">
                     <Box gap={2} display="flex" alignItems="center">
-                      <Avatar alt={user.name} src={user.avatarUrl} />
-                      {user.name}
+                      <Avatar alt={user.nombre} src={user.avatar} />
+                      {user.nombre}
                     </Box>
                   </Box>
                 </TableCell>
                 <TableCell>
-                  <Typography variant="body1">{user.company}</Typography>
+                  <Typography variant="body1">{user.email}</Typography>
+                </TableCell>
+                <TableCell>
+                  <Typography variant="body1">{user.empresa}</Typography>
+                </TableCell>
+                <TableCell>
+                  <Typography variant="body1">{user.puesto}</Typography>
                 </TableCell>
                 <TableCell>
                   <Typography variant="body1">{user.role}</Typography>
                 </TableCell>
                 <TableCell>
                   <Chip
-                    label={user.isVerified ? 'Verificado' : 'No verificado'}
-                    color={user.isVerified ? 'success' : 'error'}
+                    label={user.verified ? 'Verificado' : 'No verificado'}
+                    color={user.verified ? 'success' : 'error'}
                     size="small"
                   />
                 </TableCell>
                 <TableCell>
                   <Chip
-                    label={user.status}
+                    label={user.status ? 'Activo' : 'Inactivo'}
+                    color={user.status ? 'success' : 'error'}
                     size="small"
                   />
                 </TableCell>

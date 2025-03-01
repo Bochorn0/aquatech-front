@@ -1,13 +1,15 @@
-import { lazy, Suspense } from 'react';
-import { Outlet, Navigate, useRoutes } from 'react-router-dom';
+import axios from 'axios';
+import Swal from 'sweetalert2';
+import { lazy, Suspense, useEffect } from 'react';
+import { Outlet, Navigate, useRoutes, useNavigate } from 'react-router-dom';
 
 import Box from '@mui/material/Box';
 import LinearProgress, { linearProgressClasses } from '@mui/material/LinearProgress';
 
+import { CONFIG } from 'src/config-global';
 import { varAlpha } from 'src/theme/styles';
 import { AuthLayout } from 'src/layouts/auth';
 import { DashboardLayout } from 'src/layouts/dashboard';
-
 // ----------------------------------------------------------------------
 
 export const HomePage = lazy(() => import('src/pages/home'));
@@ -34,6 +36,47 @@ const renderFallback = (
   </Box>
 );
 
+// Token validation with error handling
+
+const TokenProtectedRoute = ({ children }: { children: JSX.Element }) => {
+const token = localStorage.getItem('token');
+const navigate = useNavigate();
+
+useEffect(() => {
+  const validateToken = async () => {
+    if (!token) {
+      // If no token, show error alert and navigate to login page
+      Swal.fire({
+        icon: 'error',
+        title: 'Oops...',
+        text: 'You need to be logged in to access this page.',
+        showCancelButton: false,
+        confirmButtonText: 'Login'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          navigate('/login');
+        }
+      });
+    } else {
+      try {
+        // Send login request to backend
+        axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+        await axios.post(`${CONFIG.API_BASE_URL}/auth/verify`);
+      } catch (error) {
+        localStorage.removeItem('token'); // Remove token if invalid
+        console.error('Error validating token:', error);
+      }
+    }
+  };
+
+  validateToken();
+}, [token, navigate]);
+
+// If token exists, render the children (Dashboard routes)
+return token ? children : null;
+};
+
+// Main Router component
 export function Router() {
   return useRoutes([
     {
@@ -45,17 +88,59 @@ export function Router() {
         </DashboardLayout>
       ),
       children: [
-        { element: <HomePage />, index: true },
-        { path: 'Usuarios', element: <UserPage /> },
-        { path: 'Productos', element: <ProductsPage /> },
-        { path: 'Productos/:id', element: <ProductsDetailPage /> },
-        { path: 'Regiones', element: <MapsPage /> },
-        { path: 'Reportes', element: <ReportGenerator /> },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <HomePage />
+            </TokenProtectedRoute>
+          ),
+          index: true,
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <UserPage />
+            </TokenProtectedRoute>
+          ),
+          path: 'Usuarios',
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <ProductsPage />
+            </TokenProtectedRoute>
+          ),
+          path: 'Productos',
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <ProductsDetailPage />
+            </TokenProtectedRoute>
+          ),
+          path: 'Productos/:id',
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <MapsPage />
+            </TokenProtectedRoute>
+          ),
+          path: 'Regiones',
+        },
+        // Uncomment and add any routes that need protection here
+        // {
+        //   element: (
+        //     <TokenProtectedRoute>
+        //       <ReportGenerator />
+        //     </TokenProtectedRoute>
+        //   ),
+        //   path: 'Reportes',
+        // },
       ],
     },
-    
     {
-      path: 'Registrarse',
+      path: 'Login',
       element: (
         <AuthLayout>
           <SignInPage />

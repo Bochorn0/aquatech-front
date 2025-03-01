@@ -45,6 +45,7 @@
     "react-helmet-async": "^2.0.5",
     "react-router-dom": "^6.26.1",
     "react-simple-maps": "^3.0.0",
+    "react-toastify": "^11.0.5",
     "simplebar-react": "^3.2.6"
   },
   "devDependencies": {
