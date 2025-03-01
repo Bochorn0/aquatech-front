@@ -49,7 +49,7 @@ useEffect(() => {
       Swal.fire({
         icon: 'error',
         title: 'Oops...',
-        text: 'You need to be logged in to access this page.',
+        text: 'Necesitas iniciar sesión para acceder a esta página',
         showCancelButton: false,
         confirmButtonText: 'Login'
       }).then((result) => {

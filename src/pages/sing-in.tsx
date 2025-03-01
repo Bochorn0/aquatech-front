@@ -11,7 +11,7 @@ import Typography from '@mui/material/Typography';
 import LoadingButton from '@mui/lab/LoadingButton';
 import InputAdornment from '@mui/material/InputAdornment';
 
-import { useRouter, } from 'src/routes/hooks';
+import { useRouter } from 'src/routes/hooks';
 
 import { CONFIG } from 'src/config-global';
 
@@ -59,6 +59,13 @@ export function RegisterPage() {
     }
   }, [email, password, router]);
 
+  // Explicitly typing the event parameter as React.KeyboardEvent
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'Enter') {
+      handleSignIn();
+    }
+  };
+
   const renderForm = (
     <Box display="flex" flexDirection="column" alignItems="flex-end">
       <TextField
@@ -67,6 +74,7 @@ export function RegisterPage() {
         label="Correo"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
+        onKeyDown={handleKeyDown} // Add onKeyDown event here
         InputLabelProps={{ shrink: true }}
         sx={{ mb: 3 }}
       />
@@ -79,6 +87,7 @@ export function RegisterPage() {
         label="Password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
+        onKeyDown={handleKeyDown} // Add onKeyDown event here
         InputLabelProps={{ shrink: true }}
         type={showPassword ? 'text' : 'password'}
         InputProps={{
@@ -151,4 +160,5 @@ export function RegisterPage() {
     </>
   );
 }
+
 export default RegisterPage;
