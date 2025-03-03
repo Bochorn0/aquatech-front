@@ -36,10 +36,6 @@ export function textGradient(color: string): CSSObject {
   };
 }
 
-/**
- * Usage:
- * ...bgGradient({ color: `to right, ${theme.vars.palette.grey[900]} 25%, ${varAlpha(theme.vars.palette.primary.darkerChannel, 0.88)}`, imgUrl: '/assets/background/overlay.png' }),
- */
 export type BgGradientProps = {
   color: string;
   imgUrl?: string;
@@ -57,10 +53,6 @@ export function bgGradient({ color, imgUrl }: BgGradientProps): CSSObject {
   return { background: `linear-gradient(${color})` };
 }
 
-/**
- * Usage:
- * ...bgBlur({ color: `varAlpha(theme.vars.palette.background.paperChannel, 0.8)`, imgUrl: '/assets/background/overlay.png', blur: 6 }),
- */
 export type BgBlurProps = {
   color: string;
   blur?: number;

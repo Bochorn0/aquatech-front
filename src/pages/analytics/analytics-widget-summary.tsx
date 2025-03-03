@@ -127,7 +127,7 @@ export function AnalyticsWidgetSummary({
       </Box>
 
       <SvgColor
-        src="/assets/background/shape-square.svg"
+        src="/assets/background/menu-background.svg"
         sx={{
           top: 0,
           left: -20,

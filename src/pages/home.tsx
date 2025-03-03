@@ -159,7 +159,7 @@ export function DashboardPage() {
 
       <DashboardContent maxWidth="xl">
         <Typography variant="h3" sx={{ mb: { xs: 3, md: 5 } }}>
-          Metricas Genrales
+          Metricas Generales
         </Typography>
 
         <Grid container spacing={3}>

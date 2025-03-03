@@ -15,7 +15,7 @@ import { DashboardLayout } from 'src/layouts/dashboard';
 export const HomePage = lazy(() => import('src/pages/home'));
 export const UserPage = lazy(() => import('src/pages/users'));
 export const ProfilePage = lazy(() => import('src/pages/users/user-profile'));
-export const SignInPage = lazy(() => import('src/pages/sing-in'));
+export const LoginPage = lazy(() => import('src/pages/login'));
 export const RegisterPage = lazy(() => import('src/pages/register'));
 export const ProductsPage = lazy(() => import('src/pages/products'));
 export const ReportGenerator = lazy(() => import('src/pages/reports'));
@@ -50,27 +50,25 @@ const navigate = useNavigate();
 useEffect(() => {
   const validateToken = async () => {
     if (!token) {
-      // If no token, show error alert and navigate to login page
-      Swal.fire({
-        icon: 'error',
-        title: 'Oops...',
-        text: 'Necesitas iniciar sesión para acceder a esta página',
-        showCancelButton: false,
-        confirmButtonText: 'Login'
-      }).then((result) => {
-        if (result.isConfirmed) {
           navigate('/login');
-        }
-      });
     } else {
-      try {
-        // Send login request to backend
-        axios.defaults.headers.common.Authorization = `Bearer ${token}`;
-        await axios.post(`${CONFIG.API_BASE_URL}/auth/verify`);
-      } catch (error) {
-        localStorage.removeItem('token'); // Remove token if invalid
-        console.error('Error validating token:', error);
-      }
+        try {
+          // Send login request to backend
+          axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+          await axios.post(`${CONFIG.API_BASE_URL}/auth/verify`);
+        } catch (error) {
+          Swal.fire({
+            icon: 'error',
+            title: 'Oops...',
+            text: 'Token inválido, por favor inicie sesión nuevamente',
+            showCancelButton: false,
+            confirmButtonText: 'Login'
+          }).then((result) => {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            navigate('/login');
+          });
+        }
     }
   };
 
@@ -158,7 +156,7 @@ export function Router() {
       path: 'Login',
       element: (
         <AuthLayout>
-          <SignInPage />
+          <LoginPage />
         </AuthLayout>
       ),
     },
@@ -178,10 +176,10 @@ export function Router() {
         </AuthLayout>
       ),
     },
-    // {
-    //   path: '404',
-    //   element: <Page404 />,
-    // },
+    {
+      path: '404',
+      element: <Page404 />,
+    },
     {
       path: '*',
       element: <Navigate to="/404" replace />,

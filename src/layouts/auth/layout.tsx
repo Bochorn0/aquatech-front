@@ -1,9 +1,5 @@
 import type { Theme, SxProps, Breakpoint } from '@mui/material/styles';
 
-import Alert from '@mui/material/Alert';
-
-import { stylesMode } from 'src/theme/styles';
-
 import { Logo } from 'src/components/logo';
 
 import { Main } from './main';
@@ -41,11 +37,6 @@ export function AuthLayout({ sx, children, header }: AuthLayoutProps) {
             ...header?.sx,
           }}
           slots={{
-            topArea: (
-              <Alert severity="info" sx={{ display: 'none', borderRadius: 0 }}>
-                This is an info Alert.
-              </Alert>
-            ),
             leftArea: <Logo />
           }}
         />
@@ -64,13 +55,12 @@ export function AuthLayout({ sx, children, header }: AuthLayoutProps) {
           height: 1,
           zIndex: -1,
           content: "''",
-          opacity: 0.24,
+          opacity: 0.4,
           position: 'fixed',
           backgroundSize: 'cover',
           backgroundRepeat: 'no-repeat',
           backgroundPosition: 'center center',
-          backgroundImage: `url(/assets/background/overlay.jpg)`,
-          [stylesMode.dark]: { opacity: 0.08 },
+          backgroundImage: `url(/assets/background/background.jpg)`,
         },
         ...sx,
       }}

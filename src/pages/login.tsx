@@ -17,7 +17,7 @@ import { CONFIG } from 'src/config-global';
 
 import { Iconify } from 'src/components/iconify';
 
-export function RegisterPage() {
+export function LoginPage() {
   const router = useRouter();
 
   const [email, setEmail] = useState('');
@@ -127,7 +127,7 @@ export function RegisterPage() {
         <title> {`Login - ${CONFIG.appName}`}</title>
       </Helmet>
       <Box gap={1.5} display="flex" flexDirection="column" alignItems="center" sx={{ mb: 5 }}>
-        <Typography variant="h5">Sign in</Typography>
+        <Typography variant="h5">Login</Typography>
         <Typography variant="body2" color="text.secondary">
           No tienes una cuenta?
           <Link variant="subtitle2" sx={{ ml: 0.5 }} href="/Registrarse">
@@ -162,4 +162,4 @@ export function RegisterPage() {
   );
 }
 
-export default RegisterPage;
+export default LoginPage;
