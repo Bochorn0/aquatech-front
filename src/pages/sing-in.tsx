@@ -51,6 +51,7 @@ export function RegisterPage() {
       
       // Assuming response contains a token
       localStorage.setItem('token', response.data.token); // Store token in localStorage
+      localStorage.setItem('user', JSON.stringify(response.data.user)); // Store user in localStorage
       router.push('/'); // Redirect to home page after successful login
     } catch (error) {
       setErrorMessage(error.response?.data?.message || 'Login failed');

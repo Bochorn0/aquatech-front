@@ -1,12 +1,10 @@
 import type { Theme, SxProps, Breakpoint } from '@mui/material/styles';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 import Box from '@mui/material/Box';
 import Alert from '@mui/material/Alert';
 import { useTheme } from '@mui/material/styles';
-
-import { _notifications } from 'src/_mock';
 
 import { Iconify } from 'src/components/iconify';
 
@@ -22,6 +20,17 @@ import { AccountPopover } from '../components/account-popover';
 import { NotificationsPopover } from '../components/notifications-popover';
 
 // ----------------------------------------------------------------------
+interface AccountData {
+  _id: string;
+  nombre: string;
+  email: string;
+  empresa: string;
+  role: string;
+  verified: boolean;
+  puesto: string;
+  status: string;
+  avatar: string;
+}
 
 export type DashboardLayoutProps = {
   sx?: SxProps<Theme>;
@@ -31,10 +40,20 @@ export type DashboardLayoutProps = {
   };
 };
 
-export function DashboardLayout({ sx, children, header }: DashboardLayoutProps) {
+export function DashboardLayout({ sx, children, header }: DashboardLayoutProps) {  
   const theme = useTheme();
 
   const [navOpen, setNavOpen] = useState(false);
+  const [accountData, setAccountData] = useState<AccountData | null>(null);
+
+  useEffect(() => {
+    const user = localStorage.getItem('user');
+    if (user) {
+      setAccountData(JSON.parse(user));
+    }
+  }, []);
+
+
 
   const layoutQuery: Breakpoint = 'lg';
 
@@ -78,24 +97,24 @@ export function DashboardLayout({ sx, children, header }: DashboardLayoutProps) 
             rightArea: (
               <Box gap={1} display="flex" alignItems="center">
                 <Searchbar />
-                <NotificationsPopover data={_notifications} />
+                <NotificationsPopover />
                 <AccountPopover
                   data={[
                     {
-                      label: 'Home',
+                      label: 'Inicio',
                       href: '/',
                       icon: <Iconify width={22} icon="solar:home-angle-bold-duotone" />,
                     },
                     {
-                      label: 'Profile',
-                      href: '#',
+                      label: 'Perfil',
+                      href: `/Usuarios/Perfil/${accountData?._id}`,
                       icon: <Iconify width={22} icon="solar:shield-keyhole-bold-duotone" />,
                     },
-                    {
-                      label: 'Settings',
-                      href: '#',
-                      icon: <Iconify width={22} icon="solar:settings-bold-duotone" />,
-                    },
+                    // {
+                    //   label: 'Settings',
+                    //   href: '#',
+                    //   icon: <Iconify width={22} icon="solar:settings-bold-duotone" />,
+                    // },
                   ]}
                 />
               </Box>

@@ -23,7 +23,7 @@ export function RequestAccessPage() {
   const [email, setEmail] = useState('');
   const [nombre, setNombre] = useState('');  // Name field
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('admin');  // Default role as 'admin'
+  const [role, setRole] = useState('user');  // Default role as 'admin'
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -33,7 +33,8 @@ export function RequestAccessPage() {
     setErrorMessage(null);
 
     try {
-      const response = await axios.post(`${CONFIG.API_BASE_URL}/auth/register`, { 
+      setRole('user'); // Default role as 'user'
+      await axios.post(`${CONFIG.API_BASE_URL}/auth/register`, { 
         email, 
         nombre, 
         password, 

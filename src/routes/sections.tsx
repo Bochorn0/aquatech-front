@@ -1,7 +1,7 @@
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { lazy, Suspense, useEffect } from 'react';
-import { Outlet, Navigate, useRoutes, useNavigate } from 'react-router-dom';
+import { Outlet, Navigate, useRoutes, useNavigate, } from 'react-router-dom';
 
 import Box from '@mui/material/Box';
 import LinearProgress, { linearProgressClasses } from '@mui/material/LinearProgress';
@@ -14,6 +14,7 @@ import { DashboardLayout } from 'src/layouts/dashboard';
 
 export const HomePage = lazy(() => import('src/pages/home'));
 export const UserPage = lazy(() => import('src/pages/users'));
+export const ProfilePage = lazy(() => import('src/pages/users/user-profile'));
 export const SignInPage = lazy(() => import('src/pages/sing-in'));
 export const RegisterPage = lazy(() => import('src/pages/register'));
 export const ProductsPage = lazy(() => import('src/pages/products'));
@@ -21,7 +22,11 @@ export const ReportGenerator = lazy(() => import('src/pages/reports'));
 export const MapsPage = lazy(() => import('src/pages/maps'));
 export const ProductsDetailPage = lazy(() => import('src/pages/products/product-details'));
 export const Page404 = lazy(() => import('src/pages/not_fund'));
-
+export const Logout =  function handleTokenLogout() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  return <Navigate to="/login" />;
+};
 // ----------------------------------------------------------------------
 
 const renderFallback = (
@@ -42,7 +47,6 @@ const renderFallback = (
 const TokenProtectedRoute = ({ children }: { children: JSX.Element }) => {
 const token = localStorage.getItem('token');
 const navigate = useNavigate();
-
 useEffect(() => {
   const validateToken = async () => {
     if (!token) {
@@ -72,6 +76,7 @@ useEffect(() => {
 
   validateToken();
 }, [token, navigate]);
+
 
 // If token exists, render the children (Dashboard routes)
 return token ? children : null;
@@ -105,6 +110,15 @@ export function Router() {
           ),
           path: 'Usuarios',
         },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <ProfilePage />
+            </TokenProtectedRoute>
+          ),
+          path: 'Usuarios/Perfil/:id',
+        },
+        
         {
           element: (
             <TokenProtectedRoute>
@@ -145,6 +159,14 @@ export function Router() {
       element: (
         <AuthLayout>
           <SignInPage />
+        </AuthLayout>
+      ),
+    },
+    {
+      path: 'Logout',
+      element: (
+        <AuthLayout>
+          <Logout />
         </AuthLayout>
       ),
     },

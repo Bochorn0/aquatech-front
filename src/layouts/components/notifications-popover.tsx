@@ -1,6 +1,7 @@
 import type { IconButtonProps } from '@mui/material/IconButton';
 
-import { useState, useCallback } from 'react';
+import axios from 'axios';
+import { useState, useEffect, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
 import List from '@mui/material/List';
@@ -19,31 +20,76 @@ import ListItemButton from '@mui/material/ListItemButton';
 
 import { fToNow } from 'src/utils/format-time';
 
+import { CONFIG } from 'src/config-global';
+
 import { Iconify } from 'src/components/iconify';
 import { Scrollbar } from 'src/components/scrollbar';
 
 // ----------------------------------------------------------------------
-
-type NotificationItemProps = {
-  id: string;
-  type: string;
+type Notification = {
+  _id: string;
   title: string;
-  isUnRead: boolean;
   description: string;
-  avatarUrl: string | null;
-  postedAt: string | number | null;
-};
+  isUnRead: boolean;
+  avatarUrl: string;
+  type: ['info', 'alert', 'warning', 'news', 'updates'],
+  createdAt: number;
+  postedAt: number;
+}
 
 export type NotificationsPopoverProps = IconButtonProps & {
-  data?: NotificationItemProps[];
+  data?: Notification[];
 };
 
-export function NotificationsPopover({ data = [], sx, ...other }: NotificationsPopoverProps) {
-  const [notifications, setNotifications] = useState(data);
+export function NotificationsPopover({ sx, ...other }: NotificationsPopoverProps) {
+
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  const fetchNotifications = async () => {
+    const user = localStorage.getItem('user')
+    if (user) {
+      const userId = JSON.parse(user)._id;
+      try {
+        const token  = localStorage.getItem('token');
+        axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+        const response = await axios.get(`${CONFIG.API_BASE_URL}/notifications`, { params: { userId } });
+        console.log('response', response);
+        setNotifications(response.data);
+      } catch (error) {
+        console.error('Error fetching notifications:', error);
+      }
+    }
+
+  };
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+  
+  const markAllAsRead = async () => {
+    try {
+      const user = localStorage.getItem('user');
+      if (!user) return;
+
+      await axios.put(`${CONFIG.API_BASE_URL}/notifications/markAllAsRead`, 
+      {
+        userId: JSON.parse(user)._id 
+      });
+      setNotifications((prev) =>
+        prev.map((notification) => ({
+          ...notification,
+          isUnRead: false,
+        }))
+      );
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
+  };
+  
 
   const totalUnRead = notifications.filter((item) => item.isUnRead === true).length;
 
   const [openPopover, setOpenPopover] = useState<HTMLButtonElement | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
   const handleOpenPopover = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
     setOpenPopover(event.currentTarget);
@@ -54,13 +100,8 @@ export function NotificationsPopover({ data = [], sx, ...other }: NotificationsP
   }, []);
 
   const handleMarkAllAsRead = useCallback(() => {
-    const updatedNotifications = notifications.map((notification) => ({
-      ...notification,
-      isUnRead: false,
-    }));
-
-    setNotifications(updatedNotifications);
-  }, [notifications]);
+    markAllAsRead();
+  }, []);
 
   return (
     <>
@@ -96,12 +137,12 @@ export function NotificationsPopover({ data = [], sx, ...other }: NotificationsP
           <Box sx={{ flexGrow: 1 }}>
             <Typography variant="subtitle1">Notifications</Typography>
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              You have {totalUnRead} unread messages
+              Tienes {totalUnRead} mensajes sin leer
             </Typography>
           </Box>
 
           {totalUnRead > 0 && (
-            <Tooltip title=" Mark all as read">
+            <Tooltip title=" Marcar todo como leído">
               <IconButton color="primary" onClick={handleMarkAllAsRead}>
                 <Iconify icon="solar:check-read-outline" />
               </IconButton>
@@ -111,30 +152,17 @@ export function NotificationsPopover({ data = [], sx, ...other }: NotificationsP
 
         <Divider sx={{ borderStyle: 'dashed' }} />
 
-        <Scrollbar fillContent sx={{ minHeight: 240, maxHeight: { xs: 360, sm: 'none' } }}>
+        <Scrollbar fillContent sx={{ minHeight: 240, maxHeight: { xs: 360, sm: 'none' } } }>
           <List
             disablePadding
             subheader={
               <ListSubheader disableSticky sx={{ py: 1, px: 2.5, typography: 'overline' }}>
-                New
+                Recientes
               </ListSubheader>
             }
           >
-            {notifications.slice(0, 2).map((notification) => (
-              <NotificationItem key={notification.id} notification={notification} />
-            ))}
-          </List>
-
-          <List
-            disablePadding
-            subheader={
-              <ListSubheader disableSticky sx={{ py: 1, px: 2.5, typography: 'overline' }}>
-                Before that
-              </ListSubheader>
-            }
-          >
-            {notifications.slice(2, 5).map((notification) => (
-              <NotificationItem key={notification.id} notification={notification} />
+          {notifications.slice(0, showAll ? notifications.length : 2).map((notification) => (
+              <NotificationItem key={notification._id} notification={notification} />
             ))}
           </List>
         </Scrollbar>
@@ -142,8 +170,8 @@ export function NotificationsPopover({ data = [], sx, ...other }: NotificationsP
         <Divider sx={{ borderStyle: 'dashed' }} />
 
         <Box sx={{ p: 1 }}>
-          <Button fullWidth disableRipple color="inherit">
-            View all
+          <Button fullWidth disableRipple color="inherit" onClick={() => setShowAll((prev) => !prev)}>
+            {showAll ? 'Ocultar' : 'Ver todo'}
           </Button>
         </Box>
       </Popover>
@@ -153,8 +181,18 @@ export function NotificationsPopover({ data = [], sx, ...other }: NotificationsP
 
 // ----------------------------------------------------------------------
 
-function NotificationItem({ notification }: { notification: NotificationItemProps }) {
+function NotificationItem({ notification }: { notification: Notification }) {
   const { avatarUrl, title } = renderContent(notification);
+
+  const markNotificationAsRead = async (id: string) => {
+    try {
+      axios.defaults.headers.common.Authorization = `Bearer ${localStorage.getItem('token')}`;
+      await axios.patch(`${CONFIG.API_BASE_URL}/notifications/${id}`);
+      notification.isUnRead = false;
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
 
   return (
     <ListItemButton
@@ -172,6 +210,7 @@ function NotificationItem({ notification }: { notification: NotificationItemProp
       </ListItemAvatar>
       <ListItemText
         primary={title}
+        onClick={() => markNotificationAsRead(notification._id)}
         secondary={
           <Typography
             variant="caption"
@@ -194,7 +233,7 @@ function NotificationItem({ notification }: { notification: NotificationItemProp
 
 // ----------------------------------------------------------------------
 
-function renderContent(notification: NotificationItemProps) {
+function renderContent(notification: Notification) {
   const title = (
     <Typography variant="subtitle2">
       {notification.title}
@@ -203,45 +242,6 @@ function renderContent(notification: NotificationItemProps) {
       </Typography>
     </Typography>
   );
-
-  if (notification.type === 'order-placed') {
-    return {
-      avatarUrl: (
-        <img
-          alt={notification.title}
-          src="/assets/icons/notification/ic-notification-package.svg"
-        />
-      ),
-      title,
-    };
-  }
-  if (notification.type === 'order-shipped') {
-    return {
-      avatarUrl: (
-        <img
-          alt={notification.title}
-          src="/assets/icons/notification/ic-notification-shipping.svg"
-        />
-      ),
-      title,
-    };
-  }
-  if (notification.type === 'mail') {
-    return {
-      avatarUrl: (
-        <img alt={notification.title} src="/assets/icons/notification/ic-notification-mail.svg" />
-      ),
-      title,
-    };
-  }
-  if (notification.type === 'chat-message') {
-    return {
-      avatarUrl: (
-        <img alt={notification.title} src="/assets/icons/notification/ic-notification-chat.svg" />
-      ),
-      title,
-    };
-  }
   return {
     avatarUrl: notification.avatarUrl ? (
       <img alt={notification.title} src={notification.avatarUrl} />

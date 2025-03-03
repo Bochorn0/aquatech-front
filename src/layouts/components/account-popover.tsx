@@ -1,6 +1,6 @@
 import type { IconButtonProps } from '@mui/material/IconButton';
 
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -14,9 +14,19 @@ import MenuItem, { menuItemClasses } from '@mui/material/MenuItem';
 
 import { useRouter, usePathname } from 'src/routes/hooks';
 
-import { _myAccount } from 'src/_mock';
 
 // ----------------------------------------------------------------------
+interface AccountData {
+  _id: string;
+  nombre: string;
+  email: string;
+  empresa: string;
+  role: string;
+  verified: boolean;
+  puesto: string;
+  status: string;
+  avatar: string;
+}
 
 export type AccountPopoverProps = IconButtonProps & {
   data?: {
@@ -29,7 +39,14 @@ export type AccountPopoverProps = IconButtonProps & {
 
 export function AccountPopover({ data = [], sx, ...other }: AccountPopoverProps) {
   const router = useRouter();
+  const [accountData, setAccountData] = useState<AccountData | null>(null);
 
+  useEffect(() => {
+    const user = localStorage.getItem('user');
+    if (user) {
+      setAccountData(JSON.parse(user));
+    }
+  }, []);
   const pathname = usePathname();
 
   const [openPopover, setOpenPopover] = useState<HTMLButtonElement | null>(null);
@@ -50,10 +67,6 @@ export function AccountPopover({ data = [], sx, ...other }: AccountPopoverProps)
     [handleClosePopover, router]
   );
 
-  const handleTokenLogout = useCallback(() => {
-    localStorage.removeItem('token');
-    router.push('/login');
-  }, [router]);
   return (
     <>
       <IconButton
@@ -68,8 +81,8 @@ export function AccountPopover({ data = [], sx, ...other }: AccountPopoverProps)
         }}
         {...other}
       >
-        <Avatar src={_myAccount.photoURL} alt={_myAccount.displayName} sx={{ width: 1, height: 1 }}>
-          {_myAccount.displayName.charAt(0).toUpperCase()}
+        <Avatar src={accountData?.avatar} alt={accountData?.nombre} sx={{ width: 1, height: 1 }}>
+          {accountData?.nombre.charAt(0).toUpperCase()}
         </Avatar>
       </IconButton>
 
@@ -87,11 +100,11 @@ export function AccountPopover({ data = [], sx, ...other }: AccountPopoverProps)
       >
         <Box sx={{ p: 2, pb: 1.5 }}>
           <Typography variant="subtitle2" noWrap>
-            {_myAccount?.displayName}
+            {accountData?.nombre}
           </Typography>
 
           <Typography variant="body2" sx={{ color: 'text.secondary' }} noWrap>
-            {_myAccount?.email}
+            {accountData?.email}
           </Typography>
         </Box>
 
@@ -133,7 +146,7 @@ export function AccountPopover({ data = [], sx, ...other }: AccountPopoverProps)
         <Divider sx={{ borderStyle: 'dashed' }} />
 
         <Box sx={{ p: 1 }}>
-          <Button fullWidth color="error" size="medium" variant="text" onClick={handleTokenLogout}>
+          <Button fullWidth color="error" size="medium" variant="text" onClick={() => router.push('/logout')}>
             Logout
           </Button>
         </Box>
