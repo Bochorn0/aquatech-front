@@ -32,7 +32,6 @@ export function LoginPage() {
       // Send login request to backend
       axios.defaults.headers.common.Authorization = `Bearer ${token}`;
       axios.post(`${CONFIG.API_BASE_URL}/auth/verify`).then((response) => {
-        console.log('response', response);
         router.push('/'); // Redirect to home if token exists
       });
     } catch (error) {

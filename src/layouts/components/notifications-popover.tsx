@@ -53,7 +53,6 @@ export function NotificationsPopover({ sx, ...other }: NotificationsPopoverProps
         const token  = localStorage.getItem('token');
         axios.defaults.headers.common.Authorization = `Bearer ${token}`;
         const response = await axios.get(`${CONFIG.API_BASE_URL}/notifications`, { params: { userId } });
-        console.log('response', response);
         setNotifications(response.data);
       } catch (error) {
         console.error('Error fetching notifications:', error);
