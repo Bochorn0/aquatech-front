@@ -235,8 +235,13 @@ const MexicoMap: React.FC = () => {
 
   return (
       <Grid container>
-        <Grid item xs={selectedMarker ? 7: 12}>
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <Grid item xs={12} sm={12} md={12} p={2} alignContent='center'>
+          <Typography variant="h4" gutterBottom>
+            Detalle en {selectedMarker ? selectedMarker.name :  "Mexico"}  {selectedMarker?.state || ''} 
+          </Typography>
+        </Grid>
+        <Grid item xs={12} sm={12} md={selectedMarker ? 7: 12} >
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: selectedMarker ? '50vh' :'100vh' }}>
             <ComposableMap
               projection="geoMercator"
               projectionConfig={{ scale, center: centerCoordinates }}
@@ -284,18 +289,12 @@ const MexicoMap: React.FC = () => {
             </ComposableMap>
           </div>
         </Grid>
-        <Grid item xs={selectedMarker ? 5: 0} sx={{ padding: 2 }}>
+        <Grid item xs={12} sm={12} md={selectedMarker ? 5: 0} >
         {selectedMarker && (
-          <Paper sx={{ padding: 2 }}>
-            <Typography variant="h4" gutterBottom>
-              Detalle de {selectedMarker.state}
-              <Typography variant="h6" gutterBottom color="#b18276">
-                {selectedMarker ? selectedMarker.name : (selectedState ? "Metricas" : "Select a Location")}
-              </Typography>
-              <Button onClick={handleBackClick} variant="contained" sx={{ marginTop: 2 }}>
-                Ver Mapa completo
-              </Button>
-            </Typography>
+          <Paper>
+            <Button onClick={handleBackClick} variant="contained" color="primary" style={{width: '100%'}}>
+              Ver Mapa completo
+            </Button>
             <PieChart
               title={`Estatus de equipos: ${selectedMarker.total}`}
               chart={{
