@@ -9,23 +9,7 @@ import { Box, Chip, Grid, Table, Paper, Stack, Button, Select, Switch, Checkbox,
 
 import { CONFIG } from 'src/config-global';
 
-interface Status {
-  code: string;
-  value: any;  // Adjust this if you want more specific types for the value
-};
-
-interface Product {
-  id: string;
-  name: string;
-  city: string;
-  cliente: string;
-  drive: string;
-  online: boolean;
-  icon: string;
-  status: Status[];
-  // Allow dynamic properties (strings) to be added to a product object
-  [key: string]: any;  // This allows any string as a key on the product object
-}
+import type { Product } from './products/types';
 
 interface DisplayFields {
   product: boolean;

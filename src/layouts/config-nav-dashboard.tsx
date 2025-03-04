@@ -23,16 +23,16 @@ export const navData = [
       </Label>
     ),
   },
-  {
-    title: 'Regiones',
-    path: '/Regiones',
-    icon: icon('ic-map'),
-    info: (
-      <Label color="error" variant="inverted">
-        +1002
-      </Label>
-    ),
-  },
+  // {
+  //   title: 'Regiones',
+  //   path: '/Regiones',
+  //   icon: icon('ic-map'),
+  //   info: (
+  //     <Label color="error" variant="inverted">
+  //       +1002
+  //     </Label>
+  //   ),
+  // },
   // {
   //   title: 'Reportes',
   //   path: '/reportes',

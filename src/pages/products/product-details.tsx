@@ -10,29 +10,9 @@ import { CONFIG } from 'src/config-global';
 
 import ProductLogs from './product-logs';
 
+import type { Product } from './types';
+
 // Interfaces for TypeScript
-interface ProductStatus {
-  code: string;
-  value: string | number;
-}
-
-interface Product {
-  product_id: string;
-  name: string;
-  product_name: string;
-  online: boolean;
-  icon: string;
-  status: ProductStatus[];
-  category: string;
-  owner_id: string;
-  ip: string;
-  lat: string;
-  lon: string;
-  model: string;
-  time_zone: string;
-}
-
-
 interface MetricCardProps {
   title: string;
   value: string | number | object;
@@ -81,24 +61,7 @@ MetricCard.propTypes = {
 const ProductDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   
-  const [product, setProduct] = useState<Product>({
-    product_id: '',
-    name: '',
-    product_name: '',
-    online: true,
-    icon: '',
-    status: [
-      { code: '001', value: 'offline' },
-      { code: '002', value: 1 },
-    ],
-    category: '',
-    owner_id: '',
-    ip: '',
-    lat: '',
-    lon: '',
-    model: '',
-    time_zone: '',
-  });
+  const [product, setProduct] = useState<Product>();
   const [loading, setLoading] = useState<boolean>(true); 
 
   useEffect(() => {

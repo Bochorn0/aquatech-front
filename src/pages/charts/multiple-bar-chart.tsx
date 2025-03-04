@@ -2,11 +2,10 @@ import type { CardProps } from '@mui/material/Card';
 import type { ChartOptions } from 'src/components/chart';
 
 import Card from '@mui/material/Card';
-import Divider from '@mui/material/Divider';
 import { useTheme } from '@mui/material/styles';
 import CardHeader from '@mui/material/CardHeader';
 
-import { Chart, useChart, ChartLegends } from 'src/components/chart';
+import { Chart, useChart } from 'src/components/chart';
 
 // ----------------------------------------------------------------------
 
@@ -15,7 +14,7 @@ type Props = CardProps & {
   subheader?: string;
   chart: {
     colors?: string[];
-    categories: string[];
+    categories?: string[];
     series: {
       name: string;
       data: number[];
@@ -24,51 +23,48 @@ type Props = CardProps & {
   };
 };
 
-export function AnalyticsCurrentSubject({ title, subheader, chart, ...other }: Props) {
+export function MultipleBarChart({ title, subheader, chart, ...other }: Props) {
   const theme = useTheme();
 
-  const chartColors = chart.colors ?? [
+  const chartColors = [
     theme.palette.primary.main,
+    theme.palette.secondary.main,
+    theme.palette.success.main,
     theme.palette.warning.main,
+    theme.palette.error.main,
     theme.palette.info.main,
   ];
 
   const chartOptions = useChart({
     colors: chartColors,
-    stroke: { width: 2 },
-    fill: { opacity: 0.48 },
+    stroke: {
+      width: 2,
+      colors: ['transparent'],
+    },
     xaxis: {
       categories: chart.categories,
-      labels: { style: { colors: [...Array(4)].map(() => theme.palette.text.secondary) } },
     },
-    yaxis: {
-      max: 150, // Set radar chart maximum scale
+    legend: {
+      show: true,
+    },
+    tooltip: {
+      y: {
+        formatter: (value: number) => `${value} Instalaciones`,
+      },
     },
     ...chart.options,
   });
 
   return (
     <Card {...other}>
-      <CardHeader title={title} subheader={subheader}  sx={{p: 2}}/>
-
-      <Divider sx={{ borderStyle: 'dashed' }} />
+      <CardHeader title={title} subheader={subheader} />
 
       <Chart
-        type="radar"
+        type="bar"
         series={chart.series}
         options={chartOptions}
-        
-        width={300}
-        height={300}
-        sx={{ my: 1, mx: 'auto' }}
-      />
-
-      <Divider sx={{ borderStyle: 'dashed' }} />
-
-      <ChartLegends
-        labels={chart.series.map((item) => item.name)}
-        colors={chartOptions?.colors}
-        sx={{ p: 3, justifyContent: 'center' }}
+        height={500}
+        sx={{ py: 2.5, pl: 1, pr: 2.5 }}
       />
     </Card>
   );

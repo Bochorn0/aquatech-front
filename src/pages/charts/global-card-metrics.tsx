@@ -29,7 +29,7 @@ type Props = CardProps & {
   };
 };
 
-export function AnalyticsWidgetSummary({
+export function GlobalCardMetrics({
   icon,
   title,
   total,

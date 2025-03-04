@@ -6,7 +6,9 @@ import Box from '@mui/material/Box';
 
 import { RouterLink } from 'src/routes/components';
 
-import { logoClasses } from './classes';
+const logoClasses = {
+  root: 'mnl__logo__root',
+};
 
 // ----------------------------------------------------------------------
 

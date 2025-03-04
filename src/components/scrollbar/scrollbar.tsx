@@ -3,10 +3,9 @@ import SimpleBar from 'simplebar-react';
 
 import Box from '@mui/material/Box';
 
-import { scrollbarClasses } from './classes';
-
 import type { ScrollbarProps } from './types';
 
+const scrollbarClasses = { root: 'aquatech_scrollbar_basic' };
 // ----------------------------------------------------------------------
 
 export const Scrollbar = forwardRef<HTMLDivElement, ScrollbarProps>(

@@ -3,10 +3,9 @@ import { Icon, disableCache } from '@iconify/react';
 
 import Box from '@mui/material/Box';
 
-import { iconifyClasses } from './classes';
-
 import type { IconifyProps } from './types';
 
+const iconifyClasses = { root: 'aquatech_base_icon', flag: 'aquatech_base_icon_flag' };
 // ----------------------------------------------------------------------
 
 export const Iconify = forwardRef<SVGElement, IconifyProps>(

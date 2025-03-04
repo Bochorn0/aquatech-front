@@ -1,6 +1,5 @@
 
 import axios from 'axios';
-import { Helmet } from 'react-helmet-async';
 import React, { useState, useEffect } from 'react';
 import { Marker, Geography, Geographies, ComposableMap } from 'react-simple-maps';
 
@@ -10,7 +9,7 @@ import geoData from 'src/utils/states.json';
 
 import { CONFIG } from 'src/config-global';
 
-import { AnalyticsCurrentVisits } from './analytics/analytics-current-visits';
+import { PieChart } from './charts/pie-chart';
 
 const geoStates = JSON.parse(JSON.stringify(geoData));
 
@@ -235,10 +234,6 @@ const MexicoMap: React.FC = () => {
   }
 
   return (
-    <>
-      <Helmet>
-        <title> {`Covertura de equipos - ${CONFIG.appName}`}</title>
-      </Helmet>
       <Grid container>
         <Grid item xs={selectedMarker ? 7: 12}>
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -301,8 +296,8 @@ const MexicoMap: React.FC = () => {
                 Ver Mapa completo
               </Button>
             </Typography>
-            <AnalyticsCurrentVisits
-              title={`Estatus de equipos - ${selectedMarker.total}`}
+            <PieChart
+              title={`Estatus de equipos: ${selectedMarker.total}`}
               chart={{
                 series: [
                   { label: 'Online', value: selectedMarker.totalOnline },
@@ -319,7 +314,6 @@ const MexicoMap: React.FC = () => {
           )}
         </Grid>
       </Grid>
-    </>
   );
 };
 export default MexicoMap;

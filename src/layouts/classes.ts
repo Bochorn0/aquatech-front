@@ -1,9 +1,7 @@
-// ----------------------------------------------------------------------
-
 export const layoutClasses = {
-  root: 'layout__root',
-  main: 'layout__main',
-  header: 'layout__header',
-  content: 'layout__main__content',
-  hasSidebar: 'layout__has__sidebar',
-};
+    root: 'aquatech_layout_root',
+    main: 'aquatech_layout_main',
+    header: 'aquatech_layout_header',
+    content: 'aquatech_layout_main_content',
+    hasSidebar: 'aquatech_layout_has_sidebar',
+  }

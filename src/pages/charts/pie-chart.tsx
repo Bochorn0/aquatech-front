@@ -8,7 +8,7 @@ import CardHeader from '@mui/material/CardHeader';
 
 import { fNumber } from 'src/utils/format-number';
 
-import { Chart, useChart, ChartLegends } from 'src/components/chart';
+import { Chart, ChartLegends } from 'src/components/chart';
 
 // ----------------------------------------------------------------------
 
@@ -23,9 +23,10 @@ type Props = CardProps & {
     }[];
     options?: ChartOptions;
   };
+  onSectionClick?: (data: any) => void;
 };
 
-export function AnalyticsCurrentVisits({ title, subheader, chart, ...other }: Props) {
+export function PieChart({ title, subheader, chart, onSectionClick, ...other }: Props) {
   const theme = useTheme();
 
   const chartSeries = chart.series.map((item) => item.value);
@@ -37,8 +38,22 @@ export function AnalyticsCurrentVisits({ title, subheader, chart, ...other }: Pr
     theme.palette.error.main,
   ];
 
-  const chartOptions = useChart({
-    chart: { sparkline: { enabled: true } },
+  const chartOptions: ChartOptions = {
+    ...chart.options, // Preserve existing options
+    chart: {
+      ...chart.options?.chart,
+      sparkline: { enabled: true },
+      events: {
+        /** ✅ Native ApexCharts Click Event */
+        dataPointSelection: (_event, _chartContext, config) => {
+          if (onSectionClick && config.dataPointIndex !== undefined) {
+            const index = config.dataPointIndex;
+            const selectedItem = chart.series[index];
+            onSectionClick(selectedItem);
+          }
+        },
+      },
+    },
     colors: chartColors,
     labels: chart.series.map((item) => item.label),
     stroke: { width: 0 },
@@ -50,15 +65,14 @@ export function AnalyticsCurrentVisits({ title, subheader, chart, ...other }: Pr
       },
     },
     plotOptions: { pie: { donut: { labels: { show: false } } } },
-    ...chart.options,
-  });
+  };
 
   return (
     <Card {...other}>
-      <CardHeader title={title} subheader={subheader} sx={{p: 2}}/>
+      <CardHeader title={title} subheader={subheader} sx={{ p: 2 }} />
 
       <Divider sx={{ borderStyle: 'dashed' }} />
-      
+
       <Chart
         type="pie"
         series={chartSeries}

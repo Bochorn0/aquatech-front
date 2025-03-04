@@ -133,14 +133,14 @@ export function Router() {
           ),
           path: 'Productos/:id',
         },
-        {
-          element: (
-            <TokenProtectedRoute>
-              <MapsPage />
-            </TokenProtectedRoute>
-          ),
-          path: 'Regiones',
-        },
+        // {
+        //   element: (
+        //     <TokenProtectedRoute>
+        //       <MapsPage />
+        //     </TokenProtectedRoute>
+        //   ),
+        //   path: 'Regiones',
+        // },
         // Uncomment and add any routes that need protection here
         // {
         //   element: (

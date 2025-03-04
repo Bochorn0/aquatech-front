@@ -4,10 +4,9 @@ import ApexChart from 'react-apexcharts';
 
 import Box from '@mui/material/Box';
 
-import { chartClasses } from './classes';
-
 import type { ChartProps } from './types';
 
+const chartClasses = { root: 'aquatech_base_chart' };
 // ----------------------------------------------------------------------
 
 export function Chart({

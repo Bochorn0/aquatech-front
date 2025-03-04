@@ -5,7 +5,7 @@ import { forwardRef } from 'react';
 
 import Box from '@mui/material/Box';
 
-import { iconifyClasses } from './classes';
+const iconifyClasses = { root: 'aquatech_base_icon', flag: 'aquatech_base_icon_flag' };
 
 // ----------------------------------------------------------------------
 

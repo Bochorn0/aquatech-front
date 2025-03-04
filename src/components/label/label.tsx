@@ -4,10 +4,10 @@ import Box from '@mui/material/Box';
 import { useTheme } from '@mui/material/styles';
 
 import { StyledLabel } from './styles';
-import { labelClasses } from './classes';
 
 import type { LabelProps } from './types';
 
+const labelClasses = { root: 'aquatech_label_root', icon: 'aquatech_label_icon' };
 // ----------------------------------------------------------------------
 
 export const Label = forwardRef<HTMLSpanElement, LabelProps>(
