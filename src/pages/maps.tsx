@@ -66,6 +66,7 @@ interface VisitData {
 const MexicoMap: React.FC = () => {
   const [selectedState, setSelectedState] = useState<Number | null>(null);
   const [selectedMarker, setSelectedMarker] = useState<MarkerType | null>(null);
+  const [heighByState, setHeighByState] = useState('50vh');
   const [loading, setLoading] = useState(true);
   const [markers, setMarkers] = useState<MarkerType[]>([]);
   const [stateGeoJson, setStateGeoJson] = useState<any | null>(null);
@@ -145,10 +146,12 @@ const MexicoMap: React.FC = () => {
       console.error('State code is not valid');
       return;
     }
-  
-    setSelectedState(stateCode);
     setScale(4000); // Adjust the zoom level to zoom in when the state is selected.
-  
+    if (stateCode === 8) {
+      setHeighByState('60vh');
+      setScale(3800); // Adjust the zoom level to zoom in when the state is selected.
+    }
+    setSelectedState(stateCode);
     try {
       const geoState = geoStates.features.find((geo: GeoJSONFeature) => geo.properties.state_code === stateCode);
   
@@ -241,7 +244,7 @@ const MexicoMap: React.FC = () => {
           </Typography>
         </Grid>
         <Grid item xs={12} sm={12} md={selectedMarker ? 7: 12} >
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: selectedMarker ? '50vh' :'100vh' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: selectedMarker ? heighByState :'100vh' }}>
             <ComposableMap
               projection="geoMercator"
               projectionConfig={{ scale, center: centerCoordinates }}

@@ -18,7 +18,7 @@ export const ProfilePage = lazy(() => import('src/pages/users/user-profile'));
 export const LoginPage = lazy(() => import('src/pages/login'));
 export const RegisterPage = lazy(() => import('src/pages/register'));
 export const ProductsPage = lazy(() => import('src/pages/products'));
-export const ReportGenerator = lazy(() => import('src/pages/reports'));
+export const MetricsPage = lazy(() => import('src/pages/metrics'));
 export const MapsPage = lazy(() => import('src/pages/maps'));
 export const ProductsDetailPage = lazy(() => import('src/pages/products/product-details'));
 export const Page404 = lazy(() => import('src/pages/not_fund'));
@@ -133,6 +133,14 @@ export function Router() {
           ),
           path: 'Productos/:id',
         },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <MetricsPage />
+            </TokenProtectedRoute>
+          ),
+          path: 'Metricas',
+        }
         // {
         //   element: (
         //     <TokenProtectedRoute>

@@ -33,11 +33,11 @@ export const navData = [
   //     </Label>
   //   ),
   // },
-  // {
-  //   title: 'Reportes',
-  //   path: '/reportes',
-  //   icon: icon('ic-analytics'),
-  // },
+  {
+    title: 'Metricas',
+    path: '/metricas',
+    icon: icon('ic-analytics'),
+  },
   {
     title: 'Usuarios',
     path: '/usuarios',
