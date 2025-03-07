@@ -1,15 +1,14 @@
 
-import axios from 'axios';
 import React, { useState, useEffect } from 'react';
 import { Marker, Geography, Geographies, ComposableMap } from 'react-simple-maps';
 
-import { Box, Grid, Paper, Button, Tooltip, Typography, CircularProgress } from '@mui/material';
+import { Box, Grid, Paper, Button, Divider, Tooltip, Typography, CircularProgress } from '@mui/material';
 
 import geoData from 'src/utils/states.json';
 
-import { CONFIG } from 'src/config-global';
-
 import { PieChart } from './charts/pie-chart';
+
+import type { Product } from './products/types';
 
 const geoStates = JSON.parse(JSON.stringify(geoData));
 
@@ -27,23 +26,6 @@ interface MarkerType {
   fallando: number;
   coordinates: [number, number];
 }
-
-interface Status {
-  code: string;
-  value: any;
-}
-
-interface Product {
-  id: string;
-  name: string;
-  city: string;
-  drive: string;
-  online: boolean;
-  icon: string;
-  status: Status[];
-  [key: string]: any;
-}
-
 interface StateProperties {
   state_name: string;
   state_code: number;
@@ -63,7 +45,11 @@ interface VisitData {
   series: { label: string; value: number }[];
 }
 
-const MexicoMap: React.FC = () => {
+interface MexicoMapProps {
+  originProducts: Product[]; // Accepting the array of products as a prop
+}
+
+const MexicoMap: React.FC<MexicoMapProps> = ({ originProducts }) => {
   const [selectedState, setSelectedState] = useState<Number | null>(null);
   const [selectedMarker, setSelectedMarker] = useState<MarkerType | null>(null);
   const [heighByState, setHeighByState] = useState('50vh');
@@ -74,15 +60,11 @@ const MexicoMap: React.FC = () => {
   const [scale, setScale] = useState(1400);
 
   useEffect(() => {
-    const fetchProducts = async () => {
+    const processProducts = async () => {
       try {
-        const token = localStorage.getItem('token');
-        axios.defaults.headers.common.Authorization = `Bearer ${token}`;
-        const response = await axios.get(`${CONFIG.API_BASE_URL}/products/mocked`);
-        const products: Product[] = response.data;
         const newMarkers: MarkerType[] = [];
         const cities: { name: string, state: string, lat: number, lon: number }[] = [];
-
+        const products = originProducts as Product[];
         products.forEach((product) => {
           const cityName = product.city;
 
@@ -90,11 +72,10 @@ const MexicoMap: React.FC = () => {
             cities.push({ name: cityName, state: product.state, lat: product.lat, lon: product.lon });
           }
         });
-
         cities.forEach((city) => {
           const state_code = geoStates.features.find((geo: GeoJSONFeature) => geo.properties.state_name === city.state)?.properties.state_code;
           const cityProducts = products.filter((product) => product.city === city.name);
-
+          
           if (cityProducts.length > 0) {
             const totOnline = cityProducts.filter((product) => product.online).length;
             const enRango = cityProducts.filter((product) => {
@@ -136,10 +117,8 @@ const MexicoMap: React.FC = () => {
       }
     };
 
-    fetchProducts();
-    const interval = setInterval(fetchProducts, 300000);
-    return () => clearInterval(interval);
-  }, []);
+    processProducts();
+  }, [originProducts]);
 
   const handleStateClick = async (stateCode: number) => {
     if (!stateCode) {
@@ -242,6 +221,7 @@ const MexicoMap: React.FC = () => {
           <Typography variant="h4" gutterBottom>
             Detalle en {selectedMarker ? selectedMarker.name :  "Mexico"}  {selectedMarker?.state || ''} 
           </Typography>
+          <Divider sx={{ borderStyle: 'dashed' }} />
         </Grid>
         <Grid item xs={12} sm={12} md={selectedMarker ? 7: 12} >
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: selectedMarker ? heighByState :'100vh' }}>

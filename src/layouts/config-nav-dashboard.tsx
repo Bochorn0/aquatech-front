@@ -1,4 +1,4 @@
-import { Label } from 'src/components/label';
+// import { Label } from 'src/components/label';
 import { SvgColor } from 'src/components/svg-color';
 
 // ----------------------------------------------------------------------
@@ -6,7 +6,6 @@ import { SvgColor } from 'src/components/svg-color';
 const icon = (name: string) => (
   <SvgColor width="100%" height="100%" src={`/assets/icons/navbar/${name}.svg`} />
 );
-
 export const navData = [
   {
     title: 'Dashboard',
@@ -14,14 +13,13 @@ export const navData = [
     icon: icon('ic-analytics'),
   },
   {
-    title: 'Productos',
-    path: '/productos',
+    title: 'Equipos',
+    path: '/equipos',
     icon: icon('ic-products'),
-    info: (
-      <Label color="error" variant="inverted">
-        +1000
-      </Label>
-    ),
+    // info: (
+    //   <Label color="error" variant="inverted">
+    //   </Label>
+    // ),
   },
   // {
   //   title: 'Regiones',
@@ -34,19 +32,19 @@ export const navData = [
   //   ),
   // },
   {
-    title: 'Metricas',
-    path: '/metricas',
-    icon: icon('ic-analytics'),
+    title: 'Personalizacion',
+    path: '/personalizacion',
+    icon: icon('ic-configuration'),
   },
   {
     title: 'Usuarios',
     path: '/usuarios',
     icon: icon('ic-user'),
-    info: (
-      <Label color="error" variant="inverted">
-        +1
-      </Label>
-    ),
+    // info: (
+    //   <Label color="error" variant="inverted">
+    //     {/* amount */}
+    //   </Label>
+    // ),
   },
   // {
   //   title: 'R',

@@ -147,7 +147,7 @@ const ProductDetail: React.FC = () => {
       <Box sx={{ p: 3 }}>
         <Paper sx={{ p: 3, mb: 4 }}>
           <Typography variant="h6" gutterBottom>
-            Filter Logs
+            Filtrar Logs
           </Typography>
           <LocalizationProvider dateAdapter={AdapterDayjs}>
             <Grid container spacing={3}>

@@ -10,7 +10,7 @@ interface User {
   _id: string;
   nombre: string;
   email: string;
-  empresa: string;
+  cliente: string;
   role: string;
   verified: boolean;
   puesto: string;
@@ -116,14 +116,14 @@ export function UserList() {
 
       <TableContainer component={Paper}>
         <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
-          User List
+          Lista de usuarios
         </Typography>
         <Table>
           <TableHead>
             <TableRow>
               <TableCell>Nombre</TableCell>
               <TableCell>Correo</TableCell>
-              <TableCell>Empresa</TableCell>
+              <TableCell>Cliente</TableCell>
               <TableCell>Puesto</TableCell>
               <TableCell>Permisos</TableCell>
               <TableCell>Verificado</TableCell>
@@ -140,7 +140,7 @@ export function UserList() {
                   </Box>
                 </TableCell>
                 <TableCell>{user.email}</TableCell>
-                <TableCell>{user.empresa}</TableCell>
+                <TableCell>{user.cliente}</TableCell>
                 <TableCell>{user.puesto}</TableCell>
                 <TableCell>{user.role}</TableCell>
                 <TableCell>

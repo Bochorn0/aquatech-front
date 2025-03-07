@@ -31,11 +31,13 @@ export function PieChart({ title, subheader, chart, onSectionClick, ...other }: 
 
   const chartSeries = chart.series.map((item) => item.value);
 
-  const chartColors = chart.colors ?? [
+  const chartColors = [
     theme.palette.primary.main,
+    theme.palette.secondary.main,
+    theme.palette.success.main,
     theme.palette.warning.main,
-    theme.palette.secondary.dark,
     theme.palette.error.main,
+    theme.palette.info.main
   ];
 
   const chartOptions: ChartOptions = {
@@ -54,7 +56,7 @@ export function PieChart({ title, subheader, chart, onSectionClick, ...other }: 
         },
       },
     },
-    colors: chartColors,
+    colors: chart.colors || chartColors,
     labels: chart.series.map((item) => item.label),
     stroke: { width: 0 },
     dataLabels: { enabled: true, dropShadow: { enabled: false } },
@@ -69,7 +71,7 @@ export function PieChart({ title, subheader, chart, onSectionClick, ...other }: 
 
   return (
     <Card {...other}>
-      <CardHeader title={title} subheader={subheader} sx={{ p: 2 }} />
+      <CardHeader title={title} subheader={subheader} sx={{ p: 2 }} textAlign='center' />
 
       <Divider sx={{ borderStyle: 'dashed' }} />
 

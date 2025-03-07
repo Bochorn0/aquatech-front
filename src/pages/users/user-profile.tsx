@@ -10,7 +10,7 @@ interface User {
   _id: string;
   nombre: string;
   email: string;
-  empresa: string;
+  cliente: string;
   role: string;
   verified: boolean;
   puesto: string;
@@ -25,7 +25,7 @@ export function Profile() {
     _id: '',
     nombre: '',
     email: '',
-    empresa: '',
+    cliente: '',
     role: '',
     verified: false,
     puesto: '',
@@ -64,7 +64,7 @@ export function Profile() {
     let errorMsg = '';
     if (name === 'email' && !isValidEmail(value)) {
       errorMsg = 'Correo inválido';
-    } else if (['nombre', 'empresa', 'puesto'].includes(name) && value.trim() === '') {
+    } else if (['nombre', 'cliente', 'puesto'].includes(name) && value.trim() === '') {
       errorMsg = 'Este campo no puede estar vacío';
     }
 
@@ -131,18 +131,18 @@ export function Profile() {
       </Helmet>
       <Box display="flex" flexDirection="column" alignItems="center" gap={2}>
         <Typography variant="h4">Perfil</Typography>
-        <label htmlFor="avatar-upload">
-          <IconButton component="span">
+        <Box display="flex" flexDirection="column" alignItems="center">
+          <input
+            type="file"
+            accept="image/*"
+            id="avatar-upload"
+            style={{ display: 'none' }}
+            onChange={handleAvatarChange}
+          />
+          <IconButton component="label" htmlFor="avatar-upload">
             <Avatar src={formData.avatar} sx={{ width: 100, height: 100 }} />
           </IconButton>
-        </label>
-        <input
-          type="file"
-          accept="image/*"
-          id="avatar-upload"
-          style={{ display: 'none' }}
-          onChange={handleAvatarChange}
-        />
+        </Box>
         <TextField
           label="Nombre"
           name="nombre"
@@ -162,13 +162,13 @@ export function Profile() {
           helperText={errors.email}
         />
         <TextField
-          label="Empresa"
-          name="empresa"
-          value={formData.empresa}
+          label="Cliente"
+          name="cliente"
+          value={formData.cliente}
           onChange={handleChange}
           fullWidth
-          error={!!errors.empresa}
-          helperText={errors.empresa}
+          error={!!errors.cliente}
+          helperText={errors.cliente}
         />
         <TextField
           label="Puesto"

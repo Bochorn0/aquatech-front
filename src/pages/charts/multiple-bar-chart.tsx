@@ -49,7 +49,7 @@ export function MultipleBarChart({ title, subheader, chart, ...other }: Props) {
     },
     tooltip: {
       y: {
-        formatter: (value: number) => `${value} Instalaciones`,
+        formatter: (value: number) => `${value}`,
       },
     },
     ...chart.options,

@@ -4,11 +4,12 @@ import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 
-import { Box, Chip, Card, Grid, Paper, Typography, CardContent, CircularProgress } from '@mui/material';
+import { Box, Chip, Card, Grid, Paper, Button, Divider, Typography, CardContent, CircularProgress } from '@mui/material';
 
 import { CONFIG } from 'src/config-global';
 
 import ProductLogs from './product-logs';
+import { MultipleBarChart } from '../charts/multiple-bar-chart';
 
 import type { Product } from './types';
 
@@ -63,26 +64,63 @@ const ProductDetail: React.FC = () => {
   
   const [product, setProduct] = useState<Product>();
   const [loading, setLoading] = useState<boolean>(true); 
+  const [charData, setChartData] = useState<any>();
 
   useEffect(() => {
     const fetchProductDetails = async () => {
       try {
         const response = await axios.get(`${CONFIG.API_BASE_URL}/products/${id}`);
         setProduct(response.data);
+        prepareChartData(response.data)
         setLoading(false);
       } catch (error) {
         console.error('Error fetching product details:', error);
         setLoading(false);
       }
     };
-
+    const prepareChartData = (prod: Product) => {
+        if (prod.product_type === 'Nivel') {
+          // Dynamically extract values for the chart
+        const liquidLevelPercent = prod.status.find((s) => s.code === 'liquid_level_percent')?.value || 0;
+        const liquidDepth = prod.status.find((s) => s.code === 'liquid_depth')?.value || 0;
+        const char = {
+          categories: ['Tank A'],
+          series: [
+            {
+              name: 'Liquid Level (%)',
+              data: [liquidLevelPercent],
+            },
+            {
+              name: 'Liquid Depth (m)',
+              data: [liquidDepth],
+            },
+          ],
+          colors: ['#3b82f6', '#34d399'], // Different colors for each series
+          options: {
+            yaxis: {
+              min: 0,
+              max: 100,
+              title: {
+                text: 'Percentage (%)',
+              },
+            },
+            dataLabels: {
+              enabled: true,
+              formatter: (val: number) => `${val}%`,
+            },
+          },
+        };
+        setChartData({char, liquidDepth, liquidLevelPercent});
+      }
+    }
     fetchProductDetails();
-
+    
     const interval = setInterval(() => {
       fetchProductDetails();
     }, 30000); // Refresh every 30 seconds
 
     return () => clearInterval(interval);
+
   }, [id]);
 
   if (loading || !product) {
@@ -99,40 +137,68 @@ const ProductDetail: React.FC = () => {
         <title>{`Detalles de producto - ${CONFIG.appName}`}</title>
       </Helmet>
       <Box sx={{ p: 3 }}>
+        <Button
+          variant="outlined"
+          color="primary"
+          component="a"
+          href="/Equipos"
+          sx={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 1,
+            padding: '8px 16px',
+            borderRadius: '4px',
+            textDecoration: 'none', // Remove underline
+            '&:hover': {
+              backgroundColor: 'primary.light',
+              color: 'white',
+            },
+        }} >
+          Volver a Equipos
+        </Button>
+        <Divider sx={{ borderStyle: 'dashed' }} />
         <Typography variant="h4" gutterBottom>
           {product.name} ({product.product_name})
-          <img
-            src={`${CONFIG.ICON_URL}/${product.icon}`}
-            alt={product.name}
-            style={{ width: '40px', height: '40px', marginRight: '10px' }}
-          />
         </Typography>
 
         <Paper sx={{ p: 3, mb: 4 }}>
-          <Typography variant="h6" gutterBottom>
+          <Typography variant="h6" gutterBottom textAlign='center'>
             Product Details
           </Typography>
           <Grid container spacing={3}>
-            <Grid item xs={12} sm={6} md={4}>
+            <Grid item xs={12} sm={4} textAlign='center'>
+              <img
+                src={`${CONFIG.ICON_URL}/${product.icon}`}
+                alt={product.name}
+                style={{ width: '150px', height: '150px', marginRight: '10px' }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
               <Typography variant="body1">
-                <strong>Product ID:</strong> {product.product_id}
+                <strong>ID:</strong> {product.product_id}
               </Typography>
               <Typography variant="body1">
-                <strong>IP Address:</strong> {product.ip}
+                <strong>IP:</strong> {product.ip}
               </Typography>
               <Typography variant="body1">
-                <strong>Location:</strong> {product.lat}, {product.lon}
+                <strong>Latitud:</strong> {product.lat}
               </Typography>
               <Typography variant="body1">
-                <strong>Category:</strong> {product.category}
+                <strong>Longitud:</strong> {product.lon}
+              </Typography>
+              <Typography variant="body1">
+                <strong>Ciudad:</strong> {product.city}
               </Typography>
             </Grid>
-            <Grid item xs={12} sm={6} md={4}>
+            <Grid item xs={12} sm={4}>
+            <Typography variant="body1">
+              <strong>Tipo:</strong> {product.product_type}
+            </Typography>
               <Typography variant="body1">
-                <strong>Owner ID:</strong> {product.owner_id}
+                <strong>ID Usuario:</strong> {product.uid}
               </Typography>
               <Typography variant="body1">
-                <strong>Online:</strong>{' '}
+                <strong>Status:</strong>{' '}
                 <Chip
                   label={product.online ? 'Online' : 'Offline'}
                   color={product.online ? 'success' : 'error'}
@@ -140,7 +206,7 @@ const ProductDetail: React.FC = () => {
                 />
               </Typography>
               <Typography variant="body1">
-                <strong>Model:</strong> {product.model || 'N/A'}
+                <strong>Modelo:</strong> {product.model || 'N/A'}
               </Typography>
               <Typography variant="body1">
                 <strong>Time Zone:</strong> {product.time_zone}
@@ -148,7 +214,16 @@ const ProductDetail: React.FC = () => {
             </Grid>
           </Grid>
         </Paper>
-
+        {product.product_type === 'Nivel' && charData && (
+          <Paper sx={{ p: 3, mb: 4 }}>
+          <MultipleBarChart
+            title="Nivel del Tanque A"
+            subheader={`Profundidad del líquido: ${charData.liquidDepth}m`}
+            chart={charData.char}
+          />
+        </Paper>
+        )}
+        {product.product_type === 'Osmosis' && (
         <Grid container spacing={3} mb={4}>
           <Grid item xs={12} sm={6} md={3}>
             <MetricCard
@@ -179,10 +254,11 @@ const ProductDetail: React.FC = () => {
             />
           </Grid>
         </Grid>
-
+        )}
+        {product.product_type === 'Osmosis' && (
         <Paper sx={{ p: 3, mb: 4 }}>
           <Typography variant="h6" gutterBottom>
-            Filter Elements Status
+            Detalle de Filtros
           </Typography>
           <Grid container spacing={3}>
             {['filter_element_1', 'filter_element_2', 'filter_element_3', 'filter_element_4', 'filter_element_5'].map(
@@ -198,10 +274,11 @@ const ProductDetail: React.FC = () => {
             )}
           </Grid>
         </Paper>
-
+        )}
+        {product.product_type === 'Osmosis' && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>
-            System Status
+            Estatus de sistema
           </Typography>
           <Grid container spacing={3}>
             <Grid item xs={12} sm={6} md={3}>
@@ -218,8 +295,10 @@ const ProductDetail: React.FC = () => {
             </Grid>
           </Grid>
         </Paper>
-
+        )}
+        { product.product_type === 'Osmosis' && (
         <ProductLogs  />
+        )}
       </Box>
     </>
   );
