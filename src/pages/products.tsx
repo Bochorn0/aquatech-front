@@ -433,7 +433,7 @@ function ProductTableList() {
                         <Stack direction="row" spacing={1} alignItems="center">
                             <Chip
                               label="Flush"
-                              disabled={!product.online || product.type !== 'Osmosis'}
+                              disabled={!product.online || product.product_type !== 'Osmosis'}
                               color={(switchState[product.id] || false) ? 'primary' : 'default'}
                               sx={{ display: 'flex', alignItems: 'center', padding: '5px' }}
                               icon={
