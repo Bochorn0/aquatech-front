@@ -1,5 +1,4 @@
 import type { Dayjs } from 'dayjs'; // Only import Dayjs as a type
-import axios from 'axios';
 import dayjs from 'dayjs';
 import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
@@ -13,6 +12,7 @@ import {
   TablePagination, CircularProgress 
 } from '@mui/material';
 
+import { get } from 'src/api/axiosHelper';
 import { CONFIG } from 'src/config-global';
 import { DashboardContent } from 'src/layouts/dashboard';
 
@@ -20,16 +20,17 @@ import MexicoMap from './maps';
 import { PieChart } from './charts/pie-chart';
 import { getMetricsByProducts } from '../utils/metrix-filter';
 
-import type { Product } from './products/types';
+import type { Cliente, Product, MetricsData, DashboardMetrics } from './types';
 // ---------------------- Interfaces ---------------------- //
-interface DashboardMetrics {
-  title: string;
-  series: { label: string; color: string; value: number , products: Product[]}[];
-}
+
 // ---------------------- Component ---------------------- //
-export function DashboardPage() {
+const defaultMetric = { cliente: '', client_name: '', product_type: '', tds_range: 0, production_volume_range: 0, temperature_range: 0, rejected_volume_range: 0, flow_rate_speed_range: 0, filter_only_online: true }
+export function DashboardPage() {  
+  const [currentRole, setCurretRole] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
-  const [currentClient, setCurrentClient] = useState<string>('');
+  const [selectedClient, setSelectedClient] = useState<string>('All');
+  const [clientFilters, setClientFilters] = useState<Cliente[]>([]);
+  const [currentMetrics, setCurrentMetrics] = useState<MetricsData>(defaultMetric);
   const [dashboardMetrics, setDashboardMetrics] = useState<DashboardMetrics[]>([]);
   const [currentProducts, setCurrentProducts] = useState<Product[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<Product[]>([]);
@@ -38,39 +39,60 @@ export function DashboardPage() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [cityFilters, setCityFilters] = useState<string[]>([]);
-  const [stateFilters, setStateFilters] = useState<string[]>([]);
   const [selectedCity, setSelectedCity] = useState<string>('All');
-  const [selectedState, setSelectedState] = useState<string>('All');
   const [startD, setStartDate] = useState<Dayjs | null>(dayjs('2024-01-01'));
   const [endD, setEndDate] = useState<Dayjs | null>(dayjs().endOf('day'));
 
   useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        const user = localStorage.getItem('user');
+        let firstClients: Cliente[] = [];
+        if (user) {
+          firstClients = await get<Cliente[]>(`/clients/`) || [];
+          firstClients = firstClients.filter((client) => client.name !== 'All');
+          setClientFilters(firstClients);
+
+          const client = JSON.parse(user).cliente as Cliente;
+          setSelectedClient(client.name);
+          setCurretRole(JSON.parse(user).role.name);
+        }
+      } catch (error) {
+        console.error('Error fetching clients:', error);
+      }
+    };
+    fetchClients();
+  }, []); // ✅ Run only on mount
+  // ✅ Second effect: Fetch dashboard data (products/metrics), depends on selected filters
+  useEffect(() => {
     const fetchDashboard = async () => {
       try {
+        setLoading(true);
         setDashboardMetrics([]);
         setCurrentProducts([]);
-        const token = localStorage.getItem('token');
-        const user = localStorage.getItem('user');
-        let cliente = '';
-        // mocked: true
-        const productParams = { city: selectedCity, state: selectedState, startDate: startD, endDate: endD , cliente};
-        if (user) {
-          setCurrentClient(JSON.parse(user).empresa);
-          const { cliente: clientName  } = JSON.parse(user);
-          cliente = clientName;
-          productParams.cliente = cliente;
-        }
-        axios.defaults.headers.common.Authorization = `Bearer ${token}`;
-        const response = await axios.get(`${CONFIG.API_BASE_URL}/products/`, { params: productParams });
-        const productos = response.data || [];
+
+        const clientId = clientFilters.find((client) => client.name === selectedClient)?._id;
+
+        const productParams = { city: selectedCity, cliente: clientId, startDate: startD, endDate: endD };
+        const response = await get<Product[]>(`/products/`, productParams);
+        const productos = response || [];
         const ciudades = [...new Set(productos.map((product: Product) => product.city))] as string[];
-        const estados = [...new Set(productos.map((product: Product) => product.state))] as string[];
+
         setCurrentProducts(productos);
-        const metricas = await fetchMetrics(cliente);
-        const metricsData = getMetricsByProducts(productos, metricas) || [];
-        setDashboardMetrics([...metricsData]); // Force state update
+
+        const metricsResponse = await get<MetricsData[]>(`/metrics`, { cliente: clientId });
+        const metric = metricsResponse[0];
+
+        if (metric) {
+          setCurrentMetrics(metric);
+          const metricsData = getMetricsByProducts(productos, metric);
+          setDashboardMetrics(metricsData);
+        } else {
+          console.warn('No metrics data found for client');
+          setDashboardMetrics([]);
+        }
+
         setCityFilters(ciudades);
-        setStateFilters(estados);
         setSelectedProducts([]);
       } catch (error) {
         console.error('Error fetching dashboard metrics:', error);
@@ -79,24 +101,10 @@ export function DashboardPage() {
       }
     };
 
-    const fetchMetrics = async (cliente: string) => {
-      try {
-        const token = localStorage.getItem('token');
-        axios.defaults.headers.common.Authorization = `Bearer ${token}`;
-        const metricsResponse = await axios.get(`${CONFIG.API_BASE_URL}/metrics`, { params: { cliente } });
-        return metricsResponse.data[0];
-      } catch (error) {
-        console.error('Error fetching dashboard metrics:', error);
-        return null; // Explicitly return a default value
-      }
-    };
-    
-
     fetchDashboard();
-    const interval = setInterval(fetchDashboard, 30000);
+    const interval = setInterval(fetchDashboard, 300000); // 5 minutes
     return () => clearInterval(interval);
-
-  }, [selectedCity, selectedState, startD, endD]);
+  }, [selectedCity, selectedClient, startD, endD, clientFilters]); 
 
 
 
@@ -106,11 +114,6 @@ export function DashboardPage() {
 
   };
 
-  const handleStateChange = (event: any) => {
-    console.log('event', event.target.value);
-    setSelectedState(event.target.value);
-  };
-  
 
   if (loading) {
     return (
@@ -128,7 +131,7 @@ export function DashboardPage() {
 
       <DashboardContent maxWidth="xl">
         <Typography variant="h3" sx={{ mb: { xs: 3, md: 5 } }}>
-          Dashboard de Métricas {currentClient}
+          Dashboard de Métricas en {selectedClient === 'All' ? 'Todos los clientes' : selectedClient}
         </Typography>
 
         <Grid container spacing={3} sx={{ background: 'white' }}>
@@ -143,17 +146,19 @@ export function DashboardPage() {
               </Select>
             </FormControl>
           </Grid>
-          <Grid xs={12} md={6} lg={3}>
-            <FormControl fullWidth>
-              <InputLabel>Estado</InputLabel>
-              <Select value={selectedState} onChange={handleStateChange}>
-                <MenuItem value="All">Todos</MenuItem>
-                {stateFilters.map((state) => (
-                  <MenuItem key={state} value={state}>{state}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
+          {currentRole === 'admin' && (
+            <Grid xs={12} md={6} lg={3}>
+              <FormControl fullWidth>
+                <InputLabel>Cliente</InputLabel>
+                <Select value={selectedClient}  onChange={(e) => setSelectedClient(e.target.value)}>
+                  <MenuItem value="All">Todos</MenuItem>
+                  {clientFilters.map((cliente) => (
+                    <MenuItem key={cliente._id} value={cliente.name}>{cliente.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+          )}
           <Grid xs={12} md={6} lg={3}>
             <LocalizationProvider dateAdapter={AdapterDayjs}>
               <DateTimePicker
@@ -235,7 +240,7 @@ export function DashboardPage() {
           <Grid xs={12} md={12} lg={12}>
             <Divider sx={{ borderStyle: 'dashed' }} />
             <Paper sx={{ p: 2 }}>
-              <MexicoMap originProducts={currentProducts} />
+              <MexicoMap originProducts={currentProducts} currentMetrics={currentMetrics} />
             </Paper>
           </Grid>
         </Grid>

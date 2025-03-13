@@ -1,18 +1,20 @@
-import type { Product } from '../pages/products/types'
+import type { Product, MetricsData, DashboardMetrics } from '../pages/types'
 
-interface MetricsData {
-  tds_range: number;
-  production_volume_range: number;
-  rejected_volume_range: number;
-}
 
-export const getMetricsByProducts = (productosByCliente: Product[], metricsData: MetricsData) => {
+export const getMetricsByProducts = (productosByCliente: Product[], metricsData: MetricsData):DashboardMetrics[] => {
   const tdsOnRangeProds: Product[] = [];
   const tdsOffRangeProds: Product[] = [];
   const proOnRangeProds: Product[] = [];
   const proOffRangeProds: Product[] = [];
   const rejectedOnRangeProds: Product[] = [];
   const rejectedOffRangeProds: Product[] = [];
+  const prodOnline: Product[] =  productosByCliente.filter((p) => p.online) as Product[];
+  const prodOffline: Product[] =  productosByCliente.filter((p) => !p.online) as Product[];
+  console.log('prodOnline:', prodOnline);
+  console.log('prodOffline:', prodOffline);
+  if (metricsData.filter_only_online) {
+    productosByCliente = productosByCliente.filter((p) => p.online) as Product[];
+  }
 
   productosByCliente.forEach((product) => {
     const tdsRange = product.status.find((s) => s.code === "tds_out")?.value;
@@ -41,8 +43,8 @@ export const getMetricsByProducts = (productosByCliente: Product[], metricsData:
     {
       title: "Equipos Conectados",
       series: [
-        { label: "Equipos online", color: "#1877F2", value: productosByCliente.filter((p) => p.online).length, products: productosByCliente.filter((p) => p.online) as Product[] },
-        { label: "Equipos offline", color: "#FF5630", value: productosByCliente.filter((p) => !p.online).length, products: productosByCliente.filter((p) => !p.online) as Product[] },
+        { label: "Equipos online", color: "#1877F2", value: prodOnline.length, products: prodOnline },
+        { label: "Equipos offline", color: "#FF5630", value: prodOffline.length, products: prodOffline },
       ],
     },
     {

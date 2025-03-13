@@ -8,48 +8,12 @@ import geoData from 'src/utils/states.json';
 
 import { PieChart } from './charts/pie-chart';
 
-import type { Product } from './products/types';
+import type { Product, VisitData, MarkerType, MetricsData, MexicoMapProps, GeoJSONFeature } from './types';
 
 const geoStates = JSON.parse(JSON.stringify(geoData));
 
-interface MarkerType {
-  name: string;
-  state: string;
-  state_code: number;
-  color: string;
-  total: number;
-  totalOnline: number;
-  totalEnRango: number;
-  totalRangoOnline: number;
-  totalFueraRango: number;
-  totalFueraRangoOnline: number;
-  fallando: number;
-  coordinates: [number, number];
-}
-interface StateProperties {
-  state_name: string;
-  state_code: number;
-  centroid: [number, number];
-}
 
-interface GeoJSONFeature {
-  type: string;
-  properties: StateProperties;
-  geometry: {
-    type: string;
-    coordinates: any;
-  };
-}
-
-interface VisitData {
-  series: { label: string; value: number }[];
-}
-
-interface MexicoMapProps {
-  originProducts: Product[]; // Accepting the array of products as a prop
-}
-
-const MexicoMap: React.FC<MexicoMapProps> = ({ originProducts }) => {
+const MexicoMap: React.FC<MexicoMapProps> = ({ originProducts, currentMetrics }) => {
   const [selectedState, setSelectedState] = useState<Number | null>(null);
   const [selectedMarker, setSelectedMarker] = useState<MarkerType | null>(null);
   const [heighByState, setHeighByState] = useState('50vh');
@@ -64,7 +28,12 @@ const MexicoMap: React.FC<MexicoMapProps> = ({ originProducts }) => {
       try {
         const newMarkers: MarkerType[] = [];
         const cities: { name: string, state: string, lat: number, lon: number }[] = [];
-        const products = originProducts as Product[];
+        let products = originProducts as Product[];
+        const metrics = currentMetrics as MetricsData;
+        console.log('metrics:', metrics);
+        if (metrics.filter_only_online) {
+          products = products.filter((p) => p.online) as Product[];
+        }
         products.forEach((product) => {
           const cityName = product.city;
 
@@ -77,30 +46,34 @@ const MexicoMap: React.FC<MexicoMapProps> = ({ originProducts }) => {
           const cityProducts = products.filter((product) => product.city === city.name);
           
           if (cityProducts.length > 0) {
-            const totOnline = cityProducts.filter((product) => product.online).length;
-            const enRango = cityProducts.filter((product) => {
-              const flowrate = product.status.find(s => s.code === 'flowrate_total_1')?.value;
-              return flowrate && flowrate >= 20;
+            const tdsEnRango = cityProducts.filter((product) => {
+              const tds = product.status.find(s => s.code === 'tds_out')?.value;
+              return tds && tds >= metrics.tds_range;
             });
-            const totRangoOnline = enRango.filter((product) => product.online).length;
-            const fueraRango = cityProducts.filter((product) => {
-              const flowrate = product.status.find(s => s.code === 'flowrate_total_1')?.value;
-              return flowrate && flowrate < 20;
+            const tdsFueraRango = cityProducts.filter((product) => {
+              const tds = product.status.find(s => s.code === 'tds_out')?.value;
+              return tds && tds < metrics.tds_range;
             });
-            const totFueraRangoOnline = fueraRango.filter((product) => product.online).length;
-
+            const enRangoProduccion = cityProducts.filter((product) => {
+              const flowrate = product.status.find(s => s.code === 'flowrate_total_1')?.value;
+              return flowrate && flowrate >= metrics.production_volume_range / 10;
+            });
+            const fueraRangoProduccion = cityProducts.filter((product) => {
+              const flowrate = product.status.find(s => s.code === 'flowrate_total_1')?.value;
+              return flowrate && flowrate <  metrics.production_volume_range / 10;
+            });
             newMarkers.push({
               name: city.name,
               state: city.state,
               state_code,
               color: `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0")}`,
               total: cityProducts.length,
-              totalOnline: totOnline,
-              totalEnRango: enRango.length,
-              totalRangoOnline: totRangoOnline,
-              totalFueraRango: fueraRango.length,
-              totalFueraRangoOnline: totFueraRangoOnline,
-              fallando: cityProducts.length - totOnline,
+              tdsEnRango: tdsEnRango.length,
+              tdsFueraRango: tdsFueraRango.length,
+              enRangoProduccion: enRangoProduccion.length,
+              fueraRangoProduccion: fueraRangoProduccion.length,
+              totalOnline: cityProducts.filter((p) => p.online).length,
+              totalEnRango: tdsEnRango.length + enRangoProduccion.length,
               coordinates: [city.lon, city.lat],
             });
           }
@@ -118,7 +91,7 @@ const MexicoMap: React.FC<MexicoMapProps> = ({ originProducts }) => {
     };
 
     processProducts();
-  }, [originProducts]);
+  }, [originProducts, currentMetrics]);
 
   const handleStateClick = async (stateCode: number) => {
     if (!stateCode) {
@@ -273,6 +246,11 @@ const MexicoMap: React.FC<MexicoMapProps> = ({ originProducts }) => {
           </div>
         </Grid>
         <Grid item xs={12} sm={12} md={selectedMarker ? 5: 0} >
+        {selectedState && !selectedMarker && (
+          <Button onClick={handleBackClick} variant="contained" color="primary" style={{width: '100%'}}>
+            Ver Mapa completo
+          </Button>
+        )}
         {selectedMarker && (
           <Paper>
             <Button onClick={handleBackClick} variant="contained" color="primary" style={{width: '100%'}}>
@@ -282,13 +260,10 @@ const MexicoMap: React.FC<MexicoMapProps> = ({ originProducts }) => {
               title={`Estatus de equipos: ${selectedMarker.total}`}
               chart={{
                 series: [
-                  { label: 'Online', value: selectedMarker.totalOnline },
-                  { label: 'En Rango', value: selectedMarker.totalEnRango },
-                  // { label: 'En Rango Online', value: selectedMarker.totalRangoOnline },
-                  { label: 'Fuera de Rango', value: selectedMarker.totalFueraRango },
-                  // { label: 'Fuera de Rango Online', value: selectedMarker.totalFueraRangoOnline },
-                  // { label: 'Offline', value: selectedMarker.total - selectedMarker.totalOnline },
-                  { label: 'Fallando', value: selectedMarker.fallando },
+                  { label: 'En Rango Tds', value: selectedMarker.tdsEnRango },
+                  { label: 'Fuera de Rango Tds', value: selectedMarker.tdsFueraRango },
+                  { label: 'En Rango Producción', value: selectedMarker.enRangoProduccion },
+                  { label: 'Fuera de Rango Producción', value: selectedMarker.fueraRangoProduccion }
                 ],
               } as VisitData}
             />

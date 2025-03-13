@@ -1,79 +1,36 @@
-import axios from 'axios';
 import { CSVLink } from 'react-csv';
 import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { styled } from '@mui/material/styles';
-import { Box, Chip, Grid, Table, Paper, Stack, Button, Select, Switch, MenuItem, TableRow, TableCell, TableBody, TextField, TableHead, InputLabel, Typography, FormControl, TableContainer, TablePagination, CircularProgress } from '@mui/material';
+import { Box, Chip, Grid, Table, Paper, Stack, Button, Select, Switch, MenuItem, TableRow, TableBody, TextField, TableHead, InputLabel, Typography, FormControl, TablePagination, CircularProgress } from '@mui/material';
+
+import { StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
 import { CONFIG } from 'src/config-global';
+import { get, post } from "src/api/axiosHelper";
 
-import type { Product } from './products/types';
-
-interface DisplayFields {
-  product: boolean;
-  city: boolean;
-  cliente: boolean;
-  drive: boolean;
-  status: boolean;
-  tds: boolean;
-  volumeTotal: boolean;
-  volumeReject: boolean;
-  flowRate: boolean;
-  rejectFlow: boolean;
-  sedimentFilter: boolean;
-  granularCarbonFilter: boolean;
-  blockCarbonFilter: boolean;
-  oiMembrane: boolean;
-  temperature: boolean;
-}
-
-const StyledTableContainer = styled(TableContainer)({
-  borderRadius: '12px',
-  boxShadow: '0px 4px 10px rgba(0, 0, 0, 0.1)',
-  overflow: 'hidden',
-});
-
-const StyledTableRow = styled(TableRow)(({ theme }) => ({
-  '&:nth-of-type(odd)': {
-    backgroundColor: theme.palette.action.hover,
-  },
-  '&:hover': {
-    backgroundColor: theme.palette.action.selected,
-  },
-}));
-
-const StyledTableCell = styled(TableCell)({
-  padding: '12px',
-  fontSize: '14px',
-});
-const StyledTableCellHeader = styled(TableCell)({
-  padding: '12px',
-  fontSize: '14px',
-  fontWeight: 'bold',
-});
+import type { Cliente, Product, DisplayFields } from './types';
 
 function ProductTableList() {
   const [currentProducts, setCurrentProducts] = useState<Product[]>([]);
   const [currentRole, setCurretRole] = useState<string>('');
   const [cityFilters, setCityFilters] = useState<string[]>([]);
   const [selectedCity, setSelectedCity] = useState<string>('All');
-  const [clientFilters, setClientFilters] = useState<string[]>([]);
+  const [clientFilters, setClientFilters] = useState<Cliente[]>([]);
   const [selectedClient, setSelectedClient] = useState<string>('All');
+  const [isInitialFetch, setInitialFetch] = useState(true);
   const [driveFilters, setDriveFilters] = useState<string[]>([]);
   const [selectedDrive, setSelectedDrive] = useState<string>('All');
   const [statusFilters] = useState(['Online', 'Offline']);
   const [selectedStatus, setSelectedStatus] = useState<string>('All');
-  // const [stateFilters, setStateFilters] = useState<string[]>([]);
-  // const [selectedState, setSelectedState] = useState<string>('Todos');
+
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
   const [processing, setProcessing] = useState<Record<string, boolean>>({});
   const [switchState, setSwitchState] = useState<Record<string, boolean>>({});
-  const [isInitialFetch, setIsInitialFetch] = useState<boolean>(true);
   // const [showDisplayFields, setShowDiplayFields] = useState(false);
   const [displayFields] = useState<DisplayFields>({
     product: true,
@@ -94,43 +51,75 @@ function ProductTableList() {
   });
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const user = localStorage.getItem('user');
-        if (user && isInitialFetch) {
-          setSelectedClient(JSON.parse(user).cliente);
-          setCurretRole(JSON.parse(user).role);
-        }
-        // mocked: true
-        const productParams = { city: selectedCity, cliente: selectedClient, drive: selectedDrive, status: selectedStatus };
+useEffect(() => {
+  const fetchClients = async () => {
+    try {
+      const user = localStorage.getItem('user');
+      let firstClients: Cliente[] = [];
+      if (user) {
+        firstClients = await get<Cliente[]>(`/clients/`) || [];
+        firstClients = firstClients.filter((client) => client.name !== 'All');
+        setClientFilters(firstClients);
 
-        axios.defaults.headers.common.Authorization = `Bearer ${token}`;
-        const response = await axios.get(`${CONFIG.API_BASE_URL}/products/`, { params: productParams });
-        const productos = response.data || [];
-        const ciudades = [...new Set(productos.map((product: Product) => product.city))] as string[];
-        // const estados = [...new Set(productos.map((product: Product) => product.state))] as string[];
-        const clientes = [...new Set(productos.map((product: Product) => product.cliente))] as string[];
-        const drives = [...new Set(productos.map((product: Product) => product.drive))] as string[];
-        setCurrentProducts(productos);
-        setCityFilters(ciudades);
-        setClientFilters(clientes);
-        setDriveFilters(drives);
-        // setStateFilters(estados);
-        if (isInitialFetch) {
-          setIsInitialFetch(false);
-        }
-      } catch (error) {
-        console.error('Error fetching products:', error);
-      } finally {
-        setLoading(false);
+        const client = JSON.parse(user).cliente as Cliente;
+        setSelectedClient(client.name);
+        setCurretRole(JSON.parse(user).role.name);
       }
-    };
+    } catch (error) {
+      console.error('Error fetching clients:', error);
+    }
+  };
+  fetchClients();
+}, []);
+
+useEffect(() => {
+  const fetchProducts = async () => {
+    try {
+      let clientId = '' as Cliente['_id'];
+      const user = localStorage.getItem('user');
+
+      // Find clientId only if clientFilters is loaded
+      if (clientFilters.length > 0) {
+        clientId = clientFilters.find((client) => client.name === selectedClient)?._id || '';
+      } else if (user && isInitialFetch) {
+        const client = JSON.parse(user).cliente as Cliente;
+        clientId = client._id;
+      }
+
+      const productParams = { 
+        city: selectedCity, 
+        cliente: clientId, 
+        drive: selectedDrive, 
+        status: selectedStatus 
+      };
+      const response = await get<Product[]>(`/products/`, productParams);
+      const productos = response || [];
+      const ciudades = [...new Set(productos.map((product: Product) => product.city))] as string[];
+      const drives = [...new Set(productos.map((product: Product) => product.drive))] as string[];
+
+      setCurrentProducts(productos);
+      setCityFilters(ciudades);
+      setDriveFilters(drives);
+      if (isInitialFetch) {
+        setInitialFetch(false);
+      }
+
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (clientFilters.length > 0 || isInitialFetch) {
     fetchProducts();
     const interval = setInterval(fetchProducts, 300000);
-    return () => clearInterval(interval);
-  }, [isInitialFetch, selectedCity, selectedClient, selectedDrive, selectedStatus]);
+    return () => clearInterval(interval); // ✅ cleanup when needed
+  }
+
+  return () => {}; // ✅ empty cleanup function when condition is false
+
+}, [clientFilters, isInitialFetch, selectedCity, selectedClient, selectedDrive, selectedStatus]);
 
   const handleToggle = async (productId: string) => {
     if (processing[productId]) return; // Prevent multiple clicks
@@ -148,15 +137,13 @@ function ProductTableList() {
         id: productId,
         commands: [{ "code": "water_wash", "value": true }]
       };
-  
-      const response = await axios.post(`${CONFIG.API_BASE_URL}/products/sendCommand`, requestData);
-      const { deviceData } = response.data;
+      const response = await post<Product[]>(`/products/`, requestData);
       setCurrentProducts((prevProducts) =>
         prevProducts.map((product) =>
-          product.id === deviceData.id ? { ...product, ...deviceData } : product
+          product.id === productId ? { ...product, online: true } : product
         )
       );
-      console.log('Command executed:', response.data);
+      console.log('Command executed:', response);
     } catch (error) {
       console.error('Error executing commands:', error);
       if (error.response?.status === 401) {
@@ -289,7 +276,7 @@ function ProductTableList() {
                 <Select value={selectedClient}  onChange={(e) => setSelectedClient(e.target.value)}>
                   <MenuItem value="All">Todos</MenuItem>
                   {clientFilters.map((cliente) => (
-                    <MenuItem key={cliente} value={cliente}>{cliente}</MenuItem>
+                    <MenuItem key={cliente._id} value={cliente.name}>{cliente.name}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
@@ -391,7 +378,7 @@ function ProductTableList() {
                       )}
                       {displayFields.cliente && (
                         <StyledTableCell>
-                          {product.cliente}
+                          {product.cliente.name}
                         </StyledTableCell>
                       )}
                       {displayFields.drive && (

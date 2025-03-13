@@ -1,5 +1,4 @@
 import type { Dayjs } from 'dayjs'; // Only import Dayjs as a type
-import axios from 'axios';
 import dayjs from 'dayjs';
 import PropTypes from 'prop-types';
 import { useState, useEffect } from 'react';
@@ -9,26 +8,11 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DateTimePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { Box, Chip, Card, Grid, Table, Paper, Checkbox, TableRow, TextField, TableCell, TableBody, TableHead, Typography, CardContent, TableContainer, TablePagination, CircularProgress, FormControlLabel } from '@mui/material';
 
-import { CONFIG } from 'src/config-global';
-// Interfaces for TypeScript
+import { get } from 'src/api/axiosHelper';
 
-interface Log {
-  event_time: string;
-  value: number;
-  code: string;
-}
+import type { Log, MetricCardProps, LogDisplayFields } from '../types';
 
-interface MetricCardProps {
-  title: string;
-  value: string | number | object;
-  unit?: string;
-}
-
-interface DisplayFields {
-  [key: string]: boolean;
-}
-
-const defaultFields: DisplayFields = {
+const defaultFields: LogDisplayFields = {
   tds_out: false,
   flowrate_total_1: false,
   flowrate_total_2: false,
@@ -80,7 +64,7 @@ const ProductDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [logs, setLogs] = useState<Log[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [displayFields, setDisplayFields] = useState<DisplayFields>(defaultFields);
+  const [displayFields, setDisplayFields] = useState<LogDisplayFields>(defaultFields);
   const [startDate, setStartDate] = useState<Dayjs | null>(dayjs().startOf('day')); // Start of the day
   const [endDate, setEndDate] = useState<Dayjs | null>(dayjs()); // Current time
   const [searchTerm, setSearchTerm] = useState<string>(''); // New search state
@@ -94,15 +78,13 @@ const ProductDetail: React.FC = () => {
           id,
           start_date: startDate ? startDate.valueOf() : dayjs().startOf('day'),
           end_date: endDate ? endDate.valueOf() : dayjs().valueOf(),
-          fields: Object.keys(displayFields)
-            .filter((key) => displayFields[key as keyof DisplayFields])
-            .join(','),
+          fields: Object.keys(displayFields).filter((key) => displayFields[key as keyof LogDisplayFields]).join(','),
           page, // Send page to the API
           limit: rowsPerPage // Send limit for pagination
         };
-        console.log('params', params);
-        const response = await axios.get(`${CONFIG.API_BASE_URL}/products/${id}/logs`, { params });
-        setLogs(response.data?.list || []);
+        const response = await get<Log[]>(`/products/${id}/logs`, { params });
+        console.log('Logs:', response);
+        setLogs(response);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching logs:', error);
@@ -120,7 +102,11 @@ const ProductDetail: React.FC = () => {
   }, [id, startDate, endDate, displayFields, page, rowsPerPage]);
 
   // Filter logs based on search term
-  const filteredLogs = logs.filter((log) => log.code.toLowerCase().includes(searchTerm.toLowerCase()));
+
+  let filteredLogs = [] as Log[];
+  if  (logs.length > 0) {
+    filteredLogs = logs.filter((log) => log.code.toLowerCase().includes(searchTerm.toLowerCase()));
+  }
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
@@ -244,7 +230,7 @@ const ProductDetail: React.FC = () => {
               ) : (
                 <TableRow>
                   <TableCell colSpan={4} align="center">
-                    No logs available
+                    No hay logs disponibles
                   </TableCell>
                 </TableRow>
               )}

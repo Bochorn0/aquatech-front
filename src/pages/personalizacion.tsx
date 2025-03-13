@@ -1,23 +1,20 @@
-import axios from "axios";
 import Swal from "sweetalert2";
 import { Helmet } from "react-helmet-async";
 import { useState, useEffect } from "react";
 
-import { styled } from '@mui/material/styles';
 import {
   Box,
-  Tab,
-  Tabs,
+  Chip,
   Grid,
   Table,
   Select,
+  Switch,
   Button,
   Dialog,
   MenuItem,
   TableRow,
   TableBody,
   TableHead,
-  TableCell,
   TextField,
   InputLabel,
   IconButton,
@@ -26,13 +23,17 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TableContainer,
   CircularProgress
 } from "@mui/material";
 
+import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
+
 import { CONFIG } from "src/config-global";
+import { get, post, patch, remove } from "src/api/axiosHelper";
 
 import { SvgColor } from 'src/components/svg-color';
+
+import type { City, Metric, Cliente } from './types';
 
 const estados = [
   'Aguascalientes',
@@ -69,124 +70,15 @@ const estados = [
   'Zacatecas',
 ];
 
-interface Metric {
-  _id?: string;
-  cliente: string;
-  product_type: string;
-  tds_range: number;
-  production_volume_range: number;
-  temperature_range: number;
-  rejected_volume_range: number;
-  flow_rate_speed_range: number;
-  active_time: number;
-  metrics_description: string;
-}
-interface Client {
-  _id?: string;
-  name: string;
-  email: string;
-  phone?: string;
-  address: {
-    street: string;
-    city: string;
-    state: string;
-    zip: string;
-    country: string;
-    lat: string;
-    lng: string;
-  };
-}
+const ProductTypes = ['Osmosis', 'Nivel']
 
-interface City {
-  _id?: string;
-  state: string;
-  city: string;
-  lat: number;
-  lon: number;
-}
-
-// Styled Tabs
-const CustomTabs = styled(Tabs)({
-  backgroundColor: "#fff",
-  boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.1)",
-  borderRadius: "8px",
-  padding: "4px",
-  "& .MuiTabs-indicator": {
-    display: "none", // Hide default indicator
-  },
-});
-
-// Styled Tab
-const CustomTab = styled(Tab)({
-  textTransform: "none",
-  fontWeight: 600,
-  fontSize: "16px",
-  borderRadius: "8px",
-  padding: "10px 16px",
-  transition: "all 0.3s ease",
-"&.Mui-selected": {
-    background: "linear-gradient(135deg, rgb(255, 86, 48), rgb(255, 127, 80))", // Warm red-orange gradient
-    color: "#fff",
-    boxShadow: "0px 3px 6px rgba(255, 86, 48, 0.3)", // Soft orange glow
-  },
-  "&:hover": {
-    backgroundColor: "rgba(255, 86, 48, 0.1)", // Light hover effect
-  }
-});
-
-const StyledTableContainer = styled(TableContainer)({
-  borderRadius: '12px',
-  boxShadow: '0px 4px 10px rgba(0, 0, 0, 0.1)',
-  overflow: 'hidden',
-});
-
-const StyledTableRow = styled(TableRow)(({ theme }) => ({
-  '&:nth-of-type(odd)': {
-    backgroundColor: theme.palette.action.hover,
-  },
-  '&:hover': {
-    backgroundColor: theme.palette.action.selected,
-  },
-}));
-
-const StyledTableCell = styled(TableCell)({
-  padding: '12px',
-  fontSize: '14px',
-});
-const StyledTableCellHeader = styled(TableCell)({
-  padding: '12px',
-  fontSize: '14px',
-  fontWeight: 'bold',
-});
-
+const defaultclient = { _id: '', name: '' , email:'', address: {city: '', state: '', country: '', street: '', zip: '', lat: '', lon: ''}}
+const defaultMetric = { _id: '', cliente: '', client_name: '', product_type: '', tds_range: 0, production_volume_range: 0, temperature_range: 0, rejected_volume_range: 0, flow_rate_speed_range: 0, active_time: 0, metrics_description: '', filter_only_online: true }
 export function CustomizationPage() {
   const [metrics, setMetrics] = useState<Metric[]>([]);
 
-  const [formData, setFormData] = useState<Metric>({
-    cliente: "",
-    product_type: "",
-    tds_range: 0,
-    production_volume_range: 0,
-    temperature_range: 0,
-    rejected_volume_range: 0,
-    flow_rate_speed_range: 0,
-    active_time: 0,
-    metrics_description: "",
-  });
-  const [clientFormData, setClientFormData] = useState<Client>({
-    name: "",
-    email: "",
-    phone: "",
-    address: {
-      street: "",
-      city: "",
-      state: "",
-      zip: "",
-      country: "",
-      lat: "",
-      lng: "",
-    },
-  });
+  const [formData, setFormData] = useState<Metric>(defaultMetric);
+  const [clientFormData, setClientFormData] = useState<Cliente>(defaultclient);
   
   const [cityFormData, setCityFormData] = useState<City>({
     state: "",
@@ -201,7 +93,7 @@ export function CustomizationPage() {
   const [clientModalOpen, setClientModalOpen] = useState(false);
   const [cityModalOpen, setCityModalOpen] = useState(false);
   const [cities, setCities] = useState<City[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients, setClients] = useState<Cliente[]>([]);
   const [tabIndex, setTabIndex] = useState(0);
 
   useEffect(() => {
@@ -212,8 +104,8 @@ export function CustomizationPage() {
 
   const fetchMetrics = async () => {
     try {
-      const response = await axios.get(`${CONFIG.API_BASE_URL}/metrics`);
-      setMetrics(response.data);
+      const response = await get<Metric[]>(`/metrics`);
+      setMetrics(response);
     } catch (error) {
       console.error("Error fetching metrics:", error);
     }
@@ -221,8 +113,9 @@ export function CustomizationPage() {
 
   const fetchClients = async () => {
     try {
-      const response = await axios.get(`${CONFIG.API_BASE_URL}/clients`);
-      setClients(response.data);
+      const response = await get<Cliente[]>(`/clients`);
+      const filteredClients = response.filter(client => client.name !== 'All');
+      setClients(filteredClients);
     } catch (error) {
       console.error("Error fetching clients:", error);
     }
@@ -230,28 +123,29 @@ export function CustomizationPage() {
 
   const fetchCities = async () => {
     try {
-      const response = await axios.get(`${CONFIG.API_BASE_URL}/cities`);
-      setCities(response.data);
+      const response = await get<City[]>(`/cities`);
+      setCities(response);
     } catch (error) {
       console.error("Error fetching cities:", error);
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: any) => {
     const { name, value } = e.target;
-    setFormData((prevData) => ({
-      ...prevData,
-      [name]: name.includes("range") || name === "active_time" ? parseFloat(value) || 0 : value,
-    }));
+    console.log('e',e);
+      setFormData((prevData) => ({
+        ...prevData,
+        [name]: value,
+      }));
   };
 
   const handleSubmit = async () => {
     setLoading(true);
     try {
       if (editingId) {
-        await axios.patch(`${CONFIG.API_BASE_URL}/metrics/${editingId}`, formData);
+        await patch<Metric>(`/metrics/${editingId}`, formData);
       } else {
-        await axios.post(`${CONFIG.API_BASE_URL}/metrics`, formData);
+        await post<Metric>(`/metrics`, formData);
       }
       handleCloseModal();
       fetchMetrics();
@@ -268,18 +162,10 @@ export function CustomizationPage() {
     setModalOpen(true);
   };
 
-  const handleClientEdit = (client: Client) => {
+  const handleClientEdit = (client: Cliente) => {
     console.log('client edit',client);
     if (!client.address) {
-      client.address = {
-        street: "",
-        city: "",
-        state: "",
-        zip: "",
-        country: "",
-        lat: "",
-        lng: "",
-      };
+      client.address = defaultclient.address
     }
     setClientFormData(client);
     setClientModalOpen(true);
@@ -304,7 +190,7 @@ export function CustomizationPage() {
     try {
       const result = await confirmationAlert();
       if (result.isConfirmed) {
-        await axios.delete(`${CONFIG.API_BASE_URL}/metrics/${id}`);
+        await remove<Metric>(`/metrics/${id}`);
         fetchMetrics();
       }
     } catch (error) {
@@ -316,7 +202,7 @@ export function CustomizationPage() {
     try {
       const result = await confirmationAlert();
       if (result.isConfirmed) {
-        await axios.delete(`${CONFIG.API_BASE_URL}/clients/${id}`);
+        await remove<Cliente>(`/clients/${id}`);
         fetchClients();
       }
     } catch (error) {
@@ -328,7 +214,7 @@ export function CustomizationPage() {
     try {
       const result = await confirmationAlert();
       if (result.isConfirmed) {
-        await axios.delete(`${CONFIG.API_BASE_URL}/cities/${id}`);
+        await remove<City>(`/cities/${id}`);
         fetchCities();
       }
     } catch (error) {
@@ -337,17 +223,7 @@ export function CustomizationPage() {
   };
 
   const handleOpenModal = () => {
-    setFormData({
-      cliente: "",
-      product_type: "",
-      tds_range: 0,
-      production_volume_range: 0,
-      temperature_range: 0,
-      rejected_volume_range: 0,
-      flow_rate_speed_range: 0,
-      active_time: 0,
-      metrics_description: "",
-    });
+    setFormData(defaultMetric);
     setEditingId(null);
     setModalOpen(true);
   };
@@ -391,9 +267,9 @@ export function CustomizationPage() {
     setLoading(true);
     try {
       if (clientFormData._id) {
-        await axios.patch(`${CONFIG.API_BASE_URL}/clients/${clientFormData._id}`, clientFormData);
+        await patch<Cliente>(`/clients/${clientFormData._id}`, clientFormData);
       } else {
-        await axios.post(`${CONFIG.API_BASE_URL}/clients`, clientFormData);
+        await post<Cliente>(`/clients`, clientFormData);
       }
       handleCloseClientModal();
       fetchClients();
@@ -408,9 +284,9 @@ export function CustomizationPage() {
     setLoading(true);
     try {
       if (cityFormData._id) {
-        await axios.patch(`${CONFIG.API_BASE_URL}/cities/${cityFormData._id}`, cityFormData);
+        await patch<City>(`/cities/${cityFormData._id}`, cityFormData);
       } else {
-        await axios.post(`${CONFIG.API_BASE_URL}/cities`, cityFormData);
+        await post<City>(`/cities`, cityFormData);
       }
       handleCloseCityModal();
       fetchCities();
@@ -422,20 +298,7 @@ export function CustomizationPage() {
   };
 
   const handleOpenClientModal = () => {
-    setClientFormData({
-      name: "",
-      email: "",
-      phone: "",
-      address: {
-        street: "",
-        city: "",
-        state: "",
-        zip: "",
-        country: "",
-        lat: "",
-        lng: "",
-      },
-    });
+    setClientFormData(defaultclient);
     console.log('clientFormData',clientFormData);
     setClientModalOpen(true);
   };
@@ -499,16 +362,16 @@ export function CustomizationPage() {
                     <StyledTableRow>
                       <StyledTableCellHeader>Cliente</StyledTableCellHeader>
                       <StyledTableCellHeader>Tipo de Producto</StyledTableCellHeader>
-                      <StyledTableCellHeader>TDS Range</StyledTableCellHeader>
-                      <StyledTableCellHeader>Production Volume</StyledTableCellHeader>
-                      <StyledTableCellHeader>Temperature</StyledTableCellHeader>
+                      <StyledTableCellHeader>Rango TDS</StyledTableCellHeader>
+                      <StyledTableCellHeader>Volumen de Producción</StyledTableCellHeader>
+                      <StyledTableCellHeader>Temperatura</StyledTableCellHeader>
                       <StyledTableCellHeader>Acciones</StyledTableCellHeader>
                     </StyledTableRow>
                   </TableHead>
                   <TableBody>
                     {metrics.map((metric) => (
                       <StyledTableRow key={metric._id}>
-                        <StyledTableCell>{metric.cliente}</StyledTableCell>
+                        <StyledTableCell>{metric.client_name}</StyledTableCell>
                         <StyledTableCell>{metric.product_type}</StyledTableCell>
                         <StyledTableCell>{metric.tds_range}</StyledTableCell>
                         <StyledTableCell>{metric.production_volume_range}</StyledTableCell>
@@ -640,17 +503,45 @@ export function CustomizationPage() {
           <DialogTitle>{editingId ? "Editar Métrica" : "Nueva Métrica"}</DialogTitle>
           <DialogContent>
             <Box display="flex" flexDirection="column" gap={2} mt={1}>
-              <TextField label="Cliente" name="cliente" value={formData.cliente} onChange={handleChange} fullWidth />
-              <TextField label="Tipo de Producto" name="product_type" value={formData.product_type} onChange={handleChange} fullWidth />
-              <TextField label="TDS Range" name="tds_range" type="number" value={formData.tds_range} onChange={handleChange} fullWidth />
-              <TextField label="Production Volume" name="production_volume_range" type="number" value={formData.production_volume_range} onChange={handleChange} fullWidth />
-              <TextField label="Temperature" name="temperature_range" type="number" value={formData.temperature_range} onChange={handleChange} fullWidth />
-              <TextField label="Rejected Volume" name="rejected_volume_range" type="number" value={formData.rejected_volume_range} onChange={handleChange} fullWidth />
-              <TextField label="Flow Rate Speed" name="flow_rate_speed_range" type="number" value={formData.flow_rate_speed_range} onChange={handleChange} fullWidth />
-              <TextField label="Active Time" name="active_time" type="number" value={formData.active_time} onChange={handleChange} fullWidth />
+              <FormControl fullWidth>
+                <InputLabel>Cliente</InputLabel>
+                <Select value={formData.cliente} name="cliente" onChange={handleChange} fullWidth>
+                  {clients.map((cliente) => (
+                    <MenuItem key={cliente._id} value={cliente._id}>{cliente.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl fullWidth>
+                <InputLabel>Tipo de Producto</InputLabel>
+                <Select value={formData.product_type} name="product_type" onChange={handleChange} fullWidth>
+                  {ProductTypes.map((type) => (
+                    <MenuItem key={type} value={type}>{type}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <TextField label="Rango Tds" name="tds_range" type="number" value={formData.tds_range} onChange={handleChange} fullWidth />
+              <TextField label="Volumen de producción" name="production_volume_range" type="number" value={formData.production_volume_range} onChange={handleChange} fullWidth />
+              <TextField label="Rango de temperatura" name="temperature_range" type="number" value={formData.temperature_range} onChange={handleChange} fullWidth />
+              <TextField label="Volumen de rechazo" name="rejected_volume_range" type="number" value={formData.rejected_volume_range} onChange={handleChange} fullWidth />
+              <TextField label="Rango de velocidad de flujo" name="flow_rate_speed_range" type="number" value={formData.flow_rate_speed_range} onChange={handleChange} fullWidth />
+              <Chip
+                  label="Filtrar solo activos"
+                  color='default'
+                  sx={{ display: 'flex', alignItems: 'center', padding: '5px' }}
+                  icon={
+                    <Switch
+                      title="Toma en cuenta solo los productos en linea al usar las metricas"
+                      checked={formData.filter_only_online} 
+                      onChange={(e) => setFormData((prevData) => ({ ...prevData, filter_only_online: e.target.checked }))}
+                    />
+                  }
+                />
+              {/* <TextField label="tiempo activo" name="active_time" type="number" value={formData.active_time} onChange={handleChange} fullWidth /> */}
               <TextField label="Descripción" name="metrics_description" value={formData.metrics_description} onChange={handleChange} fullWidth multiline rows={3} />
+
             </Box>
           </DialogContent>
+          
           <DialogActions>
             <Button onClick={handleCloseModal} color="secondary">Cancelar</Button>
             <Button onClick={handleSubmit} variant="contained" color="primary" disabled={loading}>
@@ -710,7 +601,6 @@ export function CustomizationPage() {
             </Button>
           </DialogActions>
         </Dialog>
-
       </Grid>
       </Box>
     </>

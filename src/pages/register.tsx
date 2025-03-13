@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { Helmet } from 'react-helmet-async';
 import { useState, useCallback } from 'react';
 
@@ -14,6 +13,7 @@ import InputAdornment from '@mui/material/InputAdornment';
 import { useRouter } from 'src/routes/hooks';
 
 import { CONFIG } from 'src/config-global';
+import { post } from 'src/api/axiosHelper';
 
 import { Iconify } from 'src/components/iconify';
 
@@ -34,12 +34,7 @@ export function RequestAccessPage() {
 
     try {
       setRole('user'); // Default role as 'user'
-      await axios.post(`${CONFIG.API_BASE_URL}/auth/register`, { 
-        email, 
-        nombre, 
-        password, 
-        role 
-      });
+      await post(`/auth/register`, { email, nombre, password, role });
 
       // Assuming a successful response will lead to some confirmation or redirection
       router.push('/login'); // Redirect to confirmation page or wherever appropriate

@@ -1,4 +1,3 @@
-import axios from 'axios';
 import PropTypes from 'prop-types';
 import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
@@ -6,19 +5,14 @@ import { useParams } from 'react-router-dom';
 
 import { Box, Chip, Card, Grid, Paper, Button, Divider, Typography, CardContent, CircularProgress } from '@mui/material';
 
+import { get } from 'src/api/axiosHelper';
 import { CONFIG } from 'src/config-global';
 
 import ProductLogs from './product-logs';
 import { MultipleBarChart } from '../charts/multiple-bar-chart';
 
-import type { Product } from './types';
+import type { Product, MetricCardProps } from '../types';
 
-// Interfaces for TypeScript
-interface MetricCardProps {
-  title: string;
-  value: string | number | object;
-  unit?: string;
-}
 
 // Separate MetricCard Component
 const MetricCard: React.FC<MetricCardProps> = ({ title, value, unit }) => {
@@ -69,9 +63,9 @@ const ProductDetail: React.FC = () => {
   useEffect(() => {
     const fetchProductDetails = async () => {
       try {
-        const response = await axios.get(`${CONFIG.API_BASE_URL}/products/${id}`);
-        setProduct(response.data);
-        prepareChartData(response.data)
+        const response = await get<Product>(`/products/${id}`);
+        setProduct(response);
+        prepareChartData(response)
         setLoading(false);
       } catch (error) {
         console.error('Error fetching product details:', error);

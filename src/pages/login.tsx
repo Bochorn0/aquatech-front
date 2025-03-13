@@ -1,4 +1,3 @@
-import axios from 'axios'; // For making HTTP requests
 import { Helmet } from 'react-helmet-async';
 import { useState, useEffect, useCallback } from 'react';
 
@@ -13,9 +12,12 @@ import InputAdornment from '@mui/material/InputAdornment';
 
 import { useRouter } from 'src/routes/hooks';
 
+import { post } from 'src/api/axiosHelper'; // Import the post function from axiosHelper
 import { CONFIG } from 'src/config-global';
 
 import { Iconify } from 'src/components/iconify';
+
+import type { Sing } from './types';
 
 export function LoginPage() {
   const router = useRouter();
@@ -27,16 +29,15 @@ export function LoginPage() {
   const [errorMessage, setErrorMessage] = useState(null); // To manage error state
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
     try {
-      // Send login request to backend
-      axios.defaults.headers.common.Authorization = `Bearer ${token}`;
-      axios.post(`${CONFIG.API_BASE_URL}/auth/verify`).then((response) => {
+      if (!localStorage.getItem('token')) return; // Skip if no token exists
+      post(`/auth/verify`, {}).then((response) => {
         router.push('/'); // Redirect to home if token exists
       });
     } catch (error) {
+      console.error('ERROR REMOVE LOGIN', error);
       localStorage.removeItem('token'); // Remove token if invalid
-      console.error('Error validating token:', error);
+      localStorage.removeItem('user'); // Remove token if invalid
     }
   }, [router]);
 
@@ -46,18 +47,18 @@ export function LoginPage() {
 
     try {
       // Send login request to backend
-      const response = await axios.post(`${CONFIG.API_BASE_URL}/auth/login`, { email, password });
-      
+      const response = await  post<Sing>(`/auth/login`, { email, password });
       // Assuming response contains a token
-      localStorage.setItem('token', response.data.token); // Store token in localStorage
-      localStorage.setItem('user', JSON.stringify(response.data.user)); // Store user in localStorage
+      localStorage.setItem('token', response.token); // Store token in localStorage
+      localStorage.setItem('user', JSON.stringify(response.user)); // Store user in localStorage
       router.push('/'); // Redirect to home page after successful login
     } catch (error) {
+      console.error('ERROR REMOVE LOGIN', error);
       setErrorMessage(error.response?.data?.message || 'Login failed');
     } finally {
       setLoading(false); // Stop loading state
     }
-  }, [email, password, router]);
+  }, [router, email, password]);
 
   // Explicitly typing the event parameter as React.KeyboardEvent
   const handleKeyDown = (event: React.KeyboardEvent) => {

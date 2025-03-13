@@ -1,5 +1,4 @@
 import axios from 'axios';
-import Swal from 'sweetalert2';
 import { lazy, Suspense, useEffect } from 'react';
 import { Outlet, Navigate, useRoutes, useNavigate, } from 'react-router-dom';
 
@@ -57,17 +56,9 @@ useEffect(() => {
           axios.defaults.headers.common.Authorization = `Bearer ${token}`;
           await axios.post(`${CONFIG.API_BASE_URL}/auth/verify`);
         } catch (error) {
-          Swal.fire({
-            icon: 'error',
-            title: 'Oops...',
-            text: 'Token inválido, por favor inicie sesión nuevamente',
-            showCancelButton: false,
-            confirmButtonText: 'Login'
-          }).then((result) => {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            navigate('/login');
-          });
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          navigate('/login');
         }
     }
   };

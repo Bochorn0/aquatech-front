@@ -1,90 +1,180 @@
-import axios from 'axios';
+import Swal from "sweetalert2";
 import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
 
-import { Box, Chip, Table, Paper, Avatar, Button, Select, MenuItem,TableRow, TableCell, TableBody, TableHead, InputLabel, Typography, FormControl, TableContainer, CircularProgress } from '@mui/material';
+import {
+  Box,
+  Grid,
+  Table,
+  Select,
+  Button,
+  Dialog,
+  MenuItem,
+  TableRow,
+  TableBody,
+  TableHead,
+  TextField,
+  InputLabel,
+  IconButton,
+  Typography,
+  FormControl,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  CircularProgress
+} from "@mui/material";
 
-import { CONFIG } from 'src/config-global';
+import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
-interface User {
-  _id: string;
-  nombre: string;
-  email: string;
-  cliente: string;
-  role: string;
-  verified: boolean;
-  puesto: string;
-  status: string;
-  avatar: string;
-}
+import { CONFIG } from "src/config-global";
+import { get, post, patch, remove } from "src/api/axiosHelper";
 
-export function UserList() {
+import { SvgColor } from 'src/components/svg-color';
+
+import type { User, Role, Cliente } from './types';
+
+const defaultUser = { _id: '', nombre: '', email: '', client_name: '', role_name: '', cliente: '', role: { _id: '', name: '' }, verified: false, puesto: '', status: '' };
+export default function UserRoleManagement() {
+  const [loading, setLoading] = useState(false);
+  const [tabIndex, setTabIndex] = useState(0);
   const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [roleFilter, setRoleFilter] = useState<string | null>(null);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [clients, setClients] = useState<Cliente[]>([]);
+  const [userForm, setUserForm] = useState<User>(defaultUser);
+  const [roleForm, setRoleForm] = useState<Role>({ name: '' });
+  const [userModalOpen, setUserModalOpen] = useState(false);
+  const [roleModalOpen, setRoleModalOpen] = useState(false);
 
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        axios.defaults.headers.common.Authorization = `Bearer ${token}`;
-
-        const params: any = {};
-        if (statusFilter) params.status = statusFilter;
-        if (roleFilter) params.role = roleFilter;
-
-        const response = await axios.get(`${CONFIG.API_BASE_URL}/users`, { params });
-        setUsers(response.data);
-      } catch (error) {
-        console.error('Error fetching users:', error);
-        if (error.response?.status === 401) {
-          localStorage.removeItem('token'); // Remove token if unauthorized
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
+    fetchClients();
     fetchUsers();
-    const interval = setInterval(fetchUsers, 30000); // Refresh every 30 seconds
+    fetchRoles();
+  }, []);
 
-    return () => clearInterval(interval);
-  }, [statusFilter, roleFilter]);
-
-  const updateUser = async (userId: string, data: Partial<User>) => {
+  const fetchClients = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const updatedUser = { ...data };
-      console.log('updatedUser', updatedUser);
-      axios.defaults.headers.common.Authorization = `Bearer ${token}`;
-      await axios.patch(`${CONFIG.API_BASE_URL}/users/${userId}`, updatedUser);
-      setUsers((prevUsers) =>
-        prevUsers.map((user) => (user._id === userId ? { ...user, ...data } : user))
-      );
+      const response = await get<Cliente[]>(`/clients`);
+      setClients(response);
     } catch (error) {
-      console.error('Error updating user:', error);
+      console.error("Error fetching clients:", error);
     }
   };
 
-  const approveUser = async (userId: string) => {
+  const fetchUsers = async () => {
+    const response = await get<User[]>(`/users`);
+    setUsers(response);
+  };
+
+  const fetchRoles = async () => {
+    const response = await get<Role[]>(`/roles`);
+    setRoles(response);
+  };
+
+  const confirmationAlert = () => Swal.fire({
+    icon: 'warning',
+    title: 'Advertencia',
+    text: '¿Estás seguro de que deseas eliminar este registro?',
+    showCancelButton: true,
+    confirmButtonText: 'Sí, Continuar',
+    cancelButtonText: 'Cancelar',
+  });
+  
+  const handleUserEdit = (user: User) => {
+    console.log(user);
+    setUserForm(user);
+    setUserModalOpen(true);
+  };
+
+  const handleRoleEdit = (role: Role) => {
+    setRoleForm(role);
+    setRoleModalOpen(true);
+  };
+
+  const handleUserSubmit = async () => {
+    setLoading(true);
     try {
-      const currentUser = users.find((user) => user._id === userId);
-      if (!currentUser) return;
-      currentUser.status = 'active';
-      await updateUser(userId, currentUser);
+      if (userForm._id) {
+        await patch(`/users/${userForm._id}`, userForm);
+      } else {
+        await post(`/users`, userForm);
+      }
+      fetchUsers();
+      setUserModalOpen(false);
     } catch (error) {
-      console.error('Error approving user:', error);
+      console.error("Error submitting user:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
-        <CircularProgress />
-      </Box>
-    );
-  }
+  const handleRoleSubmit = async () => {
+    setLoading(true);
+    try {
+      if (roleForm._id) {
+        await patch(`/roles/${roleForm._id}`, roleForm);
+      } else {
+        await post(`/roles`, roleForm);
+      }
+      fetchRoles();
+      setRoleModalOpen(false);
+    } catch (error) {
+      console.error("Error submitting role:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUserDelete = async (id: string) => {
+    try {
+      const result = await confirmationAlert();
+      if (result.isConfirmed) {
+        await remove(`/users/${id}`);
+        fetchUsers();
+      }
+    } catch (error) {
+      console.error("Error deleting user:", error);
+    }
+  };
+
+  const handleRoleDelete = async (id: string) => {
+    try {
+      const result = await confirmationAlert();
+      if (result.isConfirmed) {
+        await remove(`/roles/${id}`);
+        fetchRoles();
+      }
+    } catch (error) {
+      console.error("Error deleting role:", error);
+    }
+  };
+
+  const handleOpenUserModal = () => {
+    setUserForm(defaultUser);
+    setUserModalOpen(true);
+  };
+
+  const handleOpenRoleModal = () => {
+    setRoleForm({ name: '' });
+    setRoleModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setUserModalOpen(false);
+    setRoleModalOpen(false);
+  };
+
+  const handleUserChange = (e: any) => {
+    console.log(e.target);
+    const { name, value } = e.target;
+    setUserForm((prevData) => ({
+      ...prevData,
+      [name]: value,
+    }));
+  };
+
+  const handleRoleChange = (e: any) => {
+    setRoleForm({ ...roleForm, [e.target.name]: e.target.value });
+  };
 
   return (
     <>
@@ -92,84 +182,173 @@ export function UserList() {
         <title>Usuarios - {CONFIG.appName}</title>
       </Helmet>
 
-      <Box display="flex" gap={2} mb={2}>
-        <FormControl sx={{ minWidth: 150 }}>
-          <InputLabel>Status</InputLabel>
-          <Select value={statusFilter || ''} onChange={(e) => setStatusFilter(e.target.value || null)}>
-            <MenuItem value="">All</MenuItem>
-            <MenuItem value="active">Active</MenuItem>
-            <MenuItem value="pending">Pending</MenuItem>
-            <MenuItem value="inactive">Inactive</MenuItem>
-          </Select>
-        </FormControl>
-
-        <FormControl sx={{ minWidth: 150 }}>
-          <InputLabel>Role</InputLabel>
-          <Select value={roleFilter || ''} onChange={(e) => setRoleFilter(e.target.value || null)}>
-            <MenuItem value="">All</MenuItem>
-            <MenuItem value="admin">Admin</MenuItem>
-            <MenuItem value="tecnico">Tecnico</MenuItem>
-            <MenuItem value="usuario">Usuario</MenuItem>
-          </Select>
-        </FormControl>
+    <Box sx={{ p: 2 }}>
+      <CustomTabs value={tabIndex} onChange={(_, newIndex) => setTabIndex(newIndex)}>
+        <CustomTab label="Users" />
+        <CustomTab label="Roles" />
+      </CustomTabs>
+      <Box mt={2}>
+        {tabIndex === 0 && (
+          <Grid container spacing={2}>
+          <Grid item xs={12}>
+            <Box sx={{ overflowX: 'auto' }}> {/* Ensures table responsiveness */}
+              <Grid container>
+                <Grid item xs={12} sm={9}>
+                  <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
+                  Lista de Usuarios
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={3} textAlign='right'>
+                  <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
+                  <Button variant="contained" color="primary" onClick={handleOpenUserModal} fullWidth>
+                    Añadir Usuario
+                  </Button>
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Box>
+            <StyledTableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <StyledTableCellHeader>Name</StyledTableCellHeader>
+                    <StyledTableCellHeader>Email</StyledTableCellHeader>
+                    <StyledTableCellHeader>Cliente</StyledTableCellHeader>
+                    <StyledTableCellHeader>Role</StyledTableCellHeader>
+                    <StyledTableCellHeader>Status</StyledTableCellHeader>
+                    <StyledTableCellHeader>Actions</StyledTableCellHeader>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {users.map((user) => (
+                    <StyledTableRow key={user._id}>
+                      <StyledTableCell>{user.nombre}</StyledTableCell>
+                      <StyledTableCell>{user.email}</StyledTableCell>
+                      <StyledTableCell>{user.client_name}</StyledTableCell>
+                      <StyledTableCell>{user.role_name}</StyledTableCell>
+                      <StyledTableCell>{user.status}</StyledTableCell>
+                      <StyledTableCell>
+                        <IconButton sx={{ mr: 1, color: 'primary.main' }} onClick={() => handleUserEdit(user)}>
+                          <SvgColor src='./assets/icons/actions/edit.svg' />
+                        </IconButton>
+                        <IconButton sx={{ mr: 1, color: 'danger.main' }} onClick={() => handleUserDelete(user._id!)}>
+                          <SvgColor src='./assets/icons/actions/delete.svg' />
+                        </IconButton>
+                      </StyledTableCell>
+                    </StyledTableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </StyledTableContainer>
+          </Grid>
+        </Grid>
+        )}
+        {tabIndex === 1 && (
+          <Grid container spacing={2}>
+          <Grid item xs={12}>
+            <Box sx={{ overflowX: 'auto' }}> {/* Ensures table responsiveness */}
+              <Grid container>
+                <Grid item xs={12} sm={9}>
+                  <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
+                  Lista de roles
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={3} textAlign='right'>
+                  <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
+                  <Button variant="contained" color="primary" onClick={handleOpenRoleModal} fullWidth>
+                    Nuevo Rol
+                  </Button>
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Box>
+            <StyledTableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <StyledTableCellHeader>Role Name</StyledTableCellHeader>
+                    <StyledTableCellHeader>Actions</StyledTableCellHeader>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {roles.map((role) => (
+                    <StyledTableRow key={role._id}>
+                      <StyledTableCell>{role.name}</StyledTableCell>
+                      <StyledTableCell>
+                        <IconButton sx={{ mr: 1, color: 'primary.main' }} onClick={() => handleRoleEdit(role)}>
+                          <SvgColor src='./assets/icons/actions/edit.svg' />
+                        </IconButton>
+                        <IconButton sx={{ mr: 1, color: 'danger.main' }} onClick={() => handleRoleDelete(role._id!)}>
+                          <SvgColor src='./assets/icons/actions/delete.svg' />
+                        </IconButton>
+                      </StyledTableCell>
+                    </StyledTableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </StyledTableContainer>
+          </Grid>
+        </Grid>
+        )}
       </Box>
-
-      <TableContainer component={Paper}>
-        <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
-          Lista de usuarios
-        </Typography>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Nombre</TableCell>
-              <TableCell>Correo</TableCell>
-              <TableCell>Cliente</TableCell>
-              <TableCell>Puesto</TableCell>
-              <TableCell>Permisos</TableCell>
-              <TableCell>Verificado</TableCell>
-              <TableCell>Estatus</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {users.map((user) => (
-              <TableRow key={user._id}>
-                <TableCell>
-                  <Box gap={2} display="flex" alignItems="center">
-                    <Avatar alt={user.nombre} src={user.avatar} />
-                    {user.nombre}
-                  </Box>
-                </TableCell>
-                <TableCell>{user.email}</TableCell>
-                <TableCell>{user.cliente}</TableCell>
-                <TableCell>{user.puesto}</TableCell>
-                <TableCell>{user.role}</TableCell>
-                <TableCell>
-                  <Chip
-                    label={user.verified ? 'Verificado' : 'No verificado'}
-                    color={user.verified ? 'success' : 'error'}
-                    size="small"
-                  />
-                </TableCell>
-                <TableCell>
-                  {user.status === 'pending' ? (
-                    <Button variant="contained" color="primary" size="small" onClick={() => approveUser(user._id)}>
-                      Approve
-                    </Button>
-                  ) : (
-                    <Chip
-                      label={user.status}
-                      color={user.status === 'active' ? 'success' : 'error'}
-                      size="small"
-                    />
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+    </Box>
+    <Grid item xs={12}>
+      <Dialog open={userModalOpen} onClose={handleCloseModal} fullWidth maxWidth="sm">
+        <DialogTitle>{userForm._id ? "Editar Usuario" : "Nuevo Usuario"}</DialogTitle>
+        <DialogContent>
+          <Box display="flex" flexDirection="column" gap={2} mt={1}>
+            <TextField label="Nombre" name="nombre" value={userForm.nombre} onChange={handleUserChange} fullWidth />
+            <TextField label="Email" name="email" value={userForm.email} onChange={handleUserChange} fullWidth />
+            <FormControl fullWidth>
+                <InputLabel>Cliente</InputLabel>
+                <Select value={userForm.cliente} name="cliente" onChange={handleUserChange} fullWidth>
+                  {clients.map((cliente) => (
+                    <MenuItem key={cliente._id} value={cliente._id}>{cliente.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Rol</InputLabel>
+              <Select value={userForm.role} name="role" onChange={handleUserChange} fullWidth>
+                {roles.map((role) => (
+                  <MenuItem key={role._id} value={role._id}>{role.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField label="Puesto" name="puesto" value={userForm.puesto} onChange={handleUserChange} fullWidth />
+            <FormControl fullWidth>
+              <InputLabel>Estado</InputLabel>
+              <Select value={userForm.status} name="status" onChange={handleUserChange} fullWidth>
+                <MenuItem value="active">Activo</MenuItem>
+                <MenuItem value="inactive">Inactivo</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseModal} color="secondary">Cancelar</Button>
+          <Button onClick={handleUserSubmit} variant="contained" color="primary" disabled={loading}>
+            {loading ? <CircularProgress size={24} /> : userForm._id ? "Actualizar" : "Guardar"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      </Grid>
+      <Grid item xs={12}>
+        <Dialog open={roleModalOpen} onClose={handleCloseModal} fullWidth maxWidth="sm">
+          <DialogTitle>{roleForm._id ? "Editar Rol" : "Nuevo Rol"}</DialogTitle>
+          <DialogContent>
+            <Box display="flex" flexDirection="column" gap={2} mt={1}>
+              <TextField label="Nombre" name="name" value={roleForm.name} onChange={handleRoleChange} fullWidth />
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseModal} color="secondary">Cancelar</Button>
+            <Button onClick={handleRoleSubmit} variant="contained" color="primary" disabled={loading}>
+              {loading ? <CircularProgress size={24} /> : roleForm._id ? "Actualizar" : "Guardar"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </Grid>
     </>
   );
 }
-
-export default UserList;
