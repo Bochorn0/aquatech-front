@@ -146,8 +146,8 @@ export function DashboardPage() {
               </Select>
             </FormControl>
           </Grid>
-          {currentRole === 'admin' && (
-            <Grid xs={12} md={6} lg={3}>
+          <Grid xs={12} md={6} lg={3}>
+            {currentRole === 'admin' && (
               <FormControl fullWidth>
                 <InputLabel>Cliente</InputLabel>
                 <Select value={selectedClient}  onChange={(e) => setSelectedClient(e.target.value)}>
@@ -157,8 +157,8 @@ export function DashboardPage() {
                   ))}
                 </Select>
               </FormControl>
-            </Grid>
-          )}
+            )}
+          </Grid>
           <Grid xs={12} md={6} lg={3}>
             <LocalizationProvider dateAdapter={AdapterDayjs}>
               <DateTimePicker

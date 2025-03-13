@@ -114,7 +114,15 @@ export function CustomizationPage() {
   const fetchClients = async () => {
     try {
       const response = await get<Cliente[]>(`/clients`);
-      const filteredClients = response.filter(client => client.name !== 'All');
+      let filteredClients = response.filter(client => client.name !== 'All');
+
+      const user = localStorage.getItem('user');
+      if (user) {
+        const client_ = JSON.parse(user).cliente as Cliente;
+        console.log('client_',client_);
+        filteredClients = filteredClients.filter(client => client.name === client_.name);
+        console.log('filteredClients',filteredClients);
+      }
       setClients(filteredClients);
     } catch (error) {
       console.error("Error fetching clients:", error);

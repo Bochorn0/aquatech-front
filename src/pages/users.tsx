@@ -33,7 +33,7 @@ import { SvgColor } from 'src/components/svg-color';
 
 import type { User, Role, Cliente } from './types';
 
-const defaultUser = { _id: '', nombre: '', email: '', client_name: '', role_name: '', cliente: '', role: { _id: '', name: '' }, verified: false, puesto: '', status: '' };
+const defaultUser = { _id: '', nombre: '', email: '', password:'',  client_name: '', role_name: '', cliente: '', role: { _id: '', name: '' }, verified: false, puesto: '', status: '' };
 export default function UserRoleManagement() {
   const [loading, setLoading] = useState(false);
   const [tabIndex, setTabIndex] = useState(0);

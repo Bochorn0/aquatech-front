@@ -179,8 +179,8 @@ useEffect(() => {
       `${product.status.find(s => s.code === 'tds_out')?.value || ''} ppm`,
       `${product.status.find(s => s.code === 'flowrate_total_1')?.value || ''} L`,
       `${product.status.find(s => s.code === 'flowrate_total_2')?.value || ''} L`,
-      `${product.status.find(s => s.code === 'flowrate_speed_1')?.value || ''} L`,
-      `${product.status.find(s => s.code === 'flowrate_speed_2')?.value || ''} L`,
+      `${product.status.find(s => s.code === 'flowrate_speed_1')?.value || ''} l/min`,
+      `${product.status.find(s => s.code === 'flowrate_speed_2')?.value || ''} l/min`,
       `${product.status.find(s => s.code === 'filter_element_1')?.value || ''} H`,
       `${product.status.find(s => s.code === 'filter_element_2')?.value || ''} H`,
       `${product.status.find(s => s.code === 'filter_element_3')?.value || ''} H`,
@@ -401,10 +401,10 @@ useEffect(() => {
                         <StyledTableCell>{product.status.find(s => s.code === 'flowrate_total_2')?.value || 'N/A'} L</StyledTableCell>
                       )}
                       {displayFields.flowRate && (
-                        <StyledTableCell>{product.status.find(s => s.code === 'flowrate_speed_1')?.value || 'N/A'} L</StyledTableCell>
+                        <StyledTableCell>{product.status.find(s => s.code === 'flowrate_speed_1')?.value || 'N/A'} l/min</StyledTableCell>
                       )}
                       {displayFields.rejectFlow && (
-                        <StyledTableCell>{product.status.find(s => s.code === 'flowrate_speed_2')?.value || 'N/A'} L</StyledTableCell>
+                        <StyledTableCell>{product.status.find(s => s.code === 'flowrate_speed_2')?.value || 'N/A'} l/min</StyledTableCell>
                       )}
                       {displayFields.sedimentFilter && (
                         <StyledTableCell>{product.status.find(s => s.code === 'filter_element_1')?.value || 'N/A'} H</StyledTableCell>
