@@ -1,3 +1,4 @@
+import Swal from 'sweetalert2';
 import { CSVLink } from 'react-csv';
 import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
@@ -121,39 +122,43 @@ useEffect(() => {
 
 }, [clientFilters, isInitialFetch, selectedCity, selectedClient, selectedDrive, selectedStatus]);
 
+  const confirmationAlert = () => Swal.fire({
+    icon: 'warning',
+    title: 'Advertencia',
+    text: 'Estas a punto de forzar un flush. estas seguro?',
+    showCancelButton: true,
+    confirmButtonText: 'Sí, Continuar',
+    cancelButtonText: 'Cancelar',
+  });
+
   const handleToggle = async (productId: string) => {
     if (processing[productId]) return; // Prevent multiple clicks
   
     // Show confirmation prompt
-    const confirmFlush = window.confirm('Estas a punto de forzar un flush. estas seguro?');
-  
-    if (!confirmFlush) return; // If the user cancels, do nothing
-  
-    setProcessing((prev) => ({ ...prev, [productId]: true }));
-    setSwitchState((prev) => ({ ...prev, [productId]: true })); // Turn switch ON
-  
-    try {
-      const requestData = { 
-        id: productId,
-        commands: [{ "code": "water_wash", "value": true }]
-      };
-      const response = await post<Product[]>(`/products/`, requestData);
-      setCurrentProducts((prevProducts) =>
-        prevProducts.map((product) =>
-          product.id === productId ? { ...product, online: true } : product
-        )
-      );
-      console.log('Command executed:', response);
-    } catch (error) {
-      console.error('Error executing commands:', error);
-      if (error.response?.status === 401) {
-        localStorage.removeItem('token'); // Remove token if invalid
+      try {
+        const result = await confirmationAlert();
+        if (result.isConfirmed) {
+          setProcessing((prev) => ({ ...prev, [productId]: true }));
+          setSwitchState((prev) => ({ ...prev, [productId]: true })); // Turn switch ON
+          const requestData = { 
+            id: productId,
+            commands: [{ "code": "water_wash", "value": true }]
+          };
+          const response = await post(`/products/sendCommand`, requestData);
+          setCurrentProducts((prevProducts) =>
+            prevProducts.map((product) =>
+              product.id === productId ? { ...product, online: true } : product
+            )
+          );
+          console.log('Command executed:', response);
+        }
+      } catch (error) {
+        console.error("Error deleting user:", error);
+      } finally {
+        setProcessing((prev) => ({ ...prev, [productId]: false }));
+        setSwitchState((prev) => ({ ...prev, [productId]: false })); // Reset switch OFF
       }
-    } finally {
-      setProcessing((prev) => ({ ...prev, [productId]: false }));
-      setSwitchState((prev) => ({ ...prev, [productId]: false })); // Reset switch OFF
     }
-  };
 
 
   // const handleFieldToggle = (field: keyof DisplayFields) => {
