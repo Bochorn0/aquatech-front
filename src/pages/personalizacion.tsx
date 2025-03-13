@@ -120,7 +120,9 @@ export function CustomizationPage() {
       if (user) {
         const client_ = JSON.parse(user).cliente as Cliente;
         console.log('client_',client_);
+        if (client_.name && client_.name !== 'All') {
         filteredClients = filteredClients.filter(client => client.name === client_.name);
+        }
         console.log('filteredClients',filteredClients);
       }
       setClients(filteredClients);
