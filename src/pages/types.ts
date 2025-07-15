@@ -142,14 +142,15 @@ interface Status {
   }
 
   export type Log = {
-    event_time: string;
-    value: number;
-    code: string;
-    list: string[];
-  }
-
-  export type LogDisplayFields = {
-    [key: string]: boolean;
+  _id: string;
+  flujo_produccion: number;
+  flujo_rechazo: number;
+  tds: number;
+  createdAt: string;
+  source: string;
+  tiempo_fin: number;
+  tiempo_inicio: number;
+  date: string;
   }
 
   export type User = {
@@ -157,6 +158,7 @@ interface Status {
     nombre: string;
     email: string;
     client_name: string;
+    password: string;
     role_name: string;
     cliente: string;
     role: Role;

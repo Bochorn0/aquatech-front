@@ -1,124 +1,71 @@
 import type { Dayjs } from 'dayjs'; // Only import Dayjs as a type
 import dayjs from 'dayjs';
-import PropTypes from 'prop-types';
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DateTimePicker, LocalizationProvider } from '@mui/x-date-pickers';
-import { Box, Chip, Card, Grid, Table, Paper, Checkbox, TableRow, TextField, TableCell, TableBody, TableHead, Typography, CardContent, TableContainer, TablePagination, CircularProgress, FormControlLabel } from '@mui/material';
+import { Box, Chip, Grid, Table, Paper, TableRow, TextField, TableCell, TableBody, TableHead, Typography, TableContainer, TablePagination, CircularProgress } from '@mui/material';
 
 import { get } from 'src/api/axiosHelper';
 
-import type { Log, MetricCardProps, LogDisplayFields } from '../types';
-
-const defaultFields: LogDisplayFields = {
-  tds_out: false,
-  flowrate_total_1: false,
-  flowrate_total_2: false,
-  flowrate_speed_1: true,
-  flowrate_speed_2: true,
-  temperature: false
-};
-
-// Separate MetricCard Component
-const MetricCard: React.FC<MetricCardProps> = ({ title, value, unit }) => {
-  let displayValue = 'N/A';
-
-  if (value !== null && value !== undefined) {
-    if (typeof value === 'object') {
-      displayValue = JSON.stringify(value);
-    } else {
-      displayValue = String(value);
-    }
-  }
-
-  return (
-    <Card sx={{ height: '100%', '&:hover': { boxShadow: 3 } }}>
-      <CardContent>
-        <Typography color="textSecondary" gutterBottom>
-          {title || 'N/A'}
-        </Typography>
-        <Typography variant="h4" component="div" color="primary">
-          {displayValue}
-          {unit && (
-            <Typography variant="subtitle1" component="span" ml={1}>
-              {unit}
-            </Typography>
-          )}
-        </Typography>
-      </CardContent>
-    </Card>
-  );
-};
-
-// PropTypes validation
-MetricCard.propTypes = {
-  title: PropTypes.string.isRequired,
-  value: PropTypes.oneOfType([PropTypes.string, PropTypes.number, PropTypes.object]).isRequired,
-  unit: PropTypes.string,
-};
+import type { Log } from '../types';
 
 
 const ProductDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [logs, setLogs] = useState<Log[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [displayFields, setDisplayFields] = useState<LogDisplayFields>(defaultFields);
-  const [startDate, setStartDate] = useState<Dayjs | null>(dayjs().startOf('day')); // Start of the day
-  const [endDate, setEndDate] = useState<Dayjs | null>(dayjs()); // Current time
-  const [searchTerm, setSearchTerm] = useState<string>(''); // New search state
-  const [page, setPage] = useState<number>(0); // Pagination page
-  const [rowsPerPage, setRowsPerPage] = useState<number>(10); // Pagination rows per page
+  const [loading, setLoading] = useState(true);
+  const [startDate, setStartDate] = useState<Dayjs | null>(dayjs().startOf('day'));
+  const [endDate, setEndDate] = useState<Dayjs | null>(dayjs());
+  const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
 
   useEffect(() => {
     const fetchLogs = async () => {
       try {
         const params = {
           id,
-          start_date: startDate ? startDate.valueOf() : dayjs().startOf('day'),
-          end_date: endDate ? endDate.valueOf() : dayjs().valueOf(),
-          fields: Object.keys(displayFields).filter((key) => displayFields[key as keyof LogDisplayFields]).join(','),
-          page, // Send page to the API
-          limit: rowsPerPage // Send limit for pagination
+          start_date: startDate?.valueOf(),
+          end_date: endDate?.valueOf(),
+          limit: 100, // puedes ajustar según el backend
         };
-        const response = await get<Log[]>(`/products/${id}/logs`, { params });
-        console.log('Logs:', response);
-        setLogs(response);
-        setLoading(false);
+
+        const response = await get<{ success: boolean; data: Log[] }>(`/products/${id}/logs`, { params });
+
+        if (response.success) {
+          setLogs(response.data);
+        } else {
+          console.warn('API responded with success = false');
+          setLogs([]);
+        }
       } catch (error) {
         console.error('Error fetching logs:', error);
+        setLogs([]);
+      } finally {
         setLoading(false);
       }
     };
 
     fetchLogs();
-
-    const interval = setInterval(() => {
-      fetchLogs();
-    }, 30000); // Refresh every 30 seconds
-
+    const interval = setInterval(fetchLogs, 30000);
     return () => clearInterval(interval);
-  }, [id, startDate, endDate, displayFields, page, rowsPerPage]);
-
-  // Filter logs based on search term
-
-  let filteredLogs = [] as Log[];
-  if  (logs.length > 0) {
-    filteredLogs = logs.filter((log) => log.code.toLowerCase().includes(searchTerm.toLowerCase()));
-  }
+  }, [id, startDate, endDate]);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
   };
 
-  const handleChangePage = (event: unknown, newPage: number) => {
-    setPage(newPage);
-  };
+  const filteredLogs = logs.filter((log) => {
+    const dateString = new Date(log.createdAt).toLocaleString();
+    return dateString.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
+  const handleChangePage = (_event: unknown, newPage: number) => setPage(newPage);
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
     setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0); // Reset to the first page when rows per page change
+    setPage(0);
   };
 
   if (loading) {
@@ -130,123 +77,116 @@ const ProductDetail: React.FC = () => {
   }
 
   return (
-      <Box sx={{ p: 3 }}>
-        <Paper sx={{ p: 3, mb: 4 }}>
-          <Typography variant="h6" gutterBottom>
-            Filtrar Logs
-          </Typography>
-          <LocalizationProvider dateAdapter={AdapterDayjs}>
-            <Grid container spacing={3}>
-              <Grid item xs={12} sm={6} md={4}>
-                <DateTimePicker
-                  label="Start Date"
-                  value={startDate}
-                  onChange={(newValue) => setStartDate(newValue)}
-                  slotProps={{ textField: { fullWidth: true } }} 
-                />
-              </Grid>
-              <Grid item xs={12} sm={6} md={4}>
-                <DateTimePicker
-                  label="End Date"
-                  value={endDate}
-                  onChange={(newValue) => setEndDate(newValue)}
-                  slotProps={{ textField: { fullWidth: true } }} 
-                />
-              </Grid>
+    <Box sx={{ p: 3 }}>
+      <Paper sx={{ p: 3, mb: 4 }}>
+        <Typography variant="h6" gutterBottom>Filtrar Logs</Typography>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+          <Grid container spacing={3}>
+            <Grid item xs={12} sm={6} md={4}>
+              <DateTimePicker
+                label="Fecha inicio"
+                value={startDate}
+                onChange={setStartDate}
+                slotProps={{ textField: { fullWidth: true } }}
+              />
             </Grid>
-          </LocalizationProvider>
-
-          <Grid container spacing={2} sx={{ mt: 2 }}>
-            {Object.keys(displayFields).map((field) => (
-              <Grid item xs={6} sm={4} md={3} key={field}>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={displayFields[field]}
-                      onChange={(e) =>
-                        setDisplayFields((prev) => ({ ...prev, [field]: e.target.checked }))
-                      }
-                    />
-                  }
-                  label={field.replace(/([A-Z])/g, ' $1').trim()}
-                />
-              </Grid>
-            ))}
+            <Grid item xs={12} sm={6} md={4}>
+              <DateTimePicker
+                label="Fecha fin"
+                value={endDate}
+                onChange={setEndDate}
+                slotProps={{ textField: { fullWidth: true } }}
+              />
+            </Grid>
           </Grid>
-          <TextField
-            label="Search Logs"
-            value={searchTerm}
-            onChange={handleSearchChange}
-            fullWidth
-            sx={{ mt: 2 }}
-          />
-        </Paper>
+        </LocalizationProvider>
 
-        <TableContainer component={Paper} sx={{ mt: 4 }}>
-          <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
-            Product Logs
-          </Typography>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Event Time</TableCell>
-                <TableCell>Code</TableCell>
-                <TableCell>Flow Rate (L)</TableCell>
-                <TableCell>Value</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredLogs.length > 0 ? (
-                filteredLogs.map(({ event_time, code, value }, index) => {
-                  const isFlowRate = code.includes('flowrate');
-                  const isTemperature = code.includes('temperature');
-                  const isTds = code === 'tds_out'; // Check for tds_out field
+        <TextField
+          label="Buscar por fecha"
+          value={searchTerm}
+          onChange={handleSearchChange}
+          fullWidth
+          sx={{ mt: 2 }}
+        />
+      </Paper>
 
-                  // Adjust value if necessary
-                  const adjustedValue = isFlowRate ? value / 10 : value;
-
-                  // Format display value
-                  const displayValue = isTemperature
-                    ? `${adjustedValue} °C`
-                    : isTds
-                    ? `${adjustedValue} ppm`
-                    : `${adjustedValue} L`; // Default to L for other cases
+      <TableContainer component={Paper}>
+        <Typography variant="h5" sx={{ p: 2 }}>Product Logs</Typography>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Fecha</TableCell>
+              <TableCell>TDS (ppm)</TableCell>
+              <TableCell>Flujo Producción (L)</TableCell>
+              <TableCell>Flujo Rechazo (L)</TableCell>
+              <TableCell>Tiempo Ejecución (s)</TableCell>
+              <TableCell>Origen</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {filteredLogs.length > 0 ? (
+              filteredLogs
+                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                .map((log) => {
+                  const tiempoEjecucion = log.tiempo_fin !== undefined && log.tiempo_inicio !== undefined
+                    ? log.tiempo_fin - log.tiempo_inicio
+                    : 'N/A';
 
                   return (
-                    <TableRow key={index}>
-                      <TableCell>{new Date(event_time).toLocaleString()}</TableCell>
-                      <TableCell>{code}</TableCell>
+                    <TableRow key={log._id}>
+                      <TableCell>{new Date(log.date).toLocaleString()}</TableCell>
                       <TableCell>
                         <Chip
-                          label={displayValue}
-                          color={isFlowRate ? 'secondary' : isTemperature ? 'primary' : 'default'}
+                          label={`${log.tds?.toFixed(2) ?? 'N/A'} ppm`}
+                          color="default"
                           size="small"
                         />
                       </TableCell>
-                      <TableCell>{value}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={`${log.flujo_produccion?.toFixed(2) ?? 'N/A'} L`}
+                          color="success"
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={`${log.flujo_rechazo?.toFixed(2) ?? 'N/A'} L`}
+                          color="error"
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={`${tiempoEjecucion} s`}
+                          color="info"
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>{log.source || 'N/A'}</TableCell>
                     </TableRow>
                   );
                 })
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={4} align="center">
-                    No hay logs disponibles
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-          <TablePagination
-            rowsPerPageOptions={[5, 10, 25]}
-            component="div"
-            count={logs.length}
-            rowsPerPage={rowsPerPage}
-            page={page}
-            onPageChange={handleChangePage}
-            onRowsPerPageChange={handleChangeRowsPerPage}
-          />
-        </TableContainer>
-      </Box>
+            ) : (
+              <TableRow>
+                <TableCell colSpan={6} align="center">
+                  No hay logs disponibles
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+        <TablePagination
+          rowsPerPageOptions={[20, 50, 100]}
+          component="div"
+          count={filteredLogs.length}
+          rowsPerPage={rowsPerPage}
+          page={page}
+          onPageChange={handleChangePage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+        />
+      </TableContainer>
+    </Box>
   );
 };
 

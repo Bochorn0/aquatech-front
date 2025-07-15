@@ -316,6 +316,7 @@ export default function UserRoleManagement() {
               </Select>
             </FormControl>
             <TextField label="Puesto" name="puesto" value={userForm.puesto} onChange={handleUserChange} fullWidth />
+            <TextField label="Password" name="password" value={userForm.password} onChange={handleUserChange} fullWidth />
             <FormControl fullWidth>
               <InputLabel>Estado</InputLabel>
               <Select value={userForm.status} name="status" onChange={handleUserChange} fullWidth>
