@@ -29,7 +29,7 @@ const ProductDetail: React.FC = () => {
           id,
           start_date: startDate?.valueOf(),
           end_date: endDate?.valueOf(),
-          limit: 100, // puedes ajustar según el backend
+          limit: 1000, // puedes ajustar según el backend
         };
 
         const response = await get<{ success: boolean; data: Log[] }>(`/products/${id}/logs`, { params });
@@ -117,8 +117,10 @@ const ProductDetail: React.FC = () => {
             <TableRow>
               <TableCell>Fecha</TableCell>
               <TableCell>TDS (ppm)</TableCell>
-              <TableCell>Flujo Producción (L)</TableCell>
-              <TableCell>Flujo Rechazo (L)</TableCell>
+              <TableCell>Flujo Producción (L/min)</TableCell>
+              <TableCell>Flujo Rechazo (LL/min)</TableCell>
+              <TableCell>Producción Real (L/min)</TableCell>
+              <TableCell>Rechazo Real (LL/min)</TableCell>
               <TableCell>Tiempo Ejecución (s)</TableCell>
               <TableCell>Origen</TableCell>
             </TableRow>
@@ -129,7 +131,7 @@ const ProductDetail: React.FC = () => {
                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                 .map((log) => {
                   const tiempoEjecucion = log.tiempo_fin !== undefined && log.tiempo_inicio !== undefined
-                    ? log.tiempo_fin - log.tiempo_inicio
+                    ? (log.tiempo_fin - log.tiempo_inicio)/1000
                     : 'N/A';
 
                   return (
@@ -144,14 +146,28 @@ const ProductDetail: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={`${log.flujo_produccion?.toFixed(2) ?? 'N/A'} L`}
+                          label={`${log.flujo_produccion?.toFixed(2) ?? 'N/A'} L/min`}
                           color="success"
                           size="small"
                         />
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={`${log.flujo_rechazo?.toFixed(2) ?? 'N/A'} L`}
+                          label={`${log.flujo_rechazo?.toFixed(2) ?? 'N/A'} L/min`}
+                          color="error"
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={`${log.production_volume?.toFixed(6) ?? 'N/A'} L/s`}
+                          color="success"
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={`${log.rejected_volume?.toFixed(6) ?? 'N/A'} L/s`}
                           color="error"
                           size="small"
                         />

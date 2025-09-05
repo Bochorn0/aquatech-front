@@ -13,6 +13,7 @@ import { DashboardLayout } from 'src/layouts/dashboard';
 
 export const HomePage = lazy(() => import('src/pages/home'));
 export const UserPage = lazy(() => import('src/pages/users'));
+export const Controllers = lazy(() => import('src/pages/controllers'));
 export const ProfilePage = lazy(() => import('src/pages/users/user-profile'));
 export const LoginPage = lazy(() => import('src/pages/login'));
 export const RegisterPage = lazy(() => import('src/pages/register'));
@@ -90,6 +91,14 @@ export function Router() {
             </TokenProtectedRoute>
           ),
           index: true,
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <Controllers />
+            </TokenProtectedRoute>
+          ),
+          path: 'Controladores',
         },
         {
           element: (

@@ -145,6 +145,8 @@ interface Status {
   _id: string;
   flujo_produccion: number;
   flujo_rechazo: number;
+  production_volume: number;
+  rejected_volume: number;
   tds: number;
   createdAt: string;
   source: string;
@@ -171,3 +173,28 @@ interface Status {
     _id?: string;
     name: string;
   }
+
+export interface Controller {
+  _id: string;
+  active_time: number;    // timestamp
+  create_time: number;    // timestamp
+  product_type: string;
+  id: string;             // id del ESP32
+  ip: string;
+  cliente: string;        // id del cliente
+  product: string;        // id del producto
+  online: boolean;
+  icon?: string;
+  city?: string;
+  state?: string;
+  drive?: string;
+  lat?: string;
+  lon?: string;
+  model?: string;
+  name: string;
+  owner_id?: string;
+  product_id?: string;
+  product_name?: string;
+  sub?: boolean;
+  time_zone?: string;
+}

@@ -46,6 +46,16 @@ export const navData = [
     //   </Label>
     // ),
   },
+  {
+    title: 'Controladores',
+    path: '/controladores',
+    icon: icon('ic-controllers'),
+    // info: (
+    //   <Label color="error" variant="inverted">
+    //     {/* amount */}
+    //   </Label>
+    // ),
+  },
   // {
   //   title: 'R',
   //   path: '/login',
