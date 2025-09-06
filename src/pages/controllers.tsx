@@ -38,6 +38,8 @@ const defaultController: Controller = {
   ip: "",
   id: "",
   product_type: "",
+  kfactor_tds: 0,
+  kfactor_flujo: 0,
   cliente: "",
   product: "",
   online: false,
@@ -183,6 +185,8 @@ export default function ControllersPage() {
                         <StyledTableCellHeader>IP</StyledTableCellHeader>
                         <StyledTableCellHeader>Cliente</StyledTableCellHeader>
                         <StyledTableCellHeader>Producto</StyledTableCellHeader>
+                        <StyledTableCellHeader>Ajuste TDS</StyledTableCellHeader>
+                        <StyledTableCellHeader>Ajuste Flujo</StyledTableCellHeader>
                         <StyledTableCellHeader>Online</StyledTableCellHeader>
                         <StyledTableCellHeader>Acciones</StyledTableCellHeader>
                       </TableRow>
@@ -194,6 +198,8 @@ export default function ControllersPage() {
                           <StyledTableCell>{ctrl.ip}</StyledTableCell>
                           <StyledTableCell>{clients.find(c => c._id === ctrl.cliente)?.name || ""}</StyledTableCell>
                           <StyledTableCell>{products.find(p => p._id === ctrl.product)?.name || ""}</StyledTableCell>
+                          <StyledTableCell>{ctrl.kfactor_tds}</StyledTableCell>
+                          <StyledTableCell>{ctrl.kfactor_flujo}</StyledTableCell>
                           <StyledTableCell>{ctrl.online ? "Sí" : "No"}</StyledTableCell>
                           <StyledTableCell>
                             <IconButton onClick={() => handleControllerEdit(ctrl)}>
@@ -267,6 +273,8 @@ export default function ControllersPage() {
                 {products.map(p => <MenuItem key={p._id} value={p._id}>{p.name}</MenuItem>)}
               </Select>
             </FormControl>
+            <TextField type="number" label="Ajuste TDS" name="kfactor_tds" value={controllerForm.kfactor_tds} onChange={handleControllerChange} fullWidth />
+            <TextField type="number" label="Ajuste Flujo" name="kfactor_flujo" value={controllerForm.kfactor_flujo} onChange={handleControllerChange} fullWidth />
             <FormControl fullWidth>
               <InputLabel>Online</InputLabel>
               <Select name="online" value={controllerForm.online ? "true" : "false"} onChange={(e) => setControllerForm({...controllerForm, online: e.target.value === "true"})}>

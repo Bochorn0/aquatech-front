@@ -179,6 +179,8 @@ export interface Controller {
   active_time: number;    // timestamp
   create_time: number;    // timestamp
   product_type: string;
+  kfactor_tds: number,
+  kfactor_flujo:  number,
   id: string;             // id del ESP32
   ip: string;
   cliente: string;        // id del cliente
