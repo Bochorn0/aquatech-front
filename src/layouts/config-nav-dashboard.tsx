@@ -56,6 +56,16 @@ export const navData = [
     //   </Label>
     // ),
   },
+  {
+    title: 'Puntos De Venta',
+    path: '/puntoVenta',
+    icon: icon('ic-building'),
+    // info: (
+    //   <Label color="error" variant="inverted">
+    //     {/* amount */}
+    //   </Label>
+    // ),
+  },
   // {
   //   title: 'R',
   //   path: '/login',

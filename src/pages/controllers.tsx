@@ -45,7 +45,13 @@ const defaultController: Controller = {
   online: false,
   active_time: 0,
   create_time: 0,
+  // 🔥 Nuevos
+  reset_pending: false,
+  update_controller_time: 10000,
+  loop_time: 1000,
+  flush_time: 20000
 };
+
 
 export default function ControllersPage() {
   const [tabIndex, setTabIndex] = useState(0);
@@ -119,11 +125,19 @@ export default function ControllersPage() {
 
   const handleControllerSubmit = async () => {
     setLoading(true);
+
+    // 🔥 Validación forzada
+    let loopTime = Number(controllerForm.loop_time);
+    if (loopTime < 1000) loopTime = 1000;
+    if (loopTime > 10000) loopTime = 10000;
+
+    const controllerToSubmit = { ...controllerForm, lapso_loop: loopTime };
+
     try {
       if (controllerForm._id) {
-        await patch(`/controllers/${controllerForm._id}`, controllerForm);
+        await patch(`/controllers/${controllerForm._id}`, controllerToSubmit);
       } else {
-        await post(`/controllers`, controllerForm);
+        await post(`/controllers`, controllerToSubmit);
       }
       fetchControllers();
       setControllerModalOpen(false);
@@ -187,6 +201,9 @@ export default function ControllersPage() {
                         <StyledTableCellHeader>Producto</StyledTableCellHeader>
                         <StyledTableCellHeader>Ajuste TDS</StyledTableCellHeader>
                         <StyledTableCellHeader>Ajuste Flujo</StyledTableCellHeader>
+                        <StyledTableCellHeader>Lapso Actualización</StyledTableCellHeader>
+                        <StyledTableCellHeader>Lapso Loop</StyledTableCellHeader>
+                        <StyledTableCellHeader>Reset Pendiente</StyledTableCellHeader>
                         <StyledTableCellHeader>Online</StyledTableCellHeader>
                         <StyledTableCellHeader>Acciones</StyledTableCellHeader>
                       </TableRow>
@@ -200,6 +217,10 @@ export default function ControllersPage() {
                           <StyledTableCell>{products.find(p => p._id === ctrl.product)?.name || ""}</StyledTableCell>
                           <StyledTableCell>{ctrl.kfactor_tds}</StyledTableCell>
                           <StyledTableCell>{ctrl.kfactor_flujo}</StyledTableCell>
+                          <StyledTableCell>{ctrl.update_controller_time} ms</StyledTableCell>
+                          <StyledTableCell>{ctrl.loop_time} ms</StyledTableCell>
+                          <StyledTableCell>{ctrl.reset_pending ? "Sí" : "No"}</StyledTableCell>
+
                           <StyledTableCell>{ctrl.online ? "Sí" : "No"}</StyledTableCell>
                           <StyledTableCell>
                             <IconButton onClick={() => handleControllerEdit(ctrl)}>
@@ -275,13 +296,71 @@ export default function ControllersPage() {
             </FormControl>
             <TextField type="number" label="Ajuste TDS" name="kfactor_tds" value={controllerForm.kfactor_tds} onChange={handleControllerChange} fullWidth />
             <TextField type="number" label="Ajuste Flujo" name="kfactor_flujo" value={controllerForm.kfactor_flujo} onChange={handleControllerChange} fullWidth />
+            <TextField
+              type="number"
+              label="Lapso de Actualización (ms)"
+              name="update_controller_time"
+              value={controllerForm.update_controller_time}
+              onChange={handleControllerChange}
+              fullWidth
+            />
+
+            <TextField
+              type="number"
+              label="Loop Time (ms)  Min: 1s, Max: 10s"
+              name="loop_time"
+              value={controllerForm.loop_time}
+              onChange={handleControllerChange}
+              onBlur={() => {
+                let val = Number(controllerForm.loop_time);
+                if (val < 1000) val = 1000;
+                if (val > 10000) val = 10000;
+                setControllerForm((prev) => ({ ...prev, loop_time: val }));
+              }}
+              fullWidth
+              inputProps={{ min: 1000, max: 10000 }}
+            />
+
+            <TextField
+              type="number"
+              label="Flush (ms)  Min: 20s, Max: 60s"
+              name="flush_time"
+              value={controllerForm.flush_time}
+              onChange={handleControllerChange}
+              onBlur={() => {
+                let val = Number(controllerForm.flush_time);
+                if (val < 20000) val = 20000;
+                if (val > 60000) val = 60000;
+                setControllerForm((prev) => ({ ...prev, flush_time: val }));
+              }}
+              fullWidth
+              inputProps={{ min: 20000, max: 60000 }}
+            />
+
             <FormControl fullWidth>
+              <InputLabel>Reinicio Remoto</InputLabel>
+              <Select
+                name="reset_pending"
+                value={controllerForm.reset_pending ? "true" : "false"}
+                onChange={(e) =>
+                  setControllerForm({
+                    ...controllerForm,
+                    reset_pending: e.target.value === "true",
+                  })
+                }
+              >
+                <MenuItem value="true">Sí</MenuItem>
+                <MenuItem value="false">No</MenuItem>
+              </Select>
+            </FormControl>
+
+            {/* <FormControl fullWidth>
               <InputLabel>Online</InputLabel>
               <Select name="online" value={controllerForm.online ? "true" : "false"} onChange={(e) => setControllerForm({...controllerForm, online: e.target.value === "true"})}>
                 <MenuItem value="true">Sí</MenuItem>
                 <MenuItem value="false">No</MenuItem>
               </Select>
-            </FormControl>
+            </FormControl> */}
           </Box>
         </DialogContent>
         <DialogActions>

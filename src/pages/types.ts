@@ -176,15 +176,15 @@ interface Status {
 
 export interface Controller {
   _id: string;
-  active_time: number;    // timestamp
-  create_time: number;    // timestamp
+  active_time: number;
+  create_time: number;
   product_type: string;
-  kfactor_tds: number,
-  kfactor_flujo:  number,
-  id: string;             // id del ESP32
+  kfactor_tds: number;
+  kfactor_flujo: number;
+  id: string;
   ip: string;
-  cliente: string;        // id del cliente
-  product: string;        // id del producto
+  cliente: string;
+  product: string;
   online: boolean;
   icon?: string;
   city?: string;
@@ -199,4 +199,21 @@ export interface Controller {
   product_name?: string;
   sub?: boolean;
   time_zone?: string;
+  restart?: boolean;               // reinicio remoto
+  reset_pending?: boolean;         // indica que ESP32 debe reiniciarse
+  update_controller_time?: number;    // intervalo para actualizar datos
+  ultima_actualizacion?: number;   // timestamp de la última actualización
+  modo_reinicio?: string;          // "manual" | "programado"
+  loop_time?: number;             // frecuencia del loop principal en ms o seg
+  flush_time?: number;
+}
+
+export interface PuntosVenta {
+    _id: string;
+    cliente: Cliente;
+    client_name: string;
+    city: City;
+    city_name: String;
+    name: String;
+    productos: Product[];
 }

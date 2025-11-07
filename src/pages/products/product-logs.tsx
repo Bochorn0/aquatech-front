@@ -1,5 +1,6 @@
 import type { Dayjs } from 'dayjs'; // Only import Dayjs as a type
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -22,14 +23,21 @@ const ProductDetail: React.FC = () => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(20);
 
+  dayjs.extend(utc);
+  const now = dayjs();
+  const safeStart = startDate?.isAfter(now) ? now : startDate;
+  const safeEnd   = endDate?.isAfter(now) ? now : endDate;
+
   useEffect(() => {
     const fetchLogs = async () => {
       try {
+
+
         const params = {
           id,
-          start_date: startDate?.valueOf(),
-          end_date: endDate?.valueOf(),
-          limit: 1000, // puedes ajustar según el backend
+          start_date: safeStart?.utc().valueOf(),
+          end_date: safeEnd?.utc().valueOf(),
+          limit: 100,
         };
 
         const response = await get<{ success: boolean; data: Log[] }>(`/products/${id}/logs`, { params });
@@ -51,7 +59,7 @@ const ProductDetail: React.FC = () => {
     fetchLogs();
     const interval = setInterval(fetchLogs, 30000);
     return () => clearInterval(interval);
-  }, [id, startDate, endDate]);
+  }, [id, startDate, endDate, safeStart, safeEnd]);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
