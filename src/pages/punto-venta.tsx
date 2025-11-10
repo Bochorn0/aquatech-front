@@ -1,212 +1,116 @@
-import Swal from 'sweetalert2';
 import { CSVLink } from 'react-csv';
 import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { Box, Chip, Grid, Table, Paper, Stack, Button, Select, Switch, MenuItem, TableRow, TableBody, TextField, TableHead, InputLabel, Typography, FormControl, TablePagination, CircularProgress } from '@mui/material';
+import { Box, Grid, Table, Paper, Button, Select, MenuItem, TableRow, TableBody, TextField, TableHead, InputLabel, Typography, FormControl, TablePagination, CircularProgress } from '@mui/material';
 
 import { StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
+import { get } from "src/api/axiosHelper";
 import { CONFIG } from 'src/config-global';
-import { get, post } from "src/api/axiosHelper";
 
-import type { Cliente, Product, DisplayFields } from './types';
+import type  { PuntosVenta } from './types';
 
-function ProductTableList() {
-  const [currentProducts, setCurrentProducts] = useState<Product[]>([]);
-  const [currentRole, setCurretRole] = useState<string>('');
-  const [cityFilters, setCityFilters] = useState<string[]>([]);
-  const [selectedCity, setSelectedCity] = useState<string>('All');
-  const [clientFilters, setClientFilters] = useState<Cliente[]>([]);
-  const [selectedClient, setSelectedClient] = useState<string>('All');
-  const [isInitialFetch, setInitialFetch] = useState(true);
-  const [driveFilters, setDriveFilters] = useState<string[]>([]);
-  const [selectedDrive, setSelectedDrive] = useState<string>('All');
-  const [statusFilters] = useState(['Online', 'Offline']);
-  const [selectedStatus, setSelectedStatus] = useState<string>('All');
-
+// ---------------------------------------------
+// 📦 COMPONENTE PRINCIPAL
+// ---------------------------------------------
+export default function PuntoVentaTableList() {
+  const [puntosVenta, setPuntosVenta] = useState<PuntosVenta[]>([]);
+  const [filtered, setFiltered] = useState<PuntosVenta[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCity, setSelectedCity] = useState('All');
+  const [selectedClient, setSelectedClient] = useState('All');
+  const [cityFilters, setCityFilters] = useState<string[]>([]);
+  const [clientFilters, setClientFilters] = useState<string[]>([]);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [processing, setProcessing] = useState<Record<string, boolean>>({});
-  const [switchState, setSwitchState] = useState<Record<string, boolean>>({});
-  // const [showDisplayFields, setShowDiplayFields] = useState(false);
-  const [displayFields] = useState<DisplayFields>({
-    product: true,
-    status: true,
-    city: true,
-    cliente: true,
-    drive: true,
-    tds: true,
-    volumeTotal: true,
-    volumeReject: true,
-    flowRate: true,
-    rejectFlow: true,
-    sedimentFilter: false,
-    granularCarbonFilter: false,
-    blockCarbonFilter: false,
-    oiMembrane: false,
-    temperature: true,
-  });
+
   const navigate = useNavigate();
 
-useEffect(() => {
-  const fetchClients = async () => {
-    try {
-      const user = localStorage.getItem('user');
-      let firstClients: Cliente[] = [];
-      if (user) {
-        firstClients = await get<Cliente[]>(`/clients/`) || [];
-        firstClients = firstClients.filter((client) => client.name !== 'All');
-        setClientFilters(firstClients);
-
-        const client = JSON.parse(user).cliente as Cliente;
-        setSelectedClient(client.name);
-        setCurretRole(JSON.parse(user).role.name);
-      }
-    } catch (error) {
-      console.error('Error fetching clients:', error);
-    }
-  };
-  fetchClients();
-}, []);
-
-useEffect(() => {
-  const fetchProducts = async () => {
-    try {
-      let clientId = '' as Cliente['_id'];
-      const user = localStorage.getItem('user');
-
-      // Find clientId only if clientFilters is loaded
-      if (clientFilters.length > 0) {
-        clientId = clientFilters.find((client) => client.name === selectedClient)?._id || '';
-      } else if (user && isInitialFetch) {
-        const client = JSON.parse(user).cliente as Cliente;
-        clientId = client._id;
-      }
-
-      const productParams = { 
-        city: selectedCity, 
-        cliente: clientId, 
-        drive: selectedDrive, 
-        status: selectedStatus 
-      };
-      const response = await get<Product[]>(`/products/`, productParams);
-      const productos = response || [];
-      const ciudades = [...new Set(productos.map((product: Product) => product.city))] as string[];
-      const drives = [...new Set(productos.map((product: Product) => product.drive))] as string[];
-
-      setCurrentProducts(productos);
-      setCityFilters(ciudades);
-      setDriveFilters(drives);
-      if (isInitialFetch) {
-        setInitialFetch(false);
-      }
-
-    } catch (error) {
-      console.error('Error fetching products:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (clientFilters.length > 0 || isInitialFetch) {
-    fetchProducts();
-    const interval = setInterval(fetchProducts, 300000);
-    return () => clearInterval(interval); // ✅ cleanup when needed
-  }
-
-  return () => {}; // ✅ empty cleanup function when condition is false
-
-}, [clientFilters, isInitialFetch, selectedCity, selectedClient, selectedDrive, selectedStatus]);
-
-  const confirmationAlert = () => Swal.fire({
-    icon: 'warning',
-    title: 'Advertencia',
-    text: 'Estas a punto de forzar un flush. estas seguro?',
-    showCancelButton: true,
-    confirmButtonText: 'Sí, Continuar',
-    cancelButtonText: 'Cancelar',
-  });
-
-  const handleToggle = async (productId: string) => {
-    if (processing[productId]) return; // Prevent multiple clicks
-  
-    // Show confirmation prompt
+  // ---------------------------------------------
+  // 🔹 Cargar datos desde API
+  // ---------------------------------------------
+  useEffect(() => {
+    const fetchData = async () => {
       try {
-        const result = await confirmationAlert();
-        if (result.isConfirmed) {
-          setProcessing((prev) => ({ ...prev, [productId]: true }));
-          setSwitchState((prev) => ({ ...prev, [productId]: true })); // Turn switch ON
-          const requestData = { 
-            id: productId,
-            commands: [{ "code": "water_wash", "value": true }]
-          };
-          const response = await post(`/products/sendCommand`, requestData);
-          setCurrentProducts((prevProducts) =>
-            prevProducts.map((product) =>
-              product.id === productId ? { ...product, online: true } : product
-            )
-          );
-          console.log('Command executed:', response);
-        }
+        const data = await get<PuntosVenta[]>('/puntoVentas/all');
+        setPuntosVenta(data);
+        setFiltered(data);
+
+        // Generar filtros únicos
+        const uniqueCities = Array.from(
+          new Set(data.map((pv) => pv.city?.city).filter(Boolean))
+        );
+        const uniqueClients = Array.from(
+          new Set(data.map((pv) => pv.cliente?.name).filter(Boolean))
+        );
+
+        setCityFilters(uniqueCities);
+        setClientFilters(uniqueClients);
       } catch (error) {
-        console.error("Error deleting user:", error);
+        console.error('Error al obtener puntos de venta:', error);
       } finally {
-        setProcessing((prev) => ({ ...prev, [productId]: false }));
-        setSwitchState((prev) => ({ ...prev, [productId]: false })); // Reset switch OFF
+        setLoading(false);
       }
+    };
+
+
+    // const fetchPuntosVenta = async () => {
+    //   try {
+    //     const response = await get<PuntosVenta[]>(`/puntoVentas/all`);
+
+    //     // Normalizamos todos los puntos de venta
+    //     const formatted = response.map((pv) => ({
+    //       ...pv,
+    //       cliente: pv.cliente?._id || pv.cliente,
+    //       client_name: pv.cliente?.name || "",
+    //       city: pv.city?._id || pv.city,
+    //       city_name: pv.city?.city || "",
+    //       productos: pv.productos?.map((p) => p._id) || []
+    //     }));
+
+    //     setPuntosVenta(formatted as unknown as PuntosVenta[]);
+
+    //   } catch (error) {
+    //     console.error("Error fetching puntos de venta:", error);
+    //   }
+    // };
+
+    fetchData();
+  }, []);
+
+  // ---------------------------------------------
+  // 🔹 Aplicar filtros y búsqueda
+  // ---------------------------------------------
+  useEffect(() => {
+    let data = [...puntosVenta];
+
+    if (selectedCity !== 'All') {
+      data = data.filter((pv) => pv.city?.city === selectedCity);
     }
 
+    if (selectedClient !== 'All') {
+      data = data.filter((pv) => pv.cliente?.name === selectedClient);
+    }
 
-  // const handleFieldToggle = (field: keyof DisplayFields) => {
-  //   setDisplayFields((prev) => ({
-  //     ...prev,
-  //     [field]: !prev[field],
-  //   }));
-  // };
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      data = data.filter(
+        (pv) =>
+          pv.name.toLowerCase().includes(q) ||
+          pv.cliente?.name.toLowerCase().includes(q) ||
+          pv.city?.city.toLowerCase().includes(q)
+      );
+    }
 
-  const filteredProducts = currentProducts.filter((product) => {
-    // Construct the product values for searching
-    const productValues = [
-      product.name,
-      product.city,
-      product.cliente,
-      product.drive,
-      product.online ? 'Online' : 'Offline',
-      `${product.status.find(s => s.code === 'tds_out')?.value || ''} ppm`,
-      `${product.status.find(s => s.code === 'flowrate_total_1')?.value || ''} L`,
-      `${product.status.find(s => s.code === 'flowrate_total_2')?.value || ''} L`,
-      `${product.status.find(s => s.code === 'flowrate_speed_1')?.value || ''} l/min`,
-      `${product.status.find(s => s.code === 'flowrate_speed_2')?.value || ''} l/min`,
-      `${product.status.find(s => s.code === 'filter_element_1')?.value || ''} H`,
-      `${product.status.find(s => s.code === 'filter_element_2')?.value || ''} H`,
-      `${product.status.find(s => s.code === 'filter_element_3')?.value || ''} H`,
-      `${product.status.find(s => s.code === 'filter_element_4')?.value || ''} H`,
-      `${product.status.find(s => s.code === 'temperature')?.value || ''} °C`,
-    ].join(' ').toLowerCase(); // Join all values into a single string for easier search
-    
-    // Search query filter (case-insensitive)
-    const matchesSearchQuery = searchQuery === '' || productValues.includes(searchQuery.toLowerCase()) ;
-  
-    // Combine all filter conditions
-    return matchesSearchQuery;
-  });
+    setFiltered(data);
+  }, [searchQuery, selectedCity, selectedClient, puntosVenta]);
 
-  const mappedFilteredData = filteredProducts.map((product: Product) => {
-    const updatedProduct = { ...product };
-  
-    // Map the status values and add them as separate properties
-    product.status.forEach((statusItem) => {
-      updatedProduct[statusItem.code] = statusItem.value;
-    });
-
-    updatedProduct.status = []
-    return updatedProduct;
-  });
-
+  // ---------------------------------------------
+  // ⏳ Estado de carga
+  // ---------------------------------------------
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
@@ -215,247 +119,125 @@ useEffect(() => {
     );
   }
 
+  // ---------------------------------------------
+  // 🧾 Render principal
+  // ---------------------------------------------
   return (
     <>
       <Helmet>
-        <title>{`Equipos - ${CONFIG.appName}`}</title>
+        <title>{`Puntos de Venta - ${CONFIG.appName}`}</title>
       </Helmet>
+
+      {/* Filtros */}
       <Box sx={{ p: 2 }}>
-        <Typography variant="h5" gutterBottom>Filtrar Productos</Typography>
-        
-        {/* <Chip
-          label="Ver lista de campos disponibles"
-          color='default'
-          sx={{ display: 'flex', alignItems: 'center', padding: '5px' }}
-          icon={
-            <Switch
-            title="Seleccionar Campos a mostrar"
-            checked={showDisplayFields} 
-            onChange={() => setShowDiplayFields(!showDisplayFields)}
-            />
-            }
-          /> */}
-      </Box>
-      {/* <Box sx={{ p: 2 }} style={{ display: showDisplayFields ? 'block' : 'none' }}>
-        {Object.keys(displayFields).map((field) => (
-          <FormControlLabel
-            key={field}
-            control={
-              <Checkbox
-                id={`checkbox-${field}`}
-                checked={displayFields[field as keyof DisplayFields]}
-                onChange={() => handleFieldToggle(field as keyof DisplayFields)}
-                color="primary" // You can customize the color here
-              />
-            }
-            label={field}
-          />
-        ))}
-      </Box> */}
-      <Box  sx={{ p: 2 }}>
+        <Typography variant="h5" gutterBottom>
+          Filtrar Puntos de Venta
+        </Typography>
         <Grid container spacing={2}>
           <Grid item xs={12} sm={4}>
             <TextField
-              label="Buscar en productos"
-              variant="outlined"
+              label="Buscar punto de venta"
               fullWidth
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </Grid>
-          <Grid item xs={12} sm={2}>
-          <FormControl fullWidth>
+          <Grid item xs={12} sm={4}>
+            <FormControl fullWidth>
               <InputLabel>Ciudad</InputLabel>
-              <Select value={selectedCity}  onChange={(e) => setSelectedCity(e.target.value)}>
+              <Select value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)}>
                 <MenuItem value="All">Todas</MenuItem>
                 {cityFilters.map((city) => (
-                  <MenuItem key={city} value={city}>{city}</MenuItem>
+                  <MenuItem key={city} value={city}>
+                    {city}
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>
           </Grid>
-          {currentRole === 'admin' && (
-            <Grid item xs={12} sm={2}>
-              <FormControl fullWidth>
-                <InputLabel>Cliente</InputLabel>
-                <Select value={selectedClient}  onChange={(e) => setSelectedClient(e.target.value)}>
-                  <MenuItem value="All">Todos</MenuItem>
-                  {clientFilters.map((cliente) => (
-                    <MenuItem key={cliente._id} value={cliente.name}>{cliente.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-          )}
-          <Grid item xs={12} sm={2}>
+          <Grid item xs={12} sm={4}>
             <FormControl fullWidth>
-              <InputLabel>Sucursal</InputLabel>
-              <Select value={selectedDrive} onChange={(e) => setSelectedDrive(e.target.value)}>
-                <MenuItem value="All">Todas</MenuItem>
-                {driveFilters.map((drive) => (
-                  <MenuItem key={drive} value={drive}>{drive}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} sm={2}>
-            <FormControl fullWidth>
-              <InputLabel>Status</InputLabel>
-              <Select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
+              <InputLabel>Cliente</InputLabel>
+              <Select value={selectedClient} onChange={(e) => setSelectedClient(e.target.value)}>
                 <MenuItem value="All">Todos</MenuItem>
-                {statusFilters.map((status) => (
-                  <MenuItem key={status} value={status}>{status}</MenuItem>
+                {clientFilters.map((cliente) => (
+                  <MenuItem key={cliente} value={cliente}>
+                    {cliente}
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>
           </Grid>
         </Grid>
       </Box>
+
+      {/* Tabla */}
       <Box sx={{ p: 2 }}>
         <StyledTableContainer>
           <Paper elevation={3}>
-            <Box sx={{ overflowX: 'auto' }}> {/* Ensures table responsiveness */}
+            <Box sx={{ overflowX: 'auto' }}>
               <Grid container>
                 <Grid item xs={12} sm={9}>
                   <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
-                    Lista de equipos en {selectedClient === 'All' ? 'Todos los clientes' : selectedClient}
+                    Lista de Puntos de Venta ({filtered.length})
                   </Typography>
                 </Grid>
-                <Grid item xs={12} sm={3} textAlign='right'>
-                  <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
-                    <CSVLink data={mappedFilteredData} filename={`Productos_${new Date()}.csv`}>
-                      <Button variant="contained" color="primary" fullWidth>
-                        Exportar | {filteredProducts.length} 
-                      </Button>
-                    </CSVLink>
-                  </Typography>
+                <Grid item xs={12} sm={3} textAlign="right" sx={{ p: 2 }}>
+                  <CSVLink
+                    data={filtered}
+                    filename={`PuntosVenta_${new Date().toISOString()}.csv`}
+                    style={{ textDecoration: 'none' }}
+                  >
+                    {/* <Button variant="contained" color="primary" fullWidth>
+                      Exportar CSV
+                    </Button> */}
+                  </CSVLink>
                 </Grid>
               </Grid>
+
               <Table>
                 <TableHead>
                   <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
-                  {displayFields.product && <StyledTableCellHeader> Product</StyledTableCellHeader>}
-                  {displayFields.status && <StyledTableCellHeader>Status</StyledTableCellHeader>}
-                  {displayFields.city && <StyledTableCellHeader>Ciudad</StyledTableCellHeader>}
-                  {displayFields.cliente && <StyledTableCellHeader>Cliente</StyledTableCellHeader>}
-                  {displayFields.drive && <StyledTableCellHeader>Drive</StyledTableCellHeader>}
-                  {displayFields.tds && <StyledTableCellHeader>TDS</StyledTableCellHeader>}
-                  {displayFields.volumeTotal && <StyledTableCellHeader>Volumen Total Prod.</StyledTableCellHeader>}
-                  {displayFields.volumeReject && <StyledTableCellHeader>Volumen Rechazo</StyledTableCellHeader>}
-                  {displayFields.flowRate && <StyledTableCellHeader>Flujo Caudal</StyledTableCellHeader>}
-                  {displayFields.rejectFlow && <StyledTableCellHeader>Flujo rechazo</StyledTableCellHeader>}
-                  {displayFields.sedimentFilter && <StyledTableCellHeader>F. Sedimentos</StyledTableCellHeader>}
-                  {displayFields.granularCarbonFilter && <StyledTableCellHeader>F. Carbon Granular</StyledTableCellHeader>}
-                  {displayFields.blockCarbonFilter && <StyledTableCellHeader>F. Carbon Bloque</StyledTableCellHeader>}
-                  {displayFields.oiMembrane && <StyledTableCellHeader>Membrana</StyledTableCellHeader>}
-                  {displayFields.temperature && <StyledTableCellHeader>Temp</StyledTableCellHeader>}
-                  <StyledTableCellHeader>Actions</StyledTableCellHeader>
+                    <StyledTableCellHeader>Nombre</StyledTableCellHeader>
+                    <StyledTableCellHeader>Cliente</StyledTableCellHeader>
+                    <StyledTableCellHeader>Ciudad</StyledTableCellHeader>
+                    <StyledTableCellHeader>Estado</StyledTableCellHeader>
+                    <StyledTableCellHeader>Productos</StyledTableCellHeader>
+                    <StyledTableCellHeader>Actions</StyledTableCellHeader>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filteredProducts.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((product) => (
-                    <StyledTableRow key={product.id}>
-                      {displayFields.product && (
+                  {filtered
+                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                    .map((pv) => (
+                      <StyledTableRow key={pv._id}>
+                        <StyledTableCell>{pv.name}</StyledTableCell>
+                        <StyledTableCell>{pv.cliente?.name || 'N/A'}</StyledTableCell>
+                        <StyledTableCell>{pv.city?.city || 'N/A'}</StyledTableCell>
+                        <StyledTableCell>{pv.city?.state || 'N/A'}</StyledTableCell>
                         <StyledTableCell>
-                          <Typography variant="body1">
-                            <img
-                              src={`${CONFIG.ICON_URL}/${product.icon}`}
-                              alt={product.name}
-                              style={{ width: '40px', height: '40px', marginRight: '10px' }}
-                            />
-                            {product.name}
-                          </Typography>
+                          {pv.productos?.length ?? 0}
                         </StyledTableCell>
-                      )}
-                      {displayFields.status && (
                         <StyledTableCell>
-                          <Chip
-                            label={product.online ? 'Online' : 'Offline'}
-                            color={product.online ? 'success' : 'error'}
-                            size="small"
-                          />
-                        </StyledTableCell>
-                      )}
-                      {displayFields.city && (
-                        <StyledTableCell>
-                          {product.city}
-                        </StyledTableCell>
-                      )}
-                      {displayFields.cliente && (
-                        <StyledTableCell>
-                          {product.cliente.name}
-                        </StyledTableCell>
-                      )}
-                      {displayFields.drive && (
-                        <StyledTableCell>
-                          {product.drive}
-                        </StyledTableCell>
-                      )}
-                      {displayFields.tds && (
-                        <StyledTableCell>{product.status.find(s => s.code === 'tds_out')?.value || 'N/A'} ppm</StyledTableCell>
-                      )}
-                      {displayFields.volumeTotal && (
-                        <StyledTableCell>{product.status.find(s => s.code === 'flowrate_total_1')?.value || 'N/A'} L</StyledTableCell>
-                      )}
-                      {displayFields.volumeReject && (
-                        <StyledTableCell>{product.status.find(s => s.code === 'flowrate_total_2')?.value || 'N/A'} L</StyledTableCell>
-                      )}
-                      {displayFields.flowRate && (
-                        <StyledTableCell>{product.status.find(s => s.code === 'flowrate_speed_1')?.value || 'N/A'} l/min</StyledTableCell>
-                      )}
-                      {displayFields.rejectFlow && (
-                        <StyledTableCell>{product.status.find(s => s.code === 'flowrate_speed_2')?.value || 'N/A'} l/min</StyledTableCell>
-                      )}
-                      {displayFields.sedimentFilter && (
-                        <StyledTableCell>{product.status.find(s => s.code === 'filter_element_1')?.value || 'N/A'} H</StyledTableCell>
-                      )}
-                      {displayFields.granularCarbonFilter && (
-                        <StyledTableCell>{product.status.find(s => s.code === 'filter_element_2')?.value || 'N/A'} H</StyledTableCell>
-                      )}
-                      {displayFields.blockCarbonFilter && (
-                        <StyledTableCell>{product.status.find(s => s.code === 'filter_element_3')?.value || 'N/A'} H</StyledTableCell>
-                      )}
-                      {displayFields.oiMembrane && (
-                        <StyledTableCell>{product.status.find(s => s.code === 'filter_element_4')?.value || 'N/A'} H</StyledTableCell>
-                      )}
-                      {displayFields.temperature && (
-                        <StyledTableCell>{product.status.find(s => s.code === 'temperature')?.value || 'N/A'} °C</StyledTableCell>
-                      )}
-                      <StyledTableCell>
-                        <Stack direction="row" spacing={1} alignItems="center">
-                            <Chip
-                              label="Flush"
-                              disabled={!product.online || product.product_type !== 'Osmosis'}
-                              color={(switchState[product.id] || false) ? 'primary' : 'default'}
-                              sx={{ display: 'flex', alignItems: 'center', padding: '5px' }}
-                              icon={
-                                <Switch
-                                  title="Forzar flush"
-                                  checked={switchState[product.id] || false} 
-                                  onChange={() => handleToggle(product.id)}
-                                  disabled={processing[product.id] || false} 
-                                />
-                              }
-                            />
-                            <Button
+                          <Button
                               variant="contained"
                               color="inherit"
-                              onClick={() => navigate(`/Equipos/${product.id}`)}
+                              onClick={() => navigate(`/PuntoVenta/${pv._id}`)}
                             >
                             Detalles
                           </Button>
-                        </Stack>
-                      </StyledTableCell>
-                    </StyledTableRow>
-                  ))}
+                        </StyledTableCell>
+                      </StyledTableRow>
+                    ))}
                 </TableBody>
               </Table>
             </Box>
           </Paper>
         </StyledTableContainer>
+
         <TablePagination
           component="div"
-          count={filteredProducts.length}
+          count={filtered.length}
           rowsPerPage={rowsPerPage}
           page={page}
           onPageChange={(_, newPage) => setPage(newPage)}
@@ -465,5 +247,3 @@ useEffect(() => {
     </>
   );
 }
-
-export default ProductTableList;
