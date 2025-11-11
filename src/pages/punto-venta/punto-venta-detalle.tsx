@@ -13,72 +13,78 @@ import { CONFIG } from 'src/config-global';
 import { SideBarChart } from '../charts/side-bar-chart';
 import { PressureGauge } from '../charts/pressure-gauge';
 
+import type { MetricsData } from '../types';
+
+function prepareChartData(puntoData: any, setChartDataNiveles: any) {
+  const productos = puntoData?.productos || [];
+  const niveles = productos.filter((p: any) => p.product_type === 'Nivel');
+  if (niveles.length === 0) {
+    setChartDataNiveles(null);
+    return;
+  }
+  // Categorías (nombres de los tanques)
+  const categories = niveles.map((nivel: any) => nivel.name);
+  const nivelesData = niveles.map((nivel: any) =>
+    nivel.status.find((s: any) => s.code === 'liquid_level_percent')?.value || 0
+  );
+  const profundidadData = niveles.map((nivel: any) =>
+    nivel.status.find((s: any) => s.code === 'liquid_depth')?.value || 0
+  );
+  const chartData = {
+    categories,
+    series: [
+      {
+        name: 'Nivel (%)',
+        data: nivelesData,
+      },
+      {
+        name: 'Profundidad (cm)',
+        data: profundidadData,
+      },
+    ],
+  };
+  setChartDataNiveles(chartData);
+}
+
+async function fetchMetrics(clienteId: string, setMetrics: any) {
+  try {
+    const metricsResponse = await get<MetricsData[]>(`/metrics`, { cliente: clienteId });
+    setMetrics(metricsResponse[0] || null);
+  } catch (err) {
+    setMetrics(null);
+  }
+}
+
 export default function PuntoVentaDetalle() {
   const { id } = useParams<{ id: string }>();
-  
   const [punto, setPunto] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [chartDataNiveles, setChartDataNiveles] = useState<any>(null);
+  const [metrics, setMetrics] = useState<MetricsData | null>(null);
 
   useEffect(() => {
     const fetchPuntoVentaDetails = async () => {
       try {
         const response = await get<any>(`/puntoVentas/${id}`);
         setPunto(response);
-        prepareChartData(response);
+        prepareChartData(response, setChartDataNiveles);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching punto venta details:', error);
         setLoading(false);
       }
     };
-
-    const prepareChartData = (puntoData: any) => {
-      const productos = puntoData?.productos || [];
-      const niveles = productos.filter((p: any) => p.product_type === 'Nivel');
-      
-      if (niveles.length === 0) {
-        setChartDataNiveles(null);
-        return;
-      }
-
-      // Preparar categorías (nombres de los tanques)
-      const categories = niveles.map((nivel: any) => nivel.name);
-      
-      // Preparar datos para las series
-      const nivelesData = niveles.map((nivel: any) => 
-        nivel.status.find((s: any) => s.code === 'liquid_level_percent')?.value || 0
-      );
-      
-      const profundidadData = niveles.map((nivel: any) => 
-        nivel.status.find((s: any) => s.code === 'liquid_depth')?.value || 0
-      );
-      
-      const chartData = {
-        categories,
-        series: [
-          {
-            name: 'Nivel (%)',
-            data: nivelesData,
-          },
-          {
-            name: 'Profundidad (cm)',
-            data: profundidadData,
-          },
-        ],
-      };
-      
-      setChartDataNiveles(chartData);
-    };
-
     fetchPuntoVentaDetails();
-
     const interval = setInterval(() => {
       fetchPuntoVentaDetails();
     }, 30000); // Refresh every 30 seconds
-
     return () => clearInterval(interval);
   }, [id]);
+
+  useEffect(() => {
+    const clienteId = punto?.cliente?._id;
+    if (clienteId) fetchMetrics(clienteId, setMetrics);
+  }, [punto?.cliente?._id]);
 
   if (loading || !punto) {
     return (
@@ -92,9 +98,7 @@ export default function PuntoVentaDetalle() {
 
   const niveles = productos.filter((p: any) => p.product_type === 'Nivel');
   const osmosis = productos.filter((p: any) => p.product_type === 'Osmosis');
-  const presion = productos.filter((p: any) =>
-    p.name?.toLowerCase().includes('pressure')
-  );
+  const presion = productos.filter((p: any) => p.product_type === 'Pressure');
 
   return (
     <>
@@ -137,7 +141,7 @@ export default function PuntoVentaDetalle() {
 
           {/* Sección Derecha: Niveles con Gráficas */}
           <Grid item xs={12} md={12} lg={7}>
-            <NivelSection niveles={niveles} chartDataNiveles={chartDataNiveles} />
+            <NivelSection niveles={niveles} chartDataNiveles={chartDataNiveles} osmosis={osmosis} metrics={metrics} />
           </Grid>
         </Grid>
       </Box>
@@ -170,20 +174,20 @@ function PresionOsmosisSection({ presion, osmosis }: any) {
           <Box key={p._id} sx={{ mb: 2 }}>
             {/* Card principal con información del equipo */}
             <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <img
-                  src={`${CONFIG.ICON_URL}/${p.icon}`}
-                  alt={p.name}
-                  style={{ width: '50px', height: '50px', marginRight: '12px' }}
-                />
-                <Box>
-                  <Typography variant="h6">{p.name}</Typography>
-                  <Chip
-                    label={p.online ? 'Online' : 'Offline'}
-                    color={p.online ? 'success' : 'error'}
-                    size="small"
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <img
+                    src={`${CONFIG.ICON_URL}/${p.icon}`}
+                    alt={p.name}
+                    style={{ width: '50px', height: '50px', marginRight: '12px' }}
                   />
+                  <Typography variant="h6">{p.name}</Typography>
                 </Box>
+                <Chip
+                  label={p.online ? 'Online' : 'Offline'}
+                  color={p.online ? 'success' : 'error'}
+                  size="small"
+                />
               </Box>
               <Divider sx={{ mb: 2 }} />
 
@@ -308,40 +312,53 @@ function PresionOsmosisSection({ presion, osmosis }: any) {
       {/* 🔹 Medidores de Presión */}
       {presion.length > 0 && (
         <Box sx={{ mt: 2 }}>
+          <Card variant="outlined" sx={{ p: 2 }}>
           <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
             Sensores de Presión
           </Typography>
           {presion.map((p: any) => {
-            const presIn = p.status.find((s: any) => s.code === 'presion_in')?.value || 0;
-            const presOut = p.status.find((s: any) => s.code === 'presion_out')?.value || 0;
+            const presIn = p.status.find((s: any) => s.code === 'pressure_valve1_psi')?.value || 0;
+            const presOut = p.status.find((s: any) => s.code === 'pressure_valve2_psi')?.value || 0;
             return (
               <Box key={p._id} sx={{ mb: 2 }}>
-                <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'medium', mb: 2 }}>
-                  {p.name}
-                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                  <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'medium' }}>
+                    {p.name}
+                  </Typography>
+                  <Chip 
+                    label={p.online ? 'Online' : 'Offline'}
+                    color={p.online ? 'success' : 'error'}
+                    size="small"
+                  />
+                </Box>
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={6}>
-                    <PressureGauge
-                      value={presIn}
-                      maxValue={150}
-                      unit="PSI"
-                      label="Presión Entrada"
-                      color="#3b82f6"
-                    />
+                    <Box sx={{ bgcolor: 'background.neutral', borderRadius: 1, p: 1, mb: 1 }}>
+                      <PressureGauge
+                        value={presIn}
+                        maxValue={150}
+                        unit="PSI"
+                        label="Presión Entrada"
+                        color="#3b82f6"
+                      />
+                    </Box>
                   </Grid>
                   <Grid item xs={12} sm={6}>
-                    <PressureGauge
-                      value={presOut}
-                      maxValue={150}
-                      unit="PSI"
-                      label="Presión Salida"
-                      color="#8b5cf6"
-                    />
+                    <Box sx={{ bgcolor: 'background.neutral', borderRadius: 1, p: 1, mb: 1 }}>
+                      <PressureGauge
+                        value={presOut}
+                        maxValue={150}
+                        unit="PSI"
+                        label="Presión Salida"
+                        color="#8b5cf6"
+                      />
+                    </Box>
                   </Grid>
                 </Grid>
               </Box>
             );
           })}
+          </Card>
         </Box>
       )}
     </Box>
@@ -562,7 +579,7 @@ function DatosGenerales({ punto }: any) {
 /* 🧱 Sección 3: Niveles */
 /* -------------------------------------------------------------------------- */
 
-function NivelSection({ niveles, chartDataNiveles }: any) {
+function NivelSection({ niveles, chartDataNiveles, osmosis = [], metrics = null }: any) {
   if (niveles.length === 0) {
     return (
       <Card variant="outlined" sx={{ p: 2 }}>
@@ -600,9 +617,16 @@ function NivelSection({ niveles, chartDataNiveles }: any) {
             return (
               <Grid item xs={12} sm={6} key={p._id}>
                 <Box sx={{ p: 1.5, bgcolor: 'background.neutral', borderRadius: 1 }}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    {p.name}
-                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      {p.name}
+                    </Typography>
+                    <Chip
+                      label={p.online ? 'Online' : 'Offline'}
+                      color={p.online ? 'success' : 'error'}
+                      size="small"
+                    />
+                  </Box>
                   <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
                     <strong>Estado:</strong> {estado ?? '-'}
                   </Typography>
@@ -626,6 +650,79 @@ function NivelSection({ niveles, chartDataNiveles }: any) {
           subheader="Niveles y profundidad de todos los tanques"
           chart={chartDataNiveles}
         />
+      )}
+
+      {/* Sección Métricas con diseño tipo filtros */}
+      {osmosis?.length > 0 && (
+        <Box sx={{ mt: 4 }}>
+          <Divider sx={{ mb: 2 }} />
+          {osmosis.map((producto: any) => {
+            const getNumber = (s: any) => {
+              const v = producto.status.find((x: any) => x.code === s)?.value;
+              return v !== undefined && v !== null && v !== '' ? Number(v) : 0;
+            };
+            const flowProd = getNumber('flowrate_speed_1');
+            const flowReject = getNumber('flowrate_speed_2');
+            const tds = getNumber('tds_out');
+            const volProd = getNumber('flowrate_total_1');
+            const volReject = getNumber('flowrate_total_2');
+            const tdsRange = metrics?.tds_range ?? 'N/A';
+            const prodRange = metrics?.production_volume_range ?? 'N/A';
+            const rejectRange = metrics?.rejected_volume_range ?? 'N/A';
+
+            const eficiencia = (flowProd + flowReject) > 0 
+              ? `${((flowProd / (flowProd + flowReject)) * 100).toFixed(2)}%` 
+              : 'N/A';
+            const tdsEnRango = (tdsRange !== 'N/A' && tds > 0) ? (tds <= tdsRange ? 'Sí' : 'No') : 'N/A';
+            const prodEnRango = (prodRange !== 'N/A' && volProd > 0) ? (volProd <= prodRange ? 'Sí' : 'No') : 'N/A';
+            const rechEnRango = (rejectRange !== 'N/A' && volReject > 0) ? (volReject <= rejectRange ? 'Sí' : 'No') : 'N/A';
+
+            return (
+              <Card key={producto._id} variant="outlined" sx={{ mb: 2, p: 2 }}>
+                <Typography variant="subtitle1" sx={{ mb: 2, textAlign: 'center' }}>Metricas de {producto.name}</Typography>
+                <Grid container spacing={1.5}>
+                  <Grid item xs={6} sm={3}>
+                    <Box sx={{ p: 1, bgcolor: 'background.neutral', borderRadius: 1, textAlign: 'center', minHeight: 70, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
+                        Eficiencia
+                      </Typography>
+                      <Typography variant="body1" fontWeight="bold" color="primary">
+                        {eficiencia}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <Box sx={{ p: 1, bgcolor: 'background.neutral', borderRadius: 1, textAlign: 'center', minHeight: 70, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
+                        TDS en rango
+                      </Typography>
+                      <Chip label={tdsEnRango} color={tdsEnRango==='Sí'?'success': tdsEnRango==='No'?'error':'default'} size="small" sx={{ mt: 0 }} />
+                      <Typography variant="caption">{tdsRange !== 'N/A' && `(Máx: ${tdsRange})`}</Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <Box sx={{ p: 1, bgcolor: 'background.neutral', borderRadius: 1, textAlign: 'center', minHeight: 70, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
+                        Producción en rango
+                      </Typography>
+                      <Chip label={prodEnRango} color={prodEnRango==='Sí'?'success': prodEnRango==='No'?'error':'default'} size="small" sx={{ mt: 0 }} />
+                      <Typography variant="caption">{prodRange !== 'N/A' && `(Máx: ${prodRange})`}</Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <Box sx={{ p: 1, bgcolor: 'background.neutral', borderRadius: 1, textAlign: 'center', minHeight: 70, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
+                        Rechazo en rango
+                      </Typography>
+                      <Chip label={rechEnRango} color={rechEnRango==='Sí'?'success': rechEnRango==='No'?'error':'default'} size="small" sx={{ mt: 0 }} />
+                      <Typography variant="caption">{rejectRange !== 'N/A' && `(Máx: ${rejectRange})`}</Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Card>
+            );
+          })}
+        </Box>
       )}
     </Box>
   );
