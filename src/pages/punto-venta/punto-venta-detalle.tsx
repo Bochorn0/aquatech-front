@@ -10,6 +10,7 @@ import geoData from 'src/utils/states.json';
 import { get } from 'src/api/axiosHelper';
 import { CONFIG } from 'src/config-global';
 
+import { ExportReportButton } from './export-button';
 import { SideBarChart } from '../charts/side-bar-chart';
 import { PressureGauge } from '../charts/pressure-gauge';
 
@@ -139,8 +140,24 @@ export default function PuntoVentaDetalle() {
             <PresionOsmosisSection presion={presion} osmosis={osmosis} />
           </Grid>
 
-          {/* Sección Derecha: Niveles con Gráficas */}
+          {/* Sección Derecha: Exportar Reportes + Niveles con Gráficas */}
           <Grid item xs={12} md={12} lg={7}>
+            {/* Sección de Exportar Reportes */}
+            {osmosis.length > 0 && (
+              <Box sx={{ mb: 3 }}>
+                <Card variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="h6" gutterBottom>
+                    Exportar Reportes
+                  </Typography>
+                  <Divider sx={{ mb: 2 }} />
+                  {osmosis.map((producto: any) => (
+                    <Box key={producto._id} sx={{ mb: 2 }}>
+                      <ExportReportButton product={producto} />
+                    </Box>
+                  ))}
+                </Card>
+              </Box>
+            )}
             <NivelSection niveles={niveles} chartDataNiveles={chartDataNiveles} osmosis={osmosis} metrics={metrics} />
           </Grid>
         </Grid>
