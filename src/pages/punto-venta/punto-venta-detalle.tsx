@@ -3,15 +3,19 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Marker, Geography, Geographies, ComposableMap } from 'react-simple-maps';
 
+import { useTheme } from '@mui/material/styles';
+import CardHeader from '@mui/material/CardHeader';
 import { Box, Chip, Card, Grid, Paper, Button, Divider, Typography, CircularProgress } from '@mui/material';
 
 import geoData from 'src/utils/states.json';
+import { fNumber } from 'src/utils/format-number';
 
 import { get } from 'src/api/axiosHelper';
 import { CONFIG } from 'src/config-global';
 
+import { Chart, useChart } from 'src/components/chart';
+
 import { ExportReportButton } from './export-button';
-import { SideBarChart } from '../charts/side-bar-chart';
 import { PressureGauge } from '../charts/pressure-gauge';
 
 import type { MetricsData } from '../types';
@@ -23,28 +27,98 @@ function prepareChartData(puntoData: any, setChartDataNiveles: any) {
     setChartDataNiveles(null);
     return;
   }
-  // Categorías (nombres de los tanques)
-  const categories = niveles.map((nivel: any) => nivel.name);
-  const nivelesData = niveles.map((nivel: any) =>
-    nivel.status.find((s: any) => s.code === 'liquid_level_percent')?.value || 0
-  );
-  const profundidadData = niveles.map((nivel: any) =>
-    nivel.status.find((s: any) => s.code === 'liquid_depth')?.value || 0
-  );
-  const chartData = {
-    categories,
-    series: [
-      {
-        name: 'Nivel (%)',
-        data: nivelesData,
-      },
-      {
-        name: 'Profundidad (cm)',
-        data: profundidadData,
-      },
-    ],
-  };
-  setChartDataNiveles(chartData);
+  // // Categorías (nombres de los tanques)
+  // const categories = niveles.map((nivel: any) => nivel.name);
+  // const nivelesData = niveles.map((nivel: any) =>
+  //   nivel.status.find((s: any) => s.code === 'liquid_level_percent')?.value || 0
+  // );
+  // const profundidadData = niveles.map((nivel: any) =>
+  //   nivel.status.find((s: any) => s.code === 'liquid_depth')?.value || 0
+  // );
+  // const chartData = {
+  //   categories,
+  //   series: [
+  //     {
+  //       name: 'Nivel (%)',
+  //       data: nivelesData,
+  //     },
+  //     {
+  //       name: 'Profundidad (cm)',
+  //       data: profundidadData,
+  //     },
+  //   ],
+  // };
+  // setChartDataNiveles(chartData);
+
+
+  // Preparar datos históricos para gráfica de línea/puntos
+  console.log('Niveles encontrados:', niveles);
+  console.log('Primer nivel histórico:', niveles[0]?.historico);
+  
+  const chartDataArray = niveles
+    .filter((nivel: any) => {
+      const hasHistorico = nivel.historico && 
+                          nivel.historico.hours_with_data && 
+                          Array.isArray(nivel.historico.hours_with_data) &&
+                          nivel.historico.hours_with_data.length > 0;
+      if (!hasHistorico) {
+        console.log(`Nivel ${nivel.name} no tiene histórico o está vacío`);
+      }
+      return hasHistorico;
+    })
+    .map((nivel: any) => {
+      const historico = nivel.historico || {};
+      const hoursWithData = historico.hours_with_data || [];
+      console.log(`Procesando histórico de ${nivel.name}:`, hoursWithData.slice(0, 2));
+      
+      // Ordenar por hora
+      const horasOrdenadas = [...hoursWithData].sort((a: any, b: any) => {
+        const horaA = a.hora || '00:00';
+        const horaB = b.hora || '00:00';
+        return horaA.localeCompare(horaB);
+      });
+      
+      // Extraer horas, datos de nivel y profundidad
+      const horas = horasOrdenadas.map((h: any) => h.hora || '');
+      const nivelPercentData = horasOrdenadas.map((h: any) => 
+        Number(h.estadisticas?.liquid_level_percent_promedio) || 0
+      );
+      const profundidadData = horasOrdenadas.map((h: any) => 
+        Number(h.estadisticas?.liquid_depth_promedio) || 0
+      );
+
+      // Calcular promedios generales de todas las horas
+      const nivelPromedioTotal = nivelPercentData.length > 0
+        ? nivelPercentData.reduce((sum, val) => sum + val, 0) / nivelPercentData.length
+        : 0;
+      const profundidadPromedioTotal = profundidadData.length > 0
+        ? profundidadData.reduce((sum, val) => sum + val, 0) / profundidadData.length
+        : 0;
+
+      return {
+        nivelId: nivel._id,
+        nivelName: nivel.name,
+        categories: horas,
+        series: [
+          {
+            name: 'Nivel (%)',
+            data: nivelPercentData,
+          },
+          {
+            name: 'Profundidad (cm)',
+            data: profundidadData,
+          },
+        ],
+        estadisticas: {
+          nivelPromedio: nivelPromedioTotal,
+          profundidadPromedio: profundidadPromedioTotal,
+        },
+      };
+    });
+
+  const result = chartDataArray.length > 0 ? chartDataArray : null;
+  console.log('Chart data prepared:', result);
+  setChartDataNiveles(result);
 }
 
 async function fetchMetrics(clienteId: string, setMetrics: any) {
@@ -593,6 +667,115 @@ function DatosGenerales({ punto }: any) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* 🧱 Componente: Gráfica Histórica de Niveles */
+/* -------------------------------------------------------------------------- */
+
+function NivelHistoricoChart({ nivelName, chart }: { nivelName: string; chart: any }) {
+  const theme = useTheme();
+
+  console.log('NivelHistoricoChart - nivelName:', nivelName, 'chart:', chart);
+
+  // Los hooks deben llamarse antes de cualquier early return
+  const chartOptions = useChart({
+    chart: {
+      type: 'line',
+      toolbar: { show: false },
+      zoom: { enabled: false },
+    },
+    colors: [theme.palette.primary.main, theme.palette.info.main],
+    stroke: {
+      width: 2,
+      curve: 'smooth',
+    },
+    markers: {
+      size: 4,
+      strokeWidth: 2,
+      hover: {
+        size: 6,
+      },
+    },
+    xaxis: {
+      categories: chart.categories,
+      labels: {
+        rotate: -45,
+        rotateAlways: false,
+        style: {
+          fontSize: '11px',
+        },
+      },
+    },
+    yaxis: [
+      {
+        title: {
+          text: 'Nivel (%)',
+        },
+        min: 0,
+        max: 100,
+      },
+      {
+        opposite: true,
+        title: {
+          text: 'Profundidad (cm)',
+        },
+      },
+    ],
+    tooltip: {
+      shared: true,
+      intersect: false,
+      y: {
+        formatter: (value: number) => fNumber(value),
+        title: {
+          formatter: (seriesName: string) => `${seriesName}: `,
+        },
+      },
+    },
+    legend: {
+      position: 'top',
+      horizontalAlign: 'right',
+    },
+    grid: {
+      strokeDashArray: 3,
+    },
+  });
+
+  // Preparar series con configuración de eje Y para ApexCharts
+  const seriesWithYaxis = chart?.series?.map((serie: any, index: number) => ({
+    name: serie.name,
+    data: serie.data,
+    yAxisIndex: index,
+  })) || [];
+
+  // Validar que hay datos después de preparar las opciones del chart
+  if (!chart || !chart.categories || chart.categories.length === 0 || !chart.series || chart.series.length === 0) {
+    return (
+      <Card variant="outlined" sx={{ mb: 3, p: 2 }}>
+        <CardHeader
+          title={`Histórico de ${nivelName}`}
+          subheader="No hay datos históricos disponibles"
+        />
+      </Card>
+    );
+  }
+
+  return (
+    <Card variant="outlined" sx={{ mb: 3, p: 2 }}>
+      <CardHeader
+        title={`Histórico de ${nivelName}`}
+        subheader={`Promedio: Nivel ${chart.estadisticas?.nivelPromedio?.toFixed(2) || 0}% | Profundidad ${chart.estadisticas?.profundidadPromedio?.toFixed(2) || 0} cm`}
+      />
+      <Divider sx={{ mb: 2 }} />
+      <Chart
+        type="line"
+        series={seriesWithYaxis}
+        options={chartOptions}
+        height={350}
+        sx={{ py: 2 }}
+      />
+    </Card>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* 🧱 Sección 3: Niveles */
 /* -------------------------------------------------------------------------- */
 
@@ -660,14 +843,24 @@ function NivelSection({ niveles, chartDataNiveles, osmosis = [], metrics = null 
         </Grid>
       </Card>
 
-      {/* Gráfica combinada de todos los niveles */}
-      {chartDataNiveles && (
-        <SideBarChart
-          title="Comparación de Niveles"
-          subheader="Niveles y profundidad de todos los tanques"
-          chart={chartDataNiveles}
-        />
-      )}
+      {/* Gráficas históricas de niveles */}
+      {chartDataNiveles && chartDataNiveles.length > 0 ? (
+        <Box>
+          {chartDataNiveles.map((chartData: any) => (
+            <NivelHistoricoChart
+              key={chartData.nivelId}
+              nivelName={chartData.nivelName}
+              chart={chartData}
+            />
+          ))}
+        </Box>
+      ) : niveles.length > 0 ? (
+        <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
+          <Typography variant="body2" color="text.secondary">
+            No hay datos históricos disponibles para mostrar gráficas
+          </Typography>
+        </Card>
+      ) : null}
 
       {/* Sección Métricas con diseño tipo filtros */}
       {osmosis?.length > 0 && (
