@@ -49,7 +49,9 @@ const defaultController: Controller = {
   reset_pending: false,
   update_controller_time: 10000,
   loop_time: 1000,
-  flush_time: 20000
+  flush_time: 20000,
+  sensor_factor: 0,
+  tipo_sensor: "1"
 };
 
 
@@ -336,7 +338,21 @@ export default function ControllersPage() {
               fullWidth
               inputProps={{ min: 20000, max: 60000 }}
             />
-
+            <FormControl fullWidth>
+              <InputLabel>Tipo de Sensor</InputLabel>
+              <Select name="tipo_sensor" value={controllerForm.tipo_sensor} onChange={handleControllerChange}>
+                <MenuItem value="1">Sensor de Presion 1</MenuItem>
+                <MenuItem value="2">Sensor de Presion 2</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField
+              type="number"
+              label="Ajuste Factor de Sensor Presion"
+              name="sensor_factor"
+              value={controllerForm.sensor_factor}
+              onChange={handleControllerChange}
+              fullWidth
+            />
             <FormControl fullWidth>
               <InputLabel>Reinicio Remoto</InputLabel>
               <Select

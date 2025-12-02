@@ -206,6 +206,8 @@ export interface Controller {
   modo_reinicio?: string;          // "manual" | "programado"
   loop_time?: number;             // frecuencia del loop principal en ms o seg
   flush_time?: number;
+  sensor_factor?: number;
+  tipo_sensor?: string;
 }
 
 export interface PuntosVenta {

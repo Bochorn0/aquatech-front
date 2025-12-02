@@ -79,13 +79,18 @@ function prepareChartData(puntoData: any, setChartDataNiveles: any) {
       });
       
       // Extraer horas, datos de nivel y profundidad
+      // Nota: Ambos valores ya vienen en porcentajes
       const horas = horasOrdenadas.map((h: any) => h.hora || '');
-      const nivelPercentData = horasOrdenadas.map((h: any) => 
-        Number(h.estadisticas?.liquid_level_percent_promedio) || 0
-      );
-      const profundidadData = horasOrdenadas.map((h: any) => 
-        Number(h.estadisticas?.liquid_depth_promedio) || 0
-      );
+      const nivelPercentData = horasOrdenadas.map((h: any) => {
+        const value = Number(h.estadisticas?.liquid_level_percent_promedio) || 0;
+        // Asegurar que el valor esté en el rango 0-100
+        return Math.max(0, Math.min(100, value));
+      });
+      const profundidadData = horasOrdenadas.map((h: any) => {
+        const value = Number(h.estadisticas?.liquid_depth_promedio) || 0;
+        // Asegurar que el valor esté en el rango 0-100 (ya viene en porcentaje)
+        return Math.max(0, Math.min(100, value));
+      });
 
       // Calcular promedios generales de todas las horas
       const nivelPromedioTotal = nivelPercentData.length > 0
@@ -105,7 +110,7 @@ function prepareChartData(puntoData: any, setChartDataNiveles: any) {
             data: nivelPercentData,
           },
           {
-            name: 'Profundidad (cm)',
+            name: 'Profundidad (%)',
             data: profundidadData,
           },
         ],
@@ -715,8 +720,10 @@ function NivelHistoricoChart({ nivelName, chart }: { nivelName: string; chart: a
       {
         opposite: true,
         title: {
-          text: 'Profundidad (cm)',
+          text: 'Profundidad (%)',
         },
+        min: 0,
+        max: 100,
       },
     ],
     tooltip: {
@@ -761,7 +768,7 @@ function NivelHistoricoChart({ nivelName, chart }: { nivelName: string; chart: a
     <Card variant="outlined" sx={{ mb: 3, p: 2 }}>
       <CardHeader
         title={`Histórico de ${nivelName}`}
-        subheader={`Promedio: Nivel ${chart.estadisticas?.nivelPromedio?.toFixed(2) || 0}% | Profundidad ${chart.estadisticas?.profundidadPromedio?.toFixed(2) || 0} cm`}
+        subheader={`Promedio: Nivel ${chart.estadisticas?.nivelPromedio?.toFixed(2) || 0}% | Profundidad ${chart.estadisticas?.profundidadPromedio?.toFixed(2) || 0}%`}
       />
       <Divider sx={{ mb: 2 }} />
       <Chart
@@ -813,6 +820,13 @@ function NivelSection({ niveles, chartDataNiveles, osmosis = [], metrics = null 
             const profundidad = p.status.find(
               (s: any) => s.code === 'liquid_depth'
             )?.value;
+            
+            // Capacidad máxima del tanque: 1100 litros
+            const capacidadMaxima = 1100;
+            // Calcular litros actuales basado en el porcentaje
+            const litrosActuales = porcentaje !== null && porcentaje !== undefined
+              ? ((Number(porcentaje) / 100) * capacidadMaxima).toFixed(2)
+              : '-';
 
             return (
               <Grid item xs={12} sm={6} key={p._id}>
@@ -832,6 +846,9 @@ function NivelSection({ niveles, chartDataNiveles, osmosis = [], metrics = null 
                   </Typography>
                   <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
                     <strong>Nivel:</strong> {porcentaje ?? '-'}%
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
+                    <strong>Litros Actuales:</strong> {litrosActuales} L / {capacidadMaxima} L
                   </Typography>
                   <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
                     <strong>Profundidad:</strong> {profundidad ?? '-'} cm
