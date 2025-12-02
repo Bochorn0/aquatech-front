@@ -201,6 +201,7 @@ export interface Controller {
   time_zone?: string;
   restart?: boolean;               // reinicio remoto
   reset_pending?: boolean;         // indica que ESP32 debe reiniciarse
+  flush_pending?: boolean; // indica que el esp32 debe forzar flush
   update_controller_time?: number;    // intervalo para actualizar datos
   ultima_actualizacion?: number;   // timestamp de la última actualización
   modo_reinicio?: string;          // "manual" | "programado"

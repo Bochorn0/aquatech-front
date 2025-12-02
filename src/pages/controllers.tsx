@@ -47,6 +47,7 @@ const defaultController: Controller = {
   create_time: 0,
   // 🔥 Nuevos
   reset_pending: false,
+  flush_pending: false,
   update_controller_time: 10000,
   loop_time: 1000,
   flush_time: 20000,
@@ -222,6 +223,7 @@ export default function ControllersPage() {
                           <StyledTableCell>{ctrl.update_controller_time} ms</StyledTableCell>
                           <StyledTableCell>{ctrl.loop_time} ms</StyledTableCell>
                           <StyledTableCell>{ctrl.reset_pending ? "Sí" : "No"}</StyledTableCell>
+                          <StyledTableCell>{ctrl.flush_pending ? "Sí" : "No"}</StyledTableCell>
 
                           <StyledTableCell>{ctrl.online ? "Sí" : "No"}</StyledTableCell>
                           <StyledTableCell>
@@ -362,6 +364,22 @@ export default function ControllersPage() {
                   setControllerForm({
                     ...controllerForm,
                     reset_pending: e.target.value === "true",
+                  })
+                }
+              >
+                <MenuItem value="true">Sí</MenuItem>
+                <MenuItem value="false">No</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Flush Remoto</InputLabel>
+              <Select
+                name="flush_pending"
+                value={controllerForm.flush_pending ? "true" : "false"}
+                onChange={(e) =>
+                  setControllerForm({
+                    ...controllerForm,
+                    flush_pending: e.target.value === "true",
                   })
                 }
               >
