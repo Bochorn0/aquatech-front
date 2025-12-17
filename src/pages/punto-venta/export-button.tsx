@@ -4,9 +4,9 @@ import * as XLSX from 'xlsx';
 import { useState } from 'react';
 import { saveAs } from 'file-saver';
 
-import { Box, Grid, Button } from '@mui/material';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
+import { Box, Grid, Button, FormControlLabel, Switch } from '@mui/material';
 
 import { get } from 'src/api/axiosHelper';
 
@@ -35,18 +35,38 @@ interface ReportResponse {
 
 function ExportReportButton({ product }: { product: any }) {
   const [selectedDate, setSelectedDate] = useState<Dayjs | null>(dayjs());
+  const [startDate, setStartDate] = useState<Dayjs | null>(dayjs());
+  const [endDate, setEndDate] = useState<Dayjs | null>(dayjs());
+  const [useDateRange, setUseDateRange] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
 
   const fetchReportData = async () => {
-    if (!selectedDate || !product?.id) return null;
+    if (!product?.id) return null;
 
-    const dateStr = selectedDate.format('YYYY-MM-DD');
-    console.log('📡 Solicitando datos del backend:', { product_id: product.id, date: dateStr });
+    const params: any = { product_id: product.id };
 
-    const response = (await get(`/reportes/product-logs`, {
-      product_id: product.id,
-      date: dateStr,
-    })) as ReportResponse;
+    if (useDateRange) {
+      if (!startDate || !endDate) {
+        alert('Por favor selecciona ambas fechas (inicio y fin)');
+        return null;
+      }
+      if (startDate.isAfter(endDate)) {
+        alert('La fecha de inicio debe ser anterior a la fecha de fin');
+        return null;
+      }
+      params.start_date = startDate.format('YYYY-MM-DD');
+      params.end_date = endDate.format('YYYY-MM-DD');
+    } else {
+      if (!selectedDate) {
+        alert('Por favor selecciona una fecha');
+        return null;
+      }
+      params.date = selectedDate.format('YYYY-MM-DD');
+    }
+
+    console.log('📡 Solicitando datos del backend:', params);
+
+    const response = (await get(`/reportes/product-logs`, params)) as ReportResponse;
 
     console.log('✅ Respuesta cruda del backend:', response);
     return response?.data ?? null;
@@ -133,7 +153,14 @@ function ExportReportButton({ product }: { product: any }) {
 
       const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([buffer], { type: 'application/octet-stream' });
-      const fileName = `Reporte_${product.name}_${selectedDate?.format('DD-MM-YYYY')}.xlsx`;
+      
+      // Generar nombre de archivo según el tipo de reporte
+      let fileName: string;
+      if (useDateRange && startDate && endDate) {
+        fileName = `Reporte_${product.name}_${startDate.format('DD-MM-YYYY')}_a_${endDate.format('DD-MM-YYYY')}.xlsx`;
+      } else {
+        fileName = `Reporte_${product.name}_${selectedDate?.format('DD-MM-YYYY')}.xlsx`;
+      }
 
       saveAs(blob, fileName);
     } catch (error) {
@@ -147,24 +174,68 @@ function ExportReportButton({ product }: { product: any }) {
     <Box sx={{ mt: 2 }}>
       <LocalizationProvider dateAdapter={AdapterDayjs}>
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={6}>
-            <DatePicker
-              label="Fecha del Reporte"
-              value={selectedDate}
-              format="DD-MM-YYYY"
-              onChange={(newValue) => setSelectedDate(newValue)}
-              slotProps={{
-                textField: { fullWidth: true, size: 'small' },
-              }}
+          <Grid item xs={12}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={useDateRange}
+                  onChange={(e) => setUseDateRange(e.target.checked)}
+                  size="small"
+                />
+              }
+              label="Usar rango de fechas"
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          
+          {useDateRange ? (
+            <>
+              <Grid item xs={12} sm={6}>
+                <DatePicker
+                  label="Fecha de Inicio"
+                  value={startDate}
+                  format="DD-MM-YYYY"
+                  onChange={(newValue) => setStartDate(newValue)}
+                  slotProps={{
+                    textField: { fullWidth: true, size: 'small' },
+                  }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <DatePicker
+                  label="Fecha de Fin"
+                  value={endDate}
+                  format="DD-MM-YYYY"
+                  onChange={(newValue) => setEndDate(newValue)}
+                  slotProps={{
+                    textField: { fullWidth: true, size: 'small' },
+                  }}
+                />
+              </Grid>
+            </>
+          ) : (
+            <Grid item xs={12} sm={6}>
+              <DatePicker
+                label="Fecha del Reporte"
+                value={selectedDate}
+                format="DD-MM-YYYY"
+                onChange={(newValue) => setSelectedDate(newValue)}
+                slotProps={{
+                  textField: { fullWidth: true, size: 'small' },
+                }}
+              />
+            </Grid>
+          )}
+          
+          <Grid item xs={12} sm={useDateRange ? 12 : 6}>
             <Button
               variant="contained"
               color="primary"
               fullWidth
               onClick={handleExportExcel}
-              disabled={loading || !selectedDate}
+              disabled={
+                loading ||
+                (useDateRange ? !startDate || !endDate : !selectedDate)
+              }
             >
               {loading ? 'Generando...' : 'Descargar Excel'}
             </Button>

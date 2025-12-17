@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import {
   Box,
   Grid,
+  Paper,
   Table,
   Select,
   Button,
@@ -208,37 +209,41 @@ export default function UserRoleManagement() {
               </Grid>
             </Box>
             <StyledTableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <StyledTableCellHeader>Name</StyledTableCellHeader>
-                    <StyledTableCellHeader>Email</StyledTableCellHeader>
-                    <StyledTableCellHeader>Cliente</StyledTableCellHeader>
-                    <StyledTableCellHeader>Role</StyledTableCellHeader>
-                    <StyledTableCellHeader>Status</StyledTableCellHeader>
-                    <StyledTableCellHeader>Actions</StyledTableCellHeader>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {users.map((user) => (
-                    <StyledTableRow key={user._id}>
-                      <StyledTableCell>{user.nombre}</StyledTableCell>
-                      <StyledTableCell>{user.email}</StyledTableCell>
-                      <StyledTableCell>{user.client_name}</StyledTableCell>
-                      <StyledTableCell>{user.role_name}</StyledTableCell>
-                      <StyledTableCell>{user.status}</StyledTableCell>
-                      <StyledTableCell>
-                        <IconButton sx={{ mr: 1, color: 'primary.main' }} onClick={() => handleUserEdit(user)}>
-                          <SvgColor src='./assets/icons/actions/edit.svg' />
-                        </IconButton>
-                        <IconButton sx={{ mr: 1, color: 'danger.main' }} onClick={() => handleUserDelete(user._id!)}>
-                          <SvgColor src='./assets/icons/actions/delete.svg' />
-                        </IconButton>
-                      </StyledTableCell>
-                    </StyledTableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <Paper elevation={3}>
+                <Box sx={{ overflowX: 'auto' }}>
+                  <Table>
+                    <TableHead>
+                      <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
+                        <StyledTableCellHeader>Name</StyledTableCellHeader>
+                        <StyledTableCellHeader>Email</StyledTableCellHeader>
+                        <StyledTableCellHeader>Cliente</StyledTableCellHeader>
+                        <StyledTableCellHeader>Role</StyledTableCellHeader>
+                        <StyledTableCellHeader>Status</StyledTableCellHeader>
+                        <StyledTableCellHeader>Actions</StyledTableCellHeader>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {users.map((user) => (
+                        <StyledTableRow key={user._id}>
+                          <StyledTableCell>{user.nombre}</StyledTableCell>
+                          <StyledTableCell>{user.email}</StyledTableCell>
+                          <StyledTableCell>{user.client_name}</StyledTableCell>
+                          <StyledTableCell>{user.role_name}</StyledTableCell>
+                          <StyledTableCell>{user.status}</StyledTableCell>
+                          <StyledTableCell>
+                            <IconButton sx={{ mr: 1, color: 'primary.main' }} onClick={() => handleUserEdit(user)}>
+                              <SvgColor src='./assets/icons/actions/edit.svg' />
+                            </IconButton>
+                            <IconButton sx={{ mr: 1, color: 'danger.main' }} onClick={() => handleUserDelete(user._id!)}>
+                              <SvgColor src='./assets/icons/actions/delete.svg' />
+                            </IconButton>
+                          </StyledTableCell>
+                        </StyledTableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Box>
+              </Paper>
             </StyledTableContainer>
           </Grid>
         </Grid>
@@ -263,29 +268,33 @@ export default function UserRoleManagement() {
               </Grid>
             </Box>
             <StyledTableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <StyledTableCellHeader>Role Name</StyledTableCellHeader>
-                    <StyledTableCellHeader>Actions</StyledTableCellHeader>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {roles.map((role) => (
-                    <StyledTableRow key={role._id}>
-                      <StyledTableCell>{role.name}</StyledTableCell>
-                      <StyledTableCell>
-                        <IconButton sx={{ mr: 1, color: 'primary.main' }} onClick={() => handleRoleEdit(role)}>
-                          <SvgColor src='./assets/icons/actions/edit.svg' />
-                        </IconButton>
-                        <IconButton sx={{ mr: 1, color: 'danger.main' }} onClick={() => handleRoleDelete(role._id!)}>
-                          <SvgColor src='./assets/icons/actions/delete.svg' />
-                        </IconButton>
-                      </StyledTableCell>
-                    </StyledTableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <Paper elevation={3}>
+                <Box sx={{ overflowX: 'auto' }}>
+                  <Table>
+                    <TableHead>
+                      <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
+                        <StyledTableCellHeader>Role Name</StyledTableCellHeader>
+                        <StyledTableCellHeader>Actions</StyledTableCellHeader>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {roles.map((role) => (
+                        <StyledTableRow key={role._id}>
+                          <StyledTableCell>{role.name}</StyledTableCell>
+                          <StyledTableCell>
+                            <IconButton sx={{ mr: 1, color: 'primary.main' }} onClick={() => handleRoleEdit(role)}>
+                              <SvgColor src='./assets/icons/actions/edit.svg' />
+                            </IconButton>
+                            <IconButton sx={{ mr: 1, color: 'danger.main' }} onClick={() => handleRoleDelete(role._id!)}>
+                              <SvgColor src='./assets/icons/actions/delete.svg' />
+                            </IconButton>
+                          </StyledTableCell>
+                        </StyledTableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Box>
+              </Paper>
             </StyledTableContainer>
           </Grid>
         </Grid>

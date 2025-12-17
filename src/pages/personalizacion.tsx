@@ -6,6 +6,7 @@ import {
   Box,
   Chip,
   Grid,
+  Paper,
   Table,
   Select,
   Switch,
@@ -472,37 +473,41 @@ const handlePvChange = (e: any) => {
                 </Grid>
               </Box>
               <StyledTableContainer>
-                <Table>
-                  <TableHead>
-                    <StyledTableRow>
-                      <StyledTableCellHeader>Cliente</StyledTableCellHeader>
-                      <StyledTableCellHeader>Tipo de Producto</StyledTableCellHeader>
-                      <StyledTableCellHeader>Rango TDS</StyledTableCellHeader>
-                      <StyledTableCellHeader>Volumen de Producción</StyledTableCellHeader>
-                      <StyledTableCellHeader>Temperatura</StyledTableCellHeader>
-                      <StyledTableCellHeader>Acciones</StyledTableCellHeader>
-                    </StyledTableRow>
-                  </TableHead>
-                  <TableBody>
-                    {metrics.map((metric) => (
-                      <StyledTableRow key={metric._id}>
-                        <StyledTableCell>{metric.client_name}</StyledTableCell>
-                        <StyledTableCell>{metric.product_type}</StyledTableCell>
-                        <StyledTableCell>{metric.tds_range}</StyledTableCell>
-                        <StyledTableCell>{metric.production_volume_range}</StyledTableCell>
-                        <StyledTableCell>{metric.temperature_range}</StyledTableCell>
-                        <StyledTableCell>
-                          <IconButton onClick={() => handleEdit(metric)} sx={{ mr: 1, color: 'primary.main' }}>
-                            <SvgColor src='./assets/icons/actions/edit.svg' />
-                          </IconButton>
-                          <IconButton onClick={() => handleDelete(metric._id!)} sx={{ mr: 1, color: 'danger.main' }}>
-                            <SvgColor src='./assets/icons/actions/delete.svg' />
-                          </IconButton>
-                        </StyledTableCell>
-                    </StyledTableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <Paper elevation={3}>
+                  <Box sx={{ overflowX: 'auto' }}>
+                    <Table>
+                      <TableHead>
+                        <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
+                          <StyledTableCellHeader>Cliente</StyledTableCellHeader>
+                          <StyledTableCellHeader>Tipo de Producto</StyledTableCellHeader>
+                          <StyledTableCellHeader>Rango TDS</StyledTableCellHeader>
+                          <StyledTableCellHeader>Volumen de Producción</StyledTableCellHeader>
+                          <StyledTableCellHeader>Temperatura</StyledTableCellHeader>
+                          <StyledTableCellHeader>Acciones</StyledTableCellHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {metrics.map((metric) => (
+                          <StyledTableRow key={metric._id}>
+                            <StyledTableCell>{metric.client_name}</StyledTableCell>
+                            <StyledTableCell>{metric.product_type}</StyledTableCell>
+                            <StyledTableCell>{metric.tds_range}</StyledTableCell>
+                            <StyledTableCell>{metric.production_volume_range}</StyledTableCell>
+                            <StyledTableCell>{metric.temperature_range}</StyledTableCell>
+                            <StyledTableCell>
+                              <IconButton onClick={() => handleEdit(metric)} sx={{ mr: 1, color: 'primary.main' }}>
+                                <SvgColor src='./assets/icons/actions/edit.svg' />
+                              </IconButton>
+                              <IconButton onClick={() => handleDelete(metric._id!)} sx={{ mr: 1, color: 'danger.main' }}>
+                                <SvgColor src='./assets/icons/actions/delete.svg' />
+                              </IconButton>
+                            </StyledTableCell>
+                          </StyledTableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </Box>
+                </Paper>
               </StyledTableContainer>
             </Grid>
           </Grid>
@@ -528,35 +533,39 @@ const handlePvChange = (e: any) => {
                 </Grid>
               </Box>
               <StyledTableContainer>
-                <Table>
-                  <TableHead>
-                    <StyledTableRow>
-                      <StyledTableCellHeader>Cliente</StyledTableCellHeader>
-                      <StyledTableCellHeader>Nombre</StyledTableCellHeader>
-                      <StyledTableCellHeader>Ciudad</StyledTableCellHeader>
-                      <StyledTableCellHeader># Productos</StyledTableCellHeader>
-                      <StyledTableCellHeader>Acciones</StyledTableCellHeader>
-                    </StyledTableRow>
-                  </TableHead>
-                  <TableBody>
-                    {puntosVenta.map((pv) => (
-                      <StyledTableRow key={pv._id}>
-                        <StyledTableCell>{pv.client_name}</StyledTableCell>
-                        <StyledTableCell>{pv.name}</StyledTableCell>
-                        <StyledTableCell>{pv.city_name}</StyledTableCell>
-                        <StyledTableCell>{pv.productos.length}</StyledTableCell>
-                        <StyledTableCell>
-                          <IconButton onClick={() => handlePvEdit(pv)} sx={{ mr: 1, color: 'primary.main' }}>
-                            <SvgColor src='./assets/icons/actions/edit.svg' />
-                          </IconButton>
-                          <IconButton onClick={() => handlePvDelete(pv._id!)} sx={{ mr: 1, color: 'danger.main' }}>
-                            <SvgColor src='./assets/icons/actions/delete.svg' />
-                          </IconButton>
-                        </StyledTableCell>
-                    </StyledTableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <Paper elevation={3}>
+                  <Box sx={{ overflowX: 'auto' }}>
+                    <Table>
+                      <TableHead>
+                        <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
+                          <StyledTableCellHeader>Cliente</StyledTableCellHeader>
+                          <StyledTableCellHeader>Nombre</StyledTableCellHeader>
+                          <StyledTableCellHeader>Ciudad</StyledTableCellHeader>
+                          <StyledTableCellHeader># Productos</StyledTableCellHeader>
+                          <StyledTableCellHeader>Acciones</StyledTableCellHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {puntosVenta.map((pv) => (
+                          <StyledTableRow key={pv._id}>
+                            <StyledTableCell>{pv.client_name}</StyledTableCell>
+                            <StyledTableCell>{pv.name}</StyledTableCell>
+                            <StyledTableCell>{pv.city_name}</StyledTableCell>
+                            <StyledTableCell>{pv.productos.length}</StyledTableCell>
+                            <StyledTableCell>
+                              <IconButton onClick={() => handlePvEdit(pv)} sx={{ mr: 1, color: 'primary.main' }}>
+                                <SvgColor src='./assets/icons/actions/edit.svg' />
+                              </IconButton>
+                              <IconButton onClick={() => handlePvDelete(pv._id!)} sx={{ mr: 1, color: 'danger.main' }}>
+                                <SvgColor src='./assets/icons/actions/delete.svg' />
+                              </IconButton>
+                            </StyledTableCell>
+                          </StyledTableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </Box>
+                </Paper>
               </StyledTableContainer>
             </Grid>
           </Grid>
@@ -582,33 +591,37 @@ const handlePvChange = (e: any) => {
                 </Grid>
               </Box>
               <StyledTableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <StyledTableCellHeader>Nombre</StyledTableCellHeader>
-                      <StyledTableCellHeader>Email</StyledTableCellHeader>
-                      <StyledTableCellHeader>Teléfono</StyledTableCellHeader>
-                      <StyledTableCellHeader>Acciones</StyledTableCellHeader>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {clients.map((client) => (
-                      <TableRow key={client._id}>
-                        <StyledTableCell>{client.name}</StyledTableCell>
-                        <StyledTableCell>{client.email}</StyledTableCell>
-                        <StyledTableCell>{client.phone}</StyledTableCell>
-                        <StyledTableCell>
-                          <IconButton sx={{ mr: 1, color: 'primary.main' }} onClick={() => handleClientEdit(client)}>
-                            <SvgColor src='./assets/icons/actions/edit.svg' />
-                          </IconButton>
-                          <IconButton sx={{ mr: 1, color: 'danger.main' }} onClick={() => handleClientDelete(client._id!)}>
-                            <SvgColor src='./assets/icons/actions/delete.svg' />
-                          </IconButton>
-                        </StyledTableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <Paper elevation={3}>
+                  <Box sx={{ overflowX: 'auto' }}>
+                    <Table>
+                      <TableHead>
+                        <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
+                          <StyledTableCellHeader>Nombre</StyledTableCellHeader>
+                          <StyledTableCellHeader>Email</StyledTableCellHeader>
+                          <StyledTableCellHeader>Teléfono</StyledTableCellHeader>
+                          <StyledTableCellHeader>Acciones</StyledTableCellHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {clients.map((client) => (
+                          <StyledTableRow key={client._id}>
+                            <StyledTableCell>{client.name}</StyledTableCell>
+                            <StyledTableCell>{client.email}</StyledTableCell>
+                            <StyledTableCell>{client.phone}</StyledTableCell>
+                            <StyledTableCell>
+                              <IconButton sx={{ mr: 1, color: 'primary.main' }} onClick={() => handleClientEdit(client)}>
+                                <SvgColor src='./assets/icons/actions/edit.svg' />
+                              </IconButton>
+                              <IconButton sx={{ mr: 1, color: 'danger.main' }} onClick={() => handleClientDelete(client._id!)}>
+                                <SvgColor src='./assets/icons/actions/delete.svg' />
+                              </IconButton>
+                            </StyledTableCell>
+                          </StyledTableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </Box>
+                </Paper>
               </StyledTableContainer>
             </Grid>
           </Grid>
@@ -633,35 +646,39 @@ const handlePvChange = (e: any) => {
                 </Grid>
               </Box>
               <StyledTableContainer>
-                <Table>
-                  <TableHead>
-                    <StyledTableRow>
-                      <StyledTableCellHeader>Estado</StyledTableCellHeader>
-                      <StyledTableCellHeader>Ciudad</StyledTableCellHeader>
-                      <StyledTableCellHeader>Latitud</StyledTableCellHeader>
-                      <StyledTableCellHeader>Longitud</StyledTableCellHeader>
-                      <StyledTableCell> Acciones </StyledTableCell>
-                    </StyledTableRow>
-                  </TableHead>
-                  <TableBody>
-                    {cities.map((city) => (
-                      <StyledTableRow key={city._id}>
-                        <StyledTableCell>{city.state}</StyledTableCell>
-                        <StyledTableCell>{city.city}</StyledTableCell>
-                        <StyledTableCell>{city.lat}</StyledTableCell>
-                        <StyledTableCell>{city.lon}</StyledTableCell>
-                        <StyledTableCell>
-                          <IconButton sx={{ mr: 1, color: 'primary.main' }} onClick={() => handleCityEdit(city)}>
-                            <SvgColor src='./assets/icons/actions/edit.svg' />
-                          </IconButton>
-                          <IconButton sx={{ mr: 1, color: 'danger.main' }} onClick={() => handleCityDelete(city._id!)}>
-                            <SvgColor src='./assets/icons/actions/delete.svg' />
-                          </IconButton>
-                        </StyledTableCell>
-                      </StyledTableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <Paper elevation={3}>
+                  <Box sx={{ overflowX: 'auto' }}>
+                    <Table>
+                      <TableHead>
+                        <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
+                          <StyledTableCellHeader>Estado</StyledTableCellHeader>
+                          <StyledTableCellHeader>Ciudad</StyledTableCellHeader>
+                          <StyledTableCellHeader>Latitud</StyledTableCellHeader>
+                          <StyledTableCellHeader>Longitud</StyledTableCellHeader>
+                          <StyledTableCellHeader>Acciones</StyledTableCellHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {cities.map((city) => (
+                          <StyledTableRow key={city._id}>
+                            <StyledTableCell>{city.state}</StyledTableCell>
+                            <StyledTableCell>{city.city}</StyledTableCell>
+                            <StyledTableCell>{city.lat}</StyledTableCell>
+                            <StyledTableCell>{city.lon}</StyledTableCell>
+                            <StyledTableCell>
+                              <IconButton sx={{ mr: 1, color: 'primary.main' }} onClick={() => handleCityEdit(city)}>
+                                <SvgColor src='./assets/icons/actions/edit.svg' />
+                              </IconButton>
+                              <IconButton sx={{ mr: 1, color: 'danger.main' }} onClick={() => handleCityDelete(city._id!)}>
+                                <SvgColor src='./assets/icons/actions/delete.svg' />
+                              </IconButton>
+                            </StyledTableCell>
+                          </StyledTableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </Box>
+                </Paper>
               </StyledTableContainer>
             </Grid>
           </Grid>

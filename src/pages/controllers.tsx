@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import {
   Box,
   Grid,
+  Paper,
   Table,
   Select,
   Button,
@@ -195,49 +196,53 @@ export default function ControllersPage() {
                 </Box>
 
                 <StyledTableContainer>
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <StyledTableCellHeader>Nombre</StyledTableCellHeader>
-                        <StyledTableCellHeader>IP</StyledTableCellHeader>
-                        <StyledTableCellHeader>Cliente</StyledTableCellHeader>
-                        <StyledTableCellHeader>Producto</StyledTableCellHeader>
-                        <StyledTableCellHeader>Ajuste TDS</StyledTableCellHeader>
-                        <StyledTableCellHeader>Ajuste Flujo</StyledTableCellHeader>
-                        <StyledTableCellHeader>Lapso Actualización</StyledTableCellHeader>
-                        <StyledTableCellHeader>Lapso Loop</StyledTableCellHeader>
-                        <StyledTableCellHeader>Reset Pendiente</StyledTableCellHeader>
-                        <StyledTableCellHeader>Online</StyledTableCellHeader>
-                        <StyledTableCellHeader>Acciones</StyledTableCellHeader>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {controllers.map((ctrl) => (
-                        <StyledTableRow key={ctrl._id}>
-                          <StyledTableCell>{ctrl.name}</StyledTableCell>
-                          <StyledTableCell>{ctrl.ip}</StyledTableCell>
-                          <StyledTableCell>{clients.find(c => c._id === ctrl.cliente)?.name || ""}</StyledTableCell>
-                          <StyledTableCell>{products.find(p => p._id === ctrl.product)?.name || ""}</StyledTableCell>
-                          <StyledTableCell>{ctrl.kfactor_tds}</StyledTableCell>
-                          <StyledTableCell>{ctrl.kfactor_flujo}</StyledTableCell>
-                          <StyledTableCell>{ctrl.update_controller_time} ms</StyledTableCell>
-                          <StyledTableCell>{ctrl.loop_time} ms</StyledTableCell>
-                          <StyledTableCell>{ctrl.reset_pending ? "Sí" : "No"}</StyledTableCell>
-                          <StyledTableCell>{ctrl.flush_pending ? "Sí" : "No"}</StyledTableCell>
-
-                          <StyledTableCell>{ctrl.online ? "Sí" : "No"}</StyledTableCell>
-                          <StyledTableCell>
-                            <IconButton onClick={() => handleControllerEdit(ctrl)}>
-                              <SvgColor src='./assets/icons/actions/edit.svg' />
-                            </IconButton>
-                            <IconButton onClick={() => handleControllerDelete(ctrl._id)}>
-                              <SvgColor src='./assets/icons/actions/delete.svg' />
-                            </IconButton>
-                          </StyledTableCell>
-                        </StyledTableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <Paper elevation={3}>
+                    <Box sx={{ overflowX: 'auto' }}>
+                      <Table>
+                        <TableHead>
+                          <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
+                            <StyledTableCellHeader>Nombre</StyledTableCellHeader>
+                            <StyledTableCellHeader>IP</StyledTableCellHeader>
+                            <StyledTableCellHeader>Cliente</StyledTableCellHeader>
+                            <StyledTableCellHeader>Producto</StyledTableCellHeader>
+                            <StyledTableCellHeader>Ajuste TDS</StyledTableCellHeader>
+                            <StyledTableCellHeader>Ajuste Flujo</StyledTableCellHeader>
+                            <StyledTableCellHeader>Lapso Actualización</StyledTableCellHeader>
+                            <StyledTableCellHeader>Lapso Loop</StyledTableCellHeader>
+                            <StyledTableCellHeader>Reset Pendiente</StyledTableCellHeader>
+                            <StyledTableCellHeader>Flush Pendiente</StyledTableCellHeader>
+                            <StyledTableCellHeader>Online</StyledTableCellHeader>
+                            <StyledTableCellHeader>Acciones</StyledTableCellHeader>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {controllers.map((ctrl) => (
+                            <StyledTableRow key={ctrl._id}>
+                              <StyledTableCell>{ctrl.name}</StyledTableCell>
+                              <StyledTableCell>{ctrl.ip}</StyledTableCell>
+                              <StyledTableCell>{clients.find(c => c._id === ctrl.cliente)?.name || ""}</StyledTableCell>
+                              <StyledTableCell>{products.find(p => p._id === ctrl.product)?.name || ""}</StyledTableCell>
+                              <StyledTableCell>{ctrl.kfactor_tds}</StyledTableCell>
+                              <StyledTableCell>{ctrl.kfactor_flujo}</StyledTableCell>
+                              <StyledTableCell>{ctrl.update_controller_time} ms</StyledTableCell>
+                              <StyledTableCell>{ctrl.loop_time} ms</StyledTableCell>
+                              <StyledTableCell>{ctrl.reset_pending ? "Sí" : "No"}</StyledTableCell>
+                              <StyledTableCell>{ctrl.flush_pending ? "Sí" : "No"}</StyledTableCell>
+                              <StyledTableCell>{ctrl.online ? "Sí" : "No"}</StyledTableCell>
+                              <StyledTableCell>
+                                <IconButton onClick={() => handleControllerEdit(ctrl)}>
+                                  <SvgColor src='./assets/icons/actions/edit.svg' />
+                                </IconButton>
+                                <IconButton onClick={() => handleControllerDelete(ctrl._id)}>
+                                  <SvgColor src='./assets/icons/actions/delete.svg' />
+                                </IconButton>
+                              </StyledTableCell>
+                            </StyledTableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </Box>
+                  </Paper>
                 </StyledTableContainer>
               </Grid>
             </Grid>
@@ -248,30 +253,34 @@ export default function ControllersPage() {
               <Grid item xs={12}>
                 <Typography variant="h5" gutterBottom>Inventario</Typography>
                 <StyledTableContainer>
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <StyledTableCellHeader>Nombre Item</StyledTableCellHeader>
-                        <StyledTableCellHeader>Cantidad</StyledTableCellHeader>
-                        <StyledTableCellHeader>Controlador</StyledTableCellHeader>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      Proximament disponible ...
-                      {/* {inventory.map((item) => (
-                        <StyledTableRow key={item._id}>
-                          <StyledTableCell>{item.name}</StyledTableCell>
-                          <StyledTableCell>{item.quantity}</StyledTableCell>
-                          <StyledTableCell>
-                            {item.controllers
-                              .map(id => controllers.find(c => c._id === id)?.name)
-                              .filter(Boolean)
-                              .join(", ")}
-                          </StyledTableCell>
-                        </StyledTableRow>
-                      ))} */}
-                    </TableBody>
-                  </Table>
+                  <Paper elevation={3}>
+                    <Box sx={{ overflowX: 'auto' }}>
+                      <Table>
+                        <TableHead>
+                          <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
+                            <StyledTableCellHeader>Nombre Item</StyledTableCellHeader>
+                            <StyledTableCellHeader>Cantidad</StyledTableCellHeader>
+                            <StyledTableCellHeader>Controlador</StyledTableCellHeader>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          Proximament disponible ...
+                          {/* {inventory.map((item) => (
+                            <StyledTableRow key={item._id}>
+                              <StyledTableCell>{item.name}</StyledTableCell>
+                              <StyledTableCell>{item.quantity}</StyledTableCell>
+                              <StyledTableCell>
+                                {item.controllers
+                                  .map(id => controllers.find(c => c._id === id)?.name)
+                                  .filter(Boolean)
+                                  .join(", ")}
+                              </StyledTableCell>
+                            </StyledTableRow>
+                          ))} */}
+                        </TableBody>
+                      </Table>
+                    </Box>
+                  </Paper>
                 </StyledTableContainer>
               </Grid>
             </Grid>

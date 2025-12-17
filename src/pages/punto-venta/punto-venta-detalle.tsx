@@ -78,27 +78,28 @@ function prepareChartData(puntoData: any, setChartDataNiveles: any) {
         return horaA.localeCompare(horaB);
       });
       
-      // Extraer horas, datos de nivel y profundidad
-      // Nota: Ambos valores ya vienen en porcentajes
+      // Extraer horas y datos de nivel
+      // Nota: Los valores vienen como el último valor registrado de cada hora
+      // El valor viene en porcentaje
       const horas = horasOrdenadas.map((h: any) => h.hora || '');
       const nivelPercentData = horasOrdenadas.map((h: any) => {
+        // Usar el último valor de la hora (aunque el campo se llame "promedio" por compatibilidad)
         const value = Number(h.estadisticas?.liquid_level_percent_promedio) || 0;
         // Asegurar que el valor esté en el rango 0-100
         return Math.max(0, Math.min(100, value));
       });
-      const profundidadData = horasOrdenadas.map((h: any) => {
-        const value = Number(h.estadisticas?.liquid_depth_promedio) || 0;
-        // Asegurar que el valor esté en el rango 0-100 (ya viene en porcentaje)
-        return Math.max(0, Math.min(100, value));
-      });
 
-      // Calcular promedios generales de todas las horas
-      const nivelPromedioTotal = nivelPercentData.length > 0
-        ? nivelPercentData.reduce((sum, val) => sum + val, 0) / nivelPercentData.length
-        : 0;
-      const profundidadPromedioTotal = profundidadData.length > 0
-        ? profundidadData.reduce((sum, val) => sum + val, 0) / profundidadData.length
-        : 0;
+      // Obtener el valor actual del producto desde el status
+      const valorActual = nivel.status?.find((s: any) => s.code === 'liquid_level_percent')?.value || null;
+      
+      // Debug: Log para verificar los datos
+      console.log(`[${nivel.name}] Preparando datos:`, {
+        valorActual,
+        totalHoras: nivelPercentData.length,
+        primerValor: nivelPercentData[0],
+        ultimoValor: nivelPercentData[nivelPercentData.length - 1],
+        valores: nivelPercentData,
+      });
 
       return {
         nivelId: nivel._id,
@@ -109,14 +110,9 @@ function prepareChartData(puntoData: any, setChartDataNiveles: any) {
             name: 'Nivel (%)',
             data: nivelPercentData,
           },
-          {
-            name: 'Profundidad (%)',
-            data: profundidadData,
-          },
         ],
         estadisticas: {
-          nivelPromedio: nivelPromedioTotal,
-          profundidadPromedio: profundidadPromedioTotal,
+          valorActual: valorActual !== null ? Number(valorActual) : null,
         },
       };
     });
@@ -413,8 +409,17 @@ function PresionOsmosisSection({ presion, osmosis }: any) {
             Sensores de Presión
           </Typography>
           {presion.map((p: any) => {
-            const presIn = p.status.find((s: any) => s.code === 'pressure_valve1_psi')?.value || 0;
-            const presOut = p.status.find((s: any) => s.code === 'pressure_valve2_psi')?.value || 0;
+            const presInValue = p.status.find((s: any) => s.code === 'presion_in')?.value;
+            const presOutValue = p.status.find((s: any) => s.code === 'presion_out')?.value;
+            
+            // Convertir a número solo si el valor existe y es válido
+            const presIn = presInValue !== null && presInValue !== undefined && presInValue !== '' 
+              ? Number(presInValue) 
+              : null;
+            const presOut = presOutValue !== null && presOutValue !== undefined && presOutValue !== '' 
+              ? Number(presOutValue) 
+              : null;
+            
             return (
               <Box key={p._id} sx={{ mb: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
@@ -430,24 +435,46 @@ function PresionOsmosisSection({ presion, osmosis }: any) {
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={6}>
                     <Box sx={{ bgcolor: 'background.neutral', borderRadius: 1, p: 1, mb: 1 }}>
-                      <PressureGauge
-                        value={presIn}
-                        maxValue={150}
-                        unit="PSI"
-                        label="Presión Entrada"
-                        color="#3b82f6"
-                      />
+                      {presIn !== null ? (
+                        <PressureGauge
+                          value={presIn}
+                          maxValue={150}
+                          unit="PSI"
+                          label="Presión Entrada"
+                          color="#3b82f6"
+                        />
+                      ) : (
+                        <Box sx={{ p: 2, textAlign: 'center' }}>
+                          <Typography variant="h6" color="text.secondary">
+                            Presión Entrada
+                          </Typography>
+                          <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
+                            N/A
+                          </Typography>
+                        </Box>
+                      )}
                     </Box>
                   </Grid>
                   <Grid item xs={12} sm={6}>
                     <Box sx={{ bgcolor: 'background.neutral', borderRadius: 1, p: 1, mb: 1 }}>
-                      <PressureGauge
-                        value={presOut}
-                        maxValue={150}
-                        unit="PSI"
-                        label="Presión Salida"
-                        color="#8b5cf6"
-                      />
+                      {presOut !== null ? (
+                        <PressureGauge
+                          value={presOut}
+                          maxValue={150}
+                          unit="PSI"
+                          label="Presión Salida"
+                          color="#8b5cf6"
+                        />
+                      ) : (
+                        <Box sx={{ p: 2, textAlign: 'center' }}>
+                          <Typography variant="h6" color="text.secondary">
+                            Presión Salida
+                          </Typography>
+                          <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
+                            N/A
+                          </Typography>
+                        </Box>
+                      )}
                     </Box>
                   </Grid>
                 </Grid>
@@ -681,13 +708,15 @@ function NivelHistoricoChart({ nivelName, chart }: { nivelName: string; chart: a
   console.log('NivelHistoricoChart - nivelName:', nivelName, 'chart:', chart);
 
   // Los hooks deben llamarse antes de cualquier early return
+  const hasData = chart && chart.categories && chart.categories.length > 0 && chart.series && chart.series.length > 0;
+  
   const chartOptions = useChart({
     chart: {
       type: 'line',
       toolbar: { show: false },
       zoom: { enabled: false },
     },
-    colors: [theme.palette.primary.main, theme.palette.info.main],
+    colors: [theme.palette.primary.main],
     stroke: {
       width: 2,
       curve: 'smooth',
@@ -700,7 +729,7 @@ function NivelHistoricoChart({ nivelName, chart }: { nivelName: string; chart: a
       },
     },
     xaxis: {
-      categories: chart.categories,
+      categories: chart?.categories || [],
       labels: {
         rotate: -45,
         rotateAlways: false,
@@ -709,23 +738,13 @@ function NivelHistoricoChart({ nivelName, chart }: { nivelName: string; chart: a
         },
       },
     },
-    yaxis: [
-      {
-        title: {
-          text: 'Nivel (%)',
-        },
-        min: 0,
-        max: 100,
+    yaxis: {
+      title: {
+        text: 'Nivel (%)',
       },
-      {
-        opposite: true,
-        title: {
-          text: 'Profundidad (%)',
-        },
-        min: 0,
-        max: 100,
-      },
-    ],
+      min: 0,
+      max: 100,
+    },
     tooltip: {
       shared: true,
       intersect: false,
@@ -745,15 +764,11 @@ function NivelHistoricoChart({ nivelName, chart }: { nivelName: string; chart: a
     },
   });
 
-  // Preparar series con configuración de eje Y para ApexCharts
-  const seriesWithYaxis = chart?.series?.map((serie: any, index: number) => ({
-    name: serie.name,
-    data: serie.data,
-    yAxisIndex: index,
-  })) || [];
+  // Preparar series (solo una serie ahora)
+  const seriesWithYaxis = chart?.series || [];
 
   // Validar que hay datos después de preparar las opciones del chart
-  if (!chart || !chart.categories || chart.categories.length === 0 || !chart.series || chart.series.length === 0) {
+  if (!hasData) {
     return (
       <Card variant="outlined" sx={{ mb: 3, p: 2 }}>
         <CardHeader
@@ -764,11 +779,16 @@ function NivelHistoricoChart({ nivelName, chart }: { nivelName: string; chart: a
     );
   }
 
+  // Obtener el valor actual del producto
+  const valorActual = chart?.estadisticas?.valorActual;
+
   return (
     <Card variant="outlined" sx={{ mb: 3, p: 2 }}>
       <CardHeader
         title={`Histórico de ${nivelName}`}
-        subheader={`Promedio: Nivel ${chart.estadisticas?.nivelPromedio?.toFixed(2) || 0}% | Profundidad ${chart.estadisticas?.profundidadPromedio?.toFixed(2) || 0}%`}
+        subheader={valorActual !== null && valorActual !== undefined 
+          ? `Valor actual: ${valorActual}%`
+          : 'Valor actual: N/A'}
       />
       <Divider sx={{ mb: 2 }} />
       <Chart
@@ -803,8 +823,8 @@ function NivelSection({ niveles, chartDataNiveles, osmosis = [], metrics = null 
 
   return (
     <Box>
-      {/* Card con información de todos los niveles */}
-      <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
+      {/* Card con información de todos los niveles - COMENTADO */}
+      {/* <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Typography variant="h6" gutterBottom>
           Niveles de Tanques
         </Typography>
@@ -858,26 +878,23 @@ function NivelSection({ niveles, chartDataNiveles, osmosis = [], metrics = null 
             );
           })}
         </Grid>
-      </Card>
+      </Card> */}
 
-      {/* Gráficas históricas de niveles */}
-      {chartDataNiveles && chartDataNiveles.length > 0 ? (
-        <Box>
-          {chartDataNiveles.map((chartData: any) => (
+      {/* Gráficas históricas de niveles - Mostrar para cada nivel */}
+      <Box>
+        {niveles.map((nivel: any) => {
+          // Buscar el chartData correspondiente a este nivel
+          const chartData = chartDataNiveles?.find((cd: any) => cd.nivelId === nivel._id);
+          
+          return (
             <NivelHistoricoChart
-              key={chartData.nivelId}
-              nivelName={chartData.nivelName}
-              chart={chartData}
+              key={nivel._id}
+              nivelName={nivel.name}
+              chart={chartData || null}
             />
-          ))}
-        </Box>
-      ) : niveles.length > 0 ? (
-        <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
-          <Typography variant="body2" color="text.secondary">
-            No hay datos históricos disponibles para mostrar gráficas
-          </Typography>
-        </Card>
-      ) : null}
+          );
+        })}
+      </Box>
 
       {/* Sección Métricas con diseño tipo filtros */}
       {osmosis?.length > 0 && (
