@@ -14,6 +14,9 @@ interface HourData {
   hora: string;
   tds_agrupado?: { tds: number; hora: string; timestamp: string }[];
   flujo_produccion_agrupado?: { flujo_produccion: number; hora: string; timestamp: string }[];
+  flujo_rechazo_agrupado?: { flujo_rechazo: number; hora: string; timestamp: string }[];
+  production_volume_agrupado?: { production_volume: number; hora: string; timestamp: string }[];
+  rejected_volume_agrupado?: { rejected_volume: number; hora: string; timestamp: string }[];
   estadisticas?: {
     tds_promedio?: number;
     flujo_produccion_promedio?: number;
@@ -134,36 +137,83 @@ function ExportReportButton({ product }: { product: any }) {
       const wsResumen = XLSX.utils.json_to_sheet(resumen);
 
       // ==========================
-      // 2️⃣ Hoja: Datos brutos
+      // 2️⃣ Hojas: Datos brutos separados por tipo
       // ==========================
-      const datosBrutos: any[] = [];
-
+      
+      // Datos brutos TDS
+      const datosBrutosTDS: any[] = [];
       hours.forEach((h) => {
         const tdsData = h.tds_agrupado || [];
-        const flujoProd = h.flujo_produccion_agrupado || [];
-
         tdsData.forEach((t) => {
-          datosBrutos.push({
+          datosBrutosTDS.push({
             HoraBloque: h.hora,
-            Tipo: 'TDS',
             Valor: t.tds,
             HoraMedición: t.hora,
             Timestamp: t.timestamp,
           });
         });
+      });
+      const wsBrutosTDS = datosBrutosTDS.length > 0 ? XLSX.utils.json_to_sheet(datosBrutosTDS) : null;
 
+      // Datos brutos Flujo Producción
+      const datosBrutosFlujoProd: any[] = [];
+      hours.forEach((h) => {
+        const flujoProd = h.flujo_produccion_agrupado || [];
         flujoProd.forEach((f) => {
-          datosBrutos.push({
+          datosBrutosFlujoProd.push({
             HoraBloque: h.hora,
-            Tipo: 'Flujo Producción',
             Valor: f.flujo_produccion,
             HoraMedición: f.hora,
             Timestamp: f.timestamp,
           });
         });
       });
+      const wsBrutosFlujoProd = datosBrutosFlujoProd.length > 0 ? XLSX.utils.json_to_sheet(datosBrutosFlujoProd) : null;
 
-      const wsBrutos = XLSX.utils.json_to_sheet(datosBrutos);
+      // Datos brutos Flujo Rechazo
+      const datosBrutosFlujoRech: any[] = [];
+      hours.forEach((h) => {
+        const flujoRech = h.flujo_rechazo_agrupado || [];
+        flujoRech.forEach((f) => {
+          datosBrutosFlujoRech.push({
+            HoraBloque: h.hora,
+            Valor: f.flujo_rechazo,
+            HoraMedición: f.hora,
+            Timestamp: f.timestamp,
+          });
+        });
+      });
+      const wsBrutosFlujoRech = datosBrutosFlujoRech.length > 0 ? XLSX.utils.json_to_sheet(datosBrutosFlujoRech) : null;
+
+      // Datos brutos Volumen Producción
+      const datosBrutosVolProd: any[] = [];
+      hours.forEach((h) => {
+        const volProd = h.production_volume_agrupado || [];
+        volProd.forEach((v) => {
+          datosBrutosVolProd.push({
+            HoraBloque: h.hora,
+            Valor: v.production_volume,
+            HoraMedición: v.hora,
+            Timestamp: v.timestamp,
+          });
+        });
+      });
+      const wsBrutosVolProd = datosBrutosVolProd.length > 0 ? XLSX.utils.json_to_sheet(datosBrutosVolProd) : null;
+
+      // Datos brutos Volumen Rechazo
+      const datosBrutosVolRech: any[] = [];
+      hours.forEach((h) => {
+        const volRech = h.rejected_volume_agrupado || [];
+        volRech.forEach((v) => {
+          datosBrutosVolRech.push({
+            HoraBloque: h.hora,
+            Valor: v.rejected_volume,
+            HoraMedición: v.hora,
+            Timestamp: v.timestamp,
+          });
+        });
+      });
+      const wsBrutosVolRech = datosBrutosVolRech.length > 0 ? XLSX.utils.json_to_sheet(datosBrutosVolRech) : null;
 
       // ==========================
       // 3️⃣ Hoja: Mini gráfico (TDS)
@@ -184,7 +234,14 @@ function ExportReportButton({ product }: { product: any }) {
       // ==========================
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen_por_Hora');
-      XLSX.utils.book_append_sheet(wb, wsBrutos, 'Datos_Brutos');
+      
+      // Agregar hojas de datos brutos solo si tienen datos
+      if (wsBrutosTDS) XLSX.utils.book_append_sheet(wb, wsBrutosTDS, 'Datos_Brutos_TDS');
+      if (wsBrutosFlujoProd) XLSX.utils.book_append_sheet(wb, wsBrutosFlujoProd, 'Datos_Brutos_Flujo_Prod');
+      if (wsBrutosFlujoRech) XLSX.utils.book_append_sheet(wb, wsBrutosFlujoRech, 'Datos_Brutos_Flujo_Rech');
+      if (wsBrutosVolProd) XLSX.utils.book_append_sheet(wb, wsBrutosVolProd, 'Datos_Brutos_Vol_Prod');
+      if (wsBrutosVolRech) XLSX.utils.book_append_sheet(wb, wsBrutosVolRech, 'Datos_Brutos_Vol_Rech');
+      
       XLSX.utils.book_append_sheet(wb, wsChart, 'Mini_Grafico_TDS');
 
       const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });

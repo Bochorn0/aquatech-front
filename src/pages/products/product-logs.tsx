@@ -125,10 +125,10 @@ const ProductDetail: React.FC = () => {
             <TableRow>
               <TableCell>Fecha</TableCell>
               <TableCell>TDS (ppm)</TableCell>
-              <TableCell>Flujo Producción (L/min)</TableCell>
-              <TableCell>Flujo Rechazo (LL/min)</TableCell>
-              <TableCell>Producción Real (L/min)</TableCell>
-              <TableCell>Rechazo Real (LL/min)</TableCell>
+              <TableCell>Flujo Producción (L/s)</TableCell>
+              <TableCell>Flujo Rechazo (L/s)</TableCell>
+              <TableCell>Volumen Producción (L)</TableCell>
+              <TableCell>Volumen Rechazo (L)</TableCell>
               <TableCell>Tiempo Ejecución (s)</TableCell>
               <TableCell>Origen</TableCell>
             </TableRow>
@@ -154,28 +154,28 @@ const ProductDetail: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={`${log.flujo_produccion?.toFixed(2) ?? 'N/A'} L/min`}
+                          label={log.flujo_produccion != null ? `${log.flujo_produccion.toFixed(2)} L/s` : 'N/A'}
                           color="success"
                           size="small"
                         />
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={`${log.flujo_rechazo?.toFixed(2) ?? 'N/A'} L/min`}
+                          label={log.flujo_rechazo != null ? `${log.flujo_rechazo.toFixed(2)} L/s` : 'N/A'}
                           color="error"
                           size="small"
                         />
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={`${log.production_volume?.toFixed(6) ?? 'N/A'} L/s`}
+                          label={log.production_volume != null ? `${log.production_volume.toFixed(2)} L` : 'N/A'}
                           color="success"
                           size="small"
                         />
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={`${log.rejected_volume?.toFixed(6) ?? 'N/A'} L/s`}
+                          label={log.rejected_volume != null ? `${log.rejected_volume.toFixed(2)} L` : 'N/A'}
                           color="error"
                           size="small"
                         />
