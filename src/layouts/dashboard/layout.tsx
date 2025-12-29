@@ -1,18 +1,20 @@
 import type { Theme, SxProps, Breakpoint } from '@mui/material/styles';
 
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 
 import Box from '@mui/material/Box';
 import Alert from '@mui/material/Alert';
 import { useTheme } from '@mui/material/styles';
+
+import { filterMenuByPermissions } from 'src/utils/permissions';
 
 import { Iconify } from 'src/components/iconify';
 
 import { Main } from './main';
 import { layoutClasses } from '../classes';
 import { NavMobile, NavDesktop } from './nav';
-import { navData } from '../config-nav-dashboard';
 import { Searchbar } from '../components/searchbar';
+import { allNavItems } from '../config-nav-dashboard';
 import { MenuButton } from '../components/menu-button';
 import { LayoutSection } from '../core/layout-section';
 import { HeaderSection } from '../core/header-section';
@@ -49,11 +51,19 @@ export function DashboardLayout({ sx, children, header }: DashboardLayoutProps) 
   useEffect(() => {
     const user = localStorage.getItem('user');
     if (user) {
-      setAccountData(JSON.parse(user));
+      const parsedUser = JSON.parse(user);
+      setAccountData(parsedUser);
     }
   }, []);
 
-
+  // Filtrar el menú dinámicamente cada vez que se renderiza, basado en los permisos actuales
+  // No necesita dependencias porque filterMenuByPermissions lee directamente de localStorage
+  const navData = useMemo(() => {
+    const filtered = filterMenuByPermissions(allNavItems);
+    console.log('[Layout] Menu filtered:', filtered.length, 'of', allNavItems.length, 'items');
+    return filtered;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Se recalcula automáticamente cuando cambia localStorage
 
   const layoutQuery: Breakpoint = 'lg';
 

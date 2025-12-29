@@ -167,11 +167,13 @@ interface Status {
     verified: boolean;
     puesto: string;
     status: string;
+    mqtt_zip_password?: string; // Contraseña para el ZIP del certificado MQTT
   }
   
   export type Role = {
     _id?: string;
     name: string;
+    permissions?: string[]; // Array de rutas permitidas (ej: ['/', '/equipos', '/usuarios'])
   }
 
 export interface Controller {

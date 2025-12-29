@@ -6,7 +6,9 @@ import { SvgColor } from 'src/components/svg-color';
 const icon = (name: string) => (
   <SvgColor width="100%" height="100%" src={`/assets/icons/navbar/${name}.svg`} />
 );
-export const navData = [
+
+// Definir todos los items del menú disponibles
+export const allNavItems = [
   {
     title: 'Dashboard',
     path: '/',
@@ -65,6 +67,11 @@ export const navData = [
     //     {/* amount */}
     //   </Label>
     // ),
+  },
+  {
+    title: 'API TI Water',
+    path: '/api-ti-water',
+    icon: icon('ic-configuration'),
   },
   // {
   //   title: 'R',

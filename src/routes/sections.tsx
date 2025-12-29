@@ -1,9 +1,11 @@
 import axios from 'axios';
 import { lazy, Suspense, useEffect } from 'react';
-import { Outlet, Navigate, useRoutes, useNavigate, } from 'react-router-dom';
+import { Outlet, Navigate, useRoutes, useNavigate, useLocation } from 'react-router-dom';
 
 import Box from '@mui/material/Box';
 import LinearProgress, { linearProgressClasses } from '@mui/material/LinearProgress';
+
+import { hasPermission } from 'src/utils/permissions';
 
 import { CONFIG } from 'src/config-global';
 import { varAlpha } from 'src/theme/styles';
@@ -23,6 +25,7 @@ export const ProductsPage = lazy(() => import('src/pages/products'));
 export const CustomizationPage = lazy(() => import('src/pages/personalizacion'));
 export const MapsPage = lazy(() => import('src/pages/maps'));
 export const ProductsDetailPage = lazy(() => import('src/pages/products/product-details'));
+export const MQTTDocumentationPage = lazy(() => import('src/pages/mqtt-documentation'));
 export const Page404 = lazy(() => import('src/pages/not_fund'));
 export const Logout =  function handleTokenLogout() {
   localStorage.removeItem('token');
@@ -45,15 +48,14 @@ const renderFallback = (
 );
 
 // Token validation with error handling
-
 const TokenProtectedRoute = ({ children }: { children: JSX.Element }) => {
-const token = localStorage.getItem('token');
-const navigate = useNavigate();
-useEffect(() => {
-  const validateToken = async () => {
-    if (!token) {
-          navigate('/login');
-    } else {
+  const token = localStorage.getItem('token');
+  const navigate = useNavigate();
+  useEffect(() => {
+    const validateToken = async () => {
+      if (!token) {
+        navigate('/login');
+      } else {
         try {
           // Send login request to backend
           axios.defaults.headers.common.Authorization = `Bearer ${token}`;
@@ -63,15 +65,44 @@ useEffect(() => {
           localStorage.removeItem('user');
           navigate('/login');
         }
+      }
+    };
+
+    validateToken();
+  }, [token, navigate]);
+
+  // If token exists, render the children (Dashboard routes)
+  return token ? children : null;
+};
+
+// Permission-based route protection
+const PermissionProtectedRoute = ({ 
+  children, 
+  requiredPath 
+}: { 
+  children: JSX.Element;
+  requiredPath: string;
+}) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    // Verificar permisos después de que el componente se monte
+    // Usar el pathname actual normalizado para la verificación
+    const currentPath = location.pathname;
+    if (!hasPermission(requiredPath)) {
+      console.log(`[Route Protection] Access denied to: ${requiredPath} (current path: ${currentPath})`);
+      navigate('/404', { replace: true });
     }
-  };
+  }, [requiredPath, navigate, location.pathname]);
 
-  validateToken();
-}, [token, navigate]);
+  // Si tiene permiso, renderizar el componente
+  if (hasPermission(requiredPath)) {
+    return children;
+  }
 
-
-// If token exists, render the children (Dashboard routes)
-return token ? children : null;
+  // Si no tiene permiso, no renderizar nada (será redirigido)
+  return null;
 };
 
 // Main Router component
@@ -89,7 +120,9 @@ export function Router() {
         {
           element: (
             <TokenProtectedRoute>
-              <HomePage />
+              <PermissionProtectedRoute requiredPath="/">
+                <HomePage />
+              </PermissionProtectedRoute>
             </TokenProtectedRoute>
           ),
           index: true,
@@ -97,7 +130,9 @@ export function Router() {
         {
           element: (
             <TokenProtectedRoute>
-              <Controllers />
+              <PermissionProtectedRoute requiredPath="/controladores">
+                <Controllers />
+              </PermissionProtectedRoute>
             </TokenProtectedRoute>
           ),
           path: 'Controladores',
@@ -105,7 +140,9 @@ export function Router() {
         {
           element: (
             <TokenProtectedRoute>
-              <PuntoVenta />
+              <PermissionProtectedRoute requiredPath="/puntoVenta">
+                <PuntoVenta />
+              </PermissionProtectedRoute>
             </TokenProtectedRoute>
           ),
           path: 'PuntoVenta',
@@ -113,7 +150,9 @@ export function Router() {
         {
           element: (
             <TokenProtectedRoute>
-              <PuntoVentaDetalle />
+              <PermissionProtectedRoute requiredPath="/puntoVenta">
+                <PuntoVentaDetalle />
+              </PermissionProtectedRoute>
             </TokenProtectedRoute>
           ),
           path: 'PuntoVenta/:id',
@@ -121,7 +160,9 @@ export function Router() {
         {
           element: (
             <TokenProtectedRoute>
-              <UserPage />
+              <PermissionProtectedRoute requiredPath="/usuarios">
+                <UserPage />
+              </PermissionProtectedRoute>
             </TokenProtectedRoute>
           ),
           path: 'Usuarios',
@@ -129,7 +170,9 @@ export function Router() {
         {
           element: (
             <TokenProtectedRoute>
-              <ProfilePage />
+              <PermissionProtectedRoute requiredPath="/usuarios">
+                <ProfilePage />
+              </PermissionProtectedRoute>
             </TokenProtectedRoute>
           ),
           path: 'Usuarios/Perfil/:id',
@@ -138,7 +181,9 @@ export function Router() {
         {
           element: (
             <TokenProtectedRoute>
-              <ProductsPage />
+              <PermissionProtectedRoute requiredPath="/equipos">
+                <ProductsPage />
+              </PermissionProtectedRoute>
             </TokenProtectedRoute>
           ),
           path: 'Equipos',
@@ -146,7 +191,9 @@ export function Router() {
         {
           element: (
             <TokenProtectedRoute>
-              <ProductsDetailPage />
+              <PermissionProtectedRoute requiredPath="/equipos">
+                <ProductsDetailPage />
+              </PermissionProtectedRoute>
             </TokenProtectedRoute>
           ),
           path: 'Equipos/:id',
@@ -154,10 +201,22 @@ export function Router() {
         {
           element: (
             <TokenProtectedRoute>
-              <CustomizationPage />
+              <PermissionProtectedRoute requiredPath="/personalizacion">
+                <CustomizationPage />
+              </PermissionProtectedRoute>
             </TokenProtectedRoute>
           ),
           path: 'Personalizacion',
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <PermissionProtectedRoute requiredPath="/api-ti-water">
+                <MQTTDocumentationPage />
+              </PermissionProtectedRoute>
+            </TokenProtectedRoute>
+          ),
+          path: 'api-ti-water',
         }
         // {
         //   element: (

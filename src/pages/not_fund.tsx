@@ -13,6 +13,10 @@ import { SimpleLayout } from 'src/layouts/simple';
 
 
 export default function Page() {
+  // Verificar si el usuario está autenticado
+  const token = localStorage.getItem('token');
+  const isAuthenticated = !!token;
+
   return (
     <>
       <Helmet>
@@ -38,9 +42,15 @@ export default function Page() {
             }}
           />
 
-          <Button component={RouterLink} href="/Login" size="large" variant="contained" color="inherit">
-            Iniciar sesión
-          </Button>
+          {isAuthenticated ? (
+            <Button component={RouterLink} href="/" size="large" variant="contained" color="inherit">
+              Volver al inicio
+            </Button>
+          ) : (
+            <Button component={RouterLink} href="/Login" size="large" variant="contained" color="inherit">
+              Iniciar sesión
+            </Button>
+          )}
         </Container>
       </SimpleLayout>
     </>

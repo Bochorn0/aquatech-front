@@ -12,9 +12,11 @@ import {
   Dialog,
   MenuItem,
   TableRow,
+  Checkbox,
   TableBody,
   TableHead,
   TextField,
+  FormGroup,
   InputLabel,
   IconButton,
   Typography,
@@ -22,7 +24,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  CircularProgress
+  CircularProgress,
+  FormControlLabel
 } from "@mui/material";
 
 import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
@@ -34,7 +37,7 @@ import { SvgColor } from 'src/components/svg-color';
 
 import type { User, Role, Cliente } from './types';
 
-const defaultUser = { _id: '', nombre: '', email: '', password:'',  client_name: '', role_name: '', cliente: '', role: { _id: '', name: '' }, verified: false, puesto: '', status: '' };
+const defaultUser = { _id: '', nombre: '', email: '', password:'',  client_name: '', role_name: '', cliente: '', role: { _id: '', name: '' }, verified: false, puesto: '', status: '', mqtt_zip_password: '' };
 export default function UserRoleManagement() {
   const [loading, setLoading] = useState(false);
   const [tabIndex, setTabIndex] = useState(0);
@@ -42,7 +45,18 @@ export default function UserRoleManagement() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [clients, setClients] = useState<Cliente[]>([]);
   const [userForm, setUserForm] = useState<User>(defaultUser);
-  const [roleForm, setRoleForm] = useState<Role>({ name: '' });
+  const [roleForm, setRoleForm] = useState<Role>({ name: '', permissions: [] });
+  
+  // Definir todas las rutas disponibles del menú
+  const availableRoutes = [
+    { path: '/', label: 'Dashboard' },
+    { path: '/equipos', label: 'Equipos' },
+    { path: '/personalizacion', label: 'Personalizacion' },
+    { path: '/usuarios', label: 'Usuarios' },
+    { path: '/controladores', label: 'Controladores' },
+    { path: '/puntoVenta', label: 'Puntos De Venta' },
+    { path: '/api-ti-water', label: 'API TI Water' },
+  ];
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [roleModalOpen, setRoleModalOpen] = useState(false);
 
@@ -87,7 +101,7 @@ export default function UserRoleManagement() {
   };
 
   const handleRoleEdit = (role: Role) => {
-    setRoleForm(role);
+    setRoleForm({ ...role, permissions: role.permissions || [] });
     setRoleModalOpen(true);
   };
 
@@ -155,7 +169,7 @@ export default function UserRoleManagement() {
   };
 
   const handleOpenRoleModal = () => {
-    setRoleForm({ name: '' });
+    setRoleForm({ name: '', permissions: [] });
     setRoleModalOpen(true);
   };
 
@@ -167,14 +181,34 @@ export default function UserRoleManagement() {
   const handleUserChange = (e: any) => {
     console.log(e.target);
     const { name, value } = e.target;
-    setUserForm((prevData) => ({
-      ...prevData,
+    const updatedForm = {
+      ...userForm,
       [name]: value,
-    }));
+    };
+    
+    // Si se cambia el password, también actualizar mqtt_zip_password con el mismo valor
+    if (name === 'password' && value.trim() !== '') {
+      updatedForm.mqtt_zip_password = value;
+    }
+    
+    setUserForm(updatedForm);
   };
 
   const handleRoleChange = (e: any) => {
     setRoleForm({ ...roleForm, [e.target.name]: e.target.value });
+  };
+
+  const handlePermissionChange = (routePath: string) => {
+    setRoleForm((prev) => {
+      const currentPermissions = prev.permissions || [];
+      const isSelected = currentPermissions.includes(routePath);
+      return {
+        ...prev,
+        permissions: isSelected
+          ? currentPermissions.filter((p) => p !== routePath)
+          : [...currentPermissions, routePath],
+      };
+    });
   };
 
   return (
@@ -280,7 +314,16 @@ export default function UserRoleManagement() {
                     <TableBody>
                       {roles.map((role) => (
                         <StyledTableRow key={role._id}>
-                          <StyledTableCell>{role.name}</StyledTableCell>
+                          <StyledTableCell>
+                            <Box>
+                              <Typography variant="body2">{role.name}</Typography>
+                              {role.permissions && role.permissions.length > 0 && (
+                                <Typography variant="caption" color="text.secondary">
+                                  {role.permissions.length} permiso(s)
+                                </Typography>
+                              )}
+                            </Box>
+                          </StyledTableCell>
                           <StyledTableCell>
                             <IconButton sx={{ mr: 1, color: 'primary.main' }} onClick={() => handleRoleEdit(role)}>
                               <SvgColor src='./assets/icons/actions/edit.svg' />
@@ -325,7 +368,17 @@ export default function UserRoleManagement() {
               </Select>
             </FormControl>
             <TextField label="Puesto" name="puesto" value={userForm.puesto} onChange={handleUserChange} fullWidth />
-            <TextField label="Password" name="password" value={userForm.password} onChange={handleUserChange} fullWidth />
+            <TextField label="Password" name="password" type="password" value={userForm.password} onChange={handleUserChange} fullWidth />
+            <TextField 
+              label="Contraseña ZIP MQTT" 
+              name="mqtt_zip_password" 
+              type="password"
+              value={userForm.mqtt_zip_password || ''} 
+              onChange={handleUserChange} 
+              fullWidth 
+              helperText="Se sincroniza automáticamente con la contraseña de inicio de sesión. La contraseña del ZIP será la misma que la de inicio de sesión."
+              disabled={!!userForm.password && userForm.password.trim() !== ''}
+            />
             <FormControl fullWidth>
               <InputLabel>Estado</InputLabel>
               <Select value={userForm.status} name="status" onChange={handleUserChange} fullWidth>
@@ -344,11 +397,36 @@ export default function UserRoleManagement() {
       </Dialog>
       </Grid>
       <Grid item xs={12}>
-        <Dialog open={roleModalOpen} onClose={handleCloseModal} fullWidth maxWidth="sm">
+        <Dialog open={roleModalOpen} onClose={handleCloseModal} fullWidth maxWidth="md">
           <DialogTitle>{roleForm._id ? "Editar Rol" : "Nuevo Rol"}</DialogTitle>
           <DialogContent>
             <Box display="flex" flexDirection="column" gap={2} mt={1}>
               <TextField label="Nombre" name="name" value={roleForm.name} onChange={handleRoleChange} fullWidth />
+              
+              <Box>
+                <Typography variant="subtitle2" gutterBottom sx={{ mb: 1 }}>
+                  Permisos de Menú (Rutas Permitidas)
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+                  Selecciona las rutas que los usuarios con este rol podrán ver en el menú
+                </Typography>
+                <Paper variant="outlined" sx={{ p: 2, maxHeight: 300, overflow: 'auto' }}>
+                  <FormGroup>
+                    {availableRoutes.map((route) => (
+                      <FormControlLabel
+                        key={route.path}
+                        control={
+                          <Checkbox
+                            checked={(roleForm.permissions || []).includes(route.path)}
+                            onChange={() => handlePermissionChange(route.path)}
+                          />
+                        }
+                        label={route.label}
+                      />
+                    ))}
+                  </FormGroup>
+                </Paper>
+              </Box>
             </Box>
           </DialogContent>
           <DialogActions>
