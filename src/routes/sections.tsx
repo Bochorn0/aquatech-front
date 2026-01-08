@@ -18,6 +18,7 @@ export const UserPage = lazy(() => import('src/pages/users'));
 export const Controllers = lazy(() => import('src/pages/controllers'));
 export const PuntoVenta = lazy(() => import('src/pages/punto-venta'));
 export const PuntoVentaDetalle = lazy(() => import('src/pages/punto-venta/punto-venta-detalle'));
+export const PuntoVentaDetalleV2 = lazy(() => import('src/pages/punto-venta/punto-venta-detalle-v2'));
 export const ProfilePage = lazy(() => import('src/pages/users/user-profile'));
 export const LoginPage = lazy(() => import('src/pages/login'));
 export const RegisterPage = lazy(() => import('src/pages/register'));
@@ -156,6 +157,16 @@ export function Router() {
             </TokenProtectedRoute>
           ),
           path: 'PuntoVenta/:id',
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <PermissionProtectedRoute requiredPath="/puntoVenta">
+                <PuntoVentaDetalleV2 />
+              </PermissionProtectedRoute>
+            </TokenProtectedRoute>
+          ),
+          path: 'PuntoVenta/:id/v2',
         },
         {
           element: (
