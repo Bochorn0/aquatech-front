@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom';
 
 import { useTheme } from '@mui/material/styles';
 import CardHeader from '@mui/material/CardHeader';
-import { Box, Card, Chip, Grid, Alert, Paper, Button, Divider, Typography, CircularProgress } from '@mui/material';
+import { Box, Card, Chip, Grid, Alert, Button, Divider, Typography, CircularProgress } from '@mui/material';
 
 import { fNumber } from 'src/utils/format-number';
 
@@ -18,12 +18,10 @@ export default function PuntoVentaDetalleV2() {
   const [loading, setLoading] = useState<boolean>(true);
   const [chartDataNiveles, setChartDataNiveles] = useState<any>(null);
   const [tiwaterData, setTiwaterData] = useState<any>(null);
-  const [tiwaterLoading, setTiwaterLoading] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchTiwaterData = async (codigoTienda: string) => {
       try {
-        setTiwaterLoading(true);
         const response = await fetch(`${CONFIG.API_BASE_URL_V2}/sensors/tiwater?codigoTienda=${codigoTienda}`, {
           method: 'GET',
           headers: {
@@ -40,8 +38,6 @@ export default function PuntoVentaDetalleV2() {
         }
       } catch (error) {
         console.error('Error fetching tiwater data:', error);
-      } finally {
-        setTiwaterLoading(false);
       }
     };
 
@@ -66,6 +62,17 @@ export default function PuntoVentaDetalleV2() {
         
         // Preparar datos de gráficas para niveles
         prepareChartDataNiveles(puntoData, setChartDataNiveles);
+        
+        // Debug: Verificar datos históricos
+        const tiwaterProd = puntoData?.productos?.find((p: any) => p.product_type === 'TIWater');
+        if (tiwaterProd) {
+          console.log('[PuntoVentaDetalleV2] Producto TIWater encontrado:', {
+            id: tiwaterProd.id,
+            hasHistorico: !!tiwaterProd.historico,
+            hasHistoricoDiario: !!tiwaterProd.historico_diario,
+            historicoHours: tiwaterProd.historico?.hours_with_data?.length || 0
+          });
+        }
         
         // Fetch tiwater sensor data if we have codigo_tienda
         const codigoTienda = puntoData.codigo_tienda || id;
@@ -138,33 +145,46 @@ export default function PuntoVentaDetalleV2() {
         </Button>
         <Divider sx={{ borderStyle: 'dashed', my: 2 }} />
 
-        {/* Sección: Datos generales */}
-        <DatosGenerales punto={punto} />
+        {/* Título de la tienda */}
+        <Typography variant="h4" align="center" fontWeight="bold" sx={{ mb: 3 }}>
+          {punto.name || 'NOMBRE TIENDA'}
+        </Typography>
 
-        <Divider sx={{ borderStyle: 'dashed', my: 3 }} />
-
-        {/* Dashboard TIWater - Mostrar primero si hay datos */}
-        {(tiwaterData || tiwaterProduct) && (
-          <>
-            <TiwaterDashboard 
-              data={tiwaterData} 
-              product={tiwaterProduct}
-              loading={tiwaterLoading} 
-            />
-            <Divider sx={{ borderStyle: 'dashed', my: 3 }} />
-          </>
-        )}
-
-        <Grid container spacing={2}>
-          {/* Sección Izquierda: Osmosis + Niveles con Gráficas */}
-          <Grid item xs={12} md={12} lg={5}>
-            <OsmosisSection osmosis={osmosis} />
-            <NivelesSection niveles={niveles} chartDataNiveles={chartDataNiveles} />
+        {/* Grid 2x2 Principal */}
+        <Grid container spacing={3}>
+          {/* Top-Left: Estado de la Tienda */}
+          <Grid item xs={12} md={6}>
+            <EstadoTiendaCard punto={punto} />
           </Grid>
 
-          {/* Sección Derecha: Métricas */}
-          <Grid item xs={12} md={12} lg={7}>
-            <MetricasSection metricas={metricas} />
+          {/* Top-Right: Mapa */}
+          <Grid item xs={12} md={6}>
+            <Card variant="outlined" sx={{ p: 2, height: '100%', border: '2px solid', borderColor: 'primary.main' }}>
+              <MapComponent 
+                lat={punto.lat || punto.city?.lat || 29.149162901939928}
+                long={punto.long || punto.city?.lon || -110.96483231003234}
+              />
+            </Card>
+          </Grid>
+
+          {/* Bottom-Left: Almacenamiento */}
+          <Grid item xs={12} md={6}>
+            <AlmacenamientoCard 
+              niveles={niveles} 
+              chartDataNiveles={chartDataNiveles}
+              tiwaterData={tiwaterData}
+              tiwaterProduct={tiwaterProduct}
+            />
+          </Grid>
+
+          {/* Bottom-Right: Osmosis Inversa */}
+          <Grid item xs={12} md={6}>
+            <OsmosisInversaCard 
+              osmosis={osmosis}
+              metricas={metricas}
+              tiwaterData={tiwaterData}
+              tiwaterProduct={tiwaterProduct}
+            />
           </Grid>
         </Grid>
       </Box>
@@ -177,23 +197,71 @@ export default function PuntoVentaDetalleV2() {
 /* -------------------------------------------------------------------------- */
 
 function prepareChartDataNiveles(puntoData: any, setChartDataNiveles: any) {
+  // Incluir tanto productos Nivel como TIWater
   const niveles = puntoData?.productos?.filter((p: any) => p.product_type === 'Nivel') || [];
+  const tiwaterProducts = puntoData?.productos?.filter((p: any) => p.product_type === 'TIWater') || [];
+  const allProducts = [...niveles, ...tiwaterProducts];
   
-  if (niveles.length === 0) {
+  console.log('[prepareChartDataNiveles] Productos encontrados:', {
+    nivelesCount: niveles.length,
+    tiwaterCount: tiwaterProducts.length,
+    totalCount: allProducts.length
+  });
+  
+  if (allProducts.length === 0) {
     setChartDataNiveles(null);
     return;
   }
 
-  const chartDataArray = niveles
-    .filter((nivel: any) => {
-      const hasHistorico = nivel.historico && 
-                          nivel.historico.hours_with_data && 
-                          Array.isArray(nivel.historico.hours_with_data) &&
-                          nivel.historico.hours_with_data.length > 0;
-      return hasHistorico;
-    })
-    .map((nivel: any) => {
-      const historico = nivel.historico || {};
+  // Procesar productos que tengan histórico (purificada o recuperada)
+  const chartDataArray: any[] = [];
+  
+  allProducts.forEach((product: any) => {
+    // Procesar histórico de purificada si existe
+    const hasHistoricoPurificada = product.historico && 
+                          product.historico.hours_with_data && 
+                          Array.isArray(product.historico.hours_with_data) &&
+                          product.historico.hours_with_data.length > 0;
+    
+    // Procesar histórico de recuperada si existe
+    const hasHistoricoRecuperada = product.historico_recuperada && 
+                          product.historico_recuperada.hours_with_data && 
+                          Array.isArray(product.historico_recuperada.hours_with_data) &&
+                          product.historico_recuperada.hours_with_data.length > 0;
+    
+    console.log(`[prepareChartDataNiveles] Producto ${product.id} (${product.product_type}):`, {
+      hasHistoricoPurificada: !!product.historico,
+      hasHistoricoRecuperada: !!product.historico_recuperada,
+      hoursWithDataPurificada: product.historico?.hours_with_data?.length || 0,
+      hoursWithDataRecuperada: product.historico_recuperada?.hours_with_data?.length || 0
+    });
+    
+    // Procesar histórico de purificada
+    if (hasHistoricoPurificada) {
+      const chartDataPurificada = processHistorico(product, product.historico, true, false);
+      if (chartDataPurificada) {
+        chartDataArray.push(chartDataPurificada);
+      }
+    }
+    
+    // Procesar histórico de recuperada
+    if (hasHistoricoRecuperada) {
+      const chartDataRecuperada = processHistorico(product, product.historico_recuperada, false, true);
+      if (chartDataRecuperada) {
+        chartDataArray.push(chartDataRecuperada);
+      }
+    }
+  });
+  
+  // Función auxiliar para procesar histórico
+  function processHistorico(product: any, historico: any, isPurificada: boolean, isCruda: boolean) {
+    try {
+      console.log(`[prepareChartDataNiveles] Procesando histórico para ${product.id} (${product.product_type}):`, {
+        isPurificada,
+        isCruda,
+        historicoType: historico.product || 'unknown'
+      });
+      
       const hoursWithData = historico.hours_with_data || [];
       
       // Ordenar por hora
@@ -211,11 +279,25 @@ function prepareChartDataNiveles(puntoData: any, setChartDataNiveles: any) {
       });
 
       // Obtener el valor actual del producto desde el status
-      const valorActual = nivel.status?.find((s: any) => s.code === 'liquid_level_percent')?.value || null;
+      let valorActual = null;
+      if (product.product_type === 'TIWater') {
+        if (isPurificada) {
+          const nivelPurificada = product.status?.find((s: any) => s.code === 'level_purificada' || s.code === 'electronivel_purificada');
+          valorActual = nivelPurificada?.value ?? null;
+        } else if (isCruda) {
+          const nivelRecuperada = product.status?.find((s: any) => s.code === 'level_recuperada' || s.code === 'electronivel_recuperada');
+          valorActual = nivelRecuperada?.value ?? null;
+        }
+      } else {
+        valorActual = product.status?.find((s: any) => s.code === 'liquid_level_percent')?.value || null;
+      }
 
       return {
-        nivelId: nivel._id || nivel.id,
-        nivelName: nivel.name,
+        nivelId: product._id || product.id,
+        nivelName: isPurificada ? 'Nivel Purificada' : (isCruda ? 'Nivel Recuperada' : product.name),
+        productType: product.product_type,
+        isPurificada,
+        isCruda,
         categories: horas,
         series: [
           {
@@ -227,215 +309,617 @@ function prepareChartDataNiveles(puntoData: any, setChartDataNiveles: any) {
           valorActual: valorActual !== null ? Number(valorActual) : null,
         },
       };
-    });
+    } catch (error) {
+      console.error(`[prepareChartDataNiveles] Error procesando histórico para ${product.id}:`, error);
+      return null;
+    }
+  }
 
   const result = chartDataArray.length > 0 ? chartDataArray : null;
+  console.log('[prepareChartDataNiveles] Resultado final:', {
+    chartDataArrayLength: chartDataArray.length,
+    result: result ? result.map((r: any) => ({
+      nivelId: r.nivelId,
+      nivelName: r.nivelName,
+      productType: r.productType,
+      isPurificada: r.isPurificada,
+      isCruda: r.isCruda,
+      categoriesCount: r.categories?.length || 0
+    })) : null
+  });
   setChartDataNiveles(result);
 }
 
 /* -------------------------------------------------------------------------- */
-/* 🧱 Sección 1: Osmosis */
+/* 🧱 Card: Almacenamiento (Bottom-Left) */
 /* -------------------------------------------------------------------------- */
 
-function OsmosisSection({ osmosis }: any) {
-  if (osmosis.length === 0) {
-    return null;
+function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterProduct }: any) {
+  // Procesar datos de TIWater de la misma manera que TiwaterDashboard
+  let processedTiwaterData: any = null;
+  if (tiwaterData || tiwaterProduct) {
+    const hasProductData = tiwaterProduct && tiwaterProduct.status && Array.isArray(tiwaterProduct.status) && tiwaterProduct.status.length > 0;
+    const hasRawData = tiwaterData && tiwaterData.raw && Object.keys(tiwaterData.raw).length > 0;
+    
+    const findStatusValue = (codes: string[], status: any[]) => {
+      const found = status?.find((s: any) => 
+        codes.some(code => 
+          s.code === code || s.label === code ||
+          s.code?.toLowerCase() === code.toLowerCase() || 
+          s.label?.toLowerCase() === code.toLowerCase()
+        )
+      );
+      return found?.value !== null && found?.value !== undefined ? Number(found.value) : null;
+    };
+
+    if (hasProductData) {
+      const { status } = tiwaterProduct;
+      processedTiwaterData = {
+        caudales: {
+          purificada: findStatusValue(['Flujo Producción', 'flowrate_speed_1', 'flujo_produccion'], status),
+          recuperacion: findStatusValue(['Flujo Recuperación', 'flowrate_recuperacion', 'flujo_recuperacion'], status),
+          rechazo: findStatusValue(['Flujo Rechazo', 'flowrate_speed_2', 'flujo_rechazo'], status),
+          cruda: findStatusValue(['Caudal Cruda', 'caudal_cruda'], status),
+          cruda_lmin: findStatusValue(['Caudal Cruda (L/min)', 'Caudal Cruda L/min', 'caudal_cruda_lmin'], status)
+        },
+        niveles: {
+          purificada_porcentaje: findStatusValue(['Nivel Purificada', 'level_purificada', 'electronivel_purificada'], status),
+          cruda_porcentaje: findStatusValue(['Nivel Recuperada', 'level_recuperada', 'electronivel_recuperada'], status)
+        }
+      };
+    } else if (hasRawData && tiwaterData.raw) {
+      const { raw } = tiwaterData;
+      processedTiwaterData = {
+        caudales: {
+          purificada: raw['Flujo Producción'] !== undefined ? parseFloat(String(raw['Flujo Producción'])) : null,
+          recuperacion: raw['Flujo Recuperación'] !== undefined ? parseFloat(String(raw['Flujo Recuperación'])) : null,
+          rechazo: raw['Flujo Rechazo'] !== undefined ? parseFloat(String(raw['Flujo Rechazo'])) : null,
+          cruda: raw['Caudal Cruda'] !== undefined ? parseFloat(String(raw['Caudal Cruda'])) : null,
+          cruda_lmin: raw['Caudal Cruda (L/min)'] !== undefined ? parseFloat(String(raw['Caudal Cruda (L/min)'])) : null
+        },
+        niveles: {
+          purificada_porcentaje: raw['Nivel Purificada'] !== undefined ? parseFloat(String(raw['Nivel Purificada'])) : null,
+          cruda_porcentaje: raw['Nivel Recuperada'] !== undefined ? parseFloat(String(raw['Nivel Recuperada'])) : null
+        }
+      };
+    } else if (tiwaterData) {
+      processedTiwaterData = tiwaterData;
+    }
+  }
+  
+  // Extraer datos de agua cruda y purificada desde niveles o tiwater
+  let aguaCrudaData: any = null;
+  let aguaPurificadaData: any = null;
+
+  // Buscar niveles desde productos
+  if (niveles && niveles.length > 0) {
+    niveles.forEach((nivel: any) => {
+      const nivelName = (nivel.name || '').toLowerCase();
+      const valorActual = nivel.status?.find((s: any) => s.code === 'liquid_level_percent')?.value;
+      
+      if (nivelName.includes('cruda') || nivelName.includes('recuperada')) {
+        aguaCrudaData = {
+          nivel: valorActual,
+          chartData: chartDataNiveles?.find((cd: any) => cd.nivelId === nivel._id || cd.nivelId === nivel.id),
+          name: nivel.name
+        };
+      } else if (nivelName.includes('purificada')) {
+        aguaPurificadaData = {
+          nivel: valorActual,
+          chartData: chartDataNiveles?.find((cd: any) => cd.nivelId === nivel._id || cd.nivelId === nivel.id),
+          name: nivel.name
+        };
+      }
+    });
   }
 
+  // Buscar datos históricos de TIWater desde chartDataNiveles
+  if (tiwaterProduct && chartDataNiveles) {
+    console.log('[AlmacenamientoCard] Buscando chartData para TIWater:', {
+      tiwaterProductId: tiwaterProduct.id,
+      tiwaterProduct_id: tiwaterProduct._id,
+      chartDataNivelesLength: Array.isArray(chartDataNiveles) ? chartDataNiveles.length : 0,
+      chartDataNiveles
+    });
+    
+    // Obtener valores de nivel desde el status de TIWater
+    const nivelPurificada = tiwaterProduct.status?.find((s: any) => 
+      s.code === 'level_purificada' || s.code === 'electronivel_purificada'
+    );
+    const nivelRecuperada = tiwaterProduct.status?.find((s: any) => 
+      s.code === 'level_recuperada' || s.code === 'electronivel_recuperada'
+    );
+
+    // Obtener el último valor del histórico si está disponible
+    const getUltimoValorHistorico = (chartData: any) => {
+      if (chartData?.series && chartData.series.length > 0 && chartData.series[0]?.data) {
+        const dataArray = chartData.series[0].data;
+        if (Array.isArray(dataArray) && dataArray.length > 0) {
+          const ultimoValor = dataArray[dataArray.length - 1];
+          return ultimoValor !== null && ultimoValor !== undefined ? Number(ultimoValor) : null;
+        }
+      }
+      return null;
+    };
+
+    // Buscar chartData de purificada
+    if (Array.isArray(chartDataNiveles)) {
+      const chartDataPurificada = chartDataNiveles.find((cd: any) => {
+        const matchesId = cd.nivelId === tiwaterProduct._id || cd.nivelId === tiwaterProduct.id;
+        const matchesType = cd.productType === 'TIWater';
+        return (matchesId || matchesType) && cd.isPurificada;
+      });
+
+      if (chartDataPurificada && nivelPurificada) {
+        const ultimoValorHistorico = getUltimoValorHistorico(chartDataPurificada);
+        aguaPurificadaData = {
+          nivel: ultimoValorHistorico !== null ? ultimoValorHistorico : (Number(nivelPurificada.value) || null),
+          chartData: chartDataPurificada,
+          name: 'Nivel Purificada'
+        };
+        console.log('[AlmacenamientoCard] Asignado chartData a aguaPurificadaData (isPurificada=true)', {
+          ultimoValorHistorico,
+          statusValue: nivelPurificada.value,
+          nivelFinal: aguaPurificadaData.nivel
+        });
+      }
+
+      // Buscar chartData de recuperada (cruda)
+      const chartDataRecuperada = chartDataNiveles.find((cd: any) => {
+        const matchesId = cd.nivelId === tiwaterProduct._id || cd.nivelId === tiwaterProduct.id;
+        const matchesType = cd.productType === 'TIWater';
+        return (matchesId || matchesType) && cd.isCruda;
+      });
+
+      if (chartDataRecuperada && nivelRecuperada) {
+        const ultimoValorHistorico = getUltimoValorHistorico(chartDataRecuperada);
+        aguaCrudaData = {
+          nivel: ultimoValorHistorico !== null ? ultimoValorHistorico : (Number(nivelRecuperada.value) || null),
+          chartData: chartDataRecuperada,
+          name: 'Nivel Recuperada'
+        };
+        console.log('[AlmacenamientoCard] Asignado chartData a aguaCrudaData (isCruda=true)', {
+          ultimoValorHistorico,
+          statusValue: nivelRecuperada.value,
+          nivelFinal: aguaCrudaData.nivel
+        });
+      } else if (nivelRecuperada && !aguaCrudaData?.chartData) {
+        // Si no hay chartData pero hay nivel recuperada, usar el valor del status
+        aguaCrudaData = {
+          nivel: Number(nivelRecuperada.value) || null,
+          chartData: null,
+          name: 'Nivel Recuperada'
+        };
+        console.log('[AlmacenamientoCard] Asignado nivel recuperada a aguaCrudaData (sin chartData)');
+      }
+    }
+  }
+
+  // Si hay datos de TIWater procesados, usarlos como fallback o complemento
+  if (processedTiwaterData) {
+    if (!aguaCrudaData && processedTiwaterData.niveles?.cruda_porcentaje !== null && processedTiwaterData.niveles?.cruda_porcentaje !== undefined) {
+      aguaCrudaData = { 
+        nivel: processedTiwaterData.niveles.cruda_porcentaje,
+        chartData: null // No hay chartData desde processedTiwaterData
+      };
+    }
+
+    if (!aguaPurificadaData && processedTiwaterData.niveles?.purificada_porcentaje !== null && processedTiwaterData.niveles?.purificada_porcentaje !== undefined) {
+      aguaPurificadaData = { 
+        nivel: processedTiwaterData.niveles.purificada_porcentaje,
+        chartData: null // No hay chartData desde processedTiwaterData
+      };
+    }
+  }
+
+  // Calcular litros (asumiendo tanques de 1000L)
+  const calcularLitros = (porcentaje: number) => {
+    if (!porcentaje) return 0;
+    return Math.round((porcentaje / 100) * 1000);
+  };
+
+  // Debug: Verificar datos finales
+  console.log('[AlmacenamientoCard] Datos finales:', {
+    aguaCrudaData: {
+      nivel: aguaCrudaData?.nivel,
+      hasChartData: !!aguaCrudaData?.chartData,
+      chartDataCategories: aguaCrudaData?.chartData?.categories?.length || 0
+    },
+    aguaPurificadaData: {
+      nivel: aguaPurificadaData?.nivel,
+      hasChartData: !!aguaPurificadaData?.chartData,
+      chartDataCategories: aguaPurificadaData?.chartData?.categories?.length || 0
+    }
+  });
+
   return (
-    <Box sx={{ mb: 3 }}>
-      {osmosis.map((p: any) => {
-        // Extract values from status array (v2.0 format)
-        const flowRate1 = p.status?.find((s: any) => s.code === 'flowrate_speed_1')?.value; // Flujo Producción
-        const flowRate2 = p.status?.find((s: any) => s.code === 'flowrate_speed_2')?.value; // Flujo Rechazo
-        const tds = p.status?.find((s: any) => s.code === 'tds_out')?.value;
-        const levelPurificada = p.status?.find((s: any) => s.code === 'level_purificada')?.value;
-        const levelRecuperada = p.status?.find((s: any) => s.code === 'level_recuperada')?.value;
-        const presionIn = p.status?.find((s: any) => s.code === 'pressure_in')?.value;
+    <Card variant="outlined" sx={{ p: 2, height: '100%', border: '2px solid', borderColor: 'primary.main' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+        <Typography variant="h6" fontWeight="bold">
+          ALMACENAMIENTO
+        </Typography>
+        <Button variant="text" size="small" sx={{ minWidth: 'auto', p: 0.5 }}>
+          ←
+        </Button>
+      </Box>
+      <Divider sx={{ mb: 2 }} />
 
-        // Calcular eficiencia: (flujo_produccion / (flujo_produccion + flujo_rechazo)) * 100
-        const totalFlujo = (flowRate1 || 0) + (flowRate2 || 0);
-        const eficiencia = totalFlujo > 0 
-          ? ((flowRate1 || 0) / totalFlujo * 100).toFixed(2)
-          : 'N/A';
-
-        // Calcular porcentajes de producción
-        const porcentajeProd1 = totalFlujo > 0 
-          ? ((flowRate1 || 0) / totalFlujo * 100).toFixed(2)
-          : 'N/A';
-        const porcentajeProd2 = totalFlujo > 0 
-          ? ((flowRate2 || 0) / totalFlujo * 100).toFixed(2)
-          : 'N/A';
-
-        return (
-          <Card key={p._id || p.id} variant="outlined" sx={{ p: 2, mb: 2 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', mb: 2 }}>
-              <Typography variant="h6">{p.name || 'Sistema de Osmosis'}</Typography>
-              <Chip 
-                label={p.online ? 'Online' : 'Offline'} 
-                color={p.online ? 'success' : 'error'} 
-                size="small" 
-              />
-            </Box>
-            <Divider sx={{ mb: 2 }} />
-
-            {/* Producción: Flujo 1 y Porcentaje */}
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                Producción
-              </Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
-                    Flujo 1
-                  </Typography>
-                  <Typography variant="h6">
-                    {flowRate1 !== undefined ? `${flowRate1.toFixed(2)}` : 'N/A'} 
-                    <Typography component="span" variant="caption"> L/min</Typography>
-                  </Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
-                    Porcentaje
-                  </Typography>
-                  <Typography variant="h6" color="primary">
-                    {porcentajeProd1 !== 'N/A' ? `${porcentajeProd1}%` : 'N/A'}
-                  </Typography>
-                </Grid>
-              </Grid>
-            </Box>
-
-            {/* Producción: Flujo 2 y Porcentaje */}
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                Rechazo
-              </Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
-                    Flujo 2
-                  </Typography>
-                  <Typography variant="h6">
-                    {flowRate2 !== undefined ? `${flowRate2.toFixed(2)}` : 'N/A'} 
-                    <Typography component="span" variant="caption"> L/min</Typography>
-                  </Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="body2" color="text.secondary">
-                    Porcentaje
-                  </Typography>
-                  <Typography variant="h6" color="secondary">
-                    {porcentajeProd2 !== 'N/A' ? `${porcentajeProd2}%` : 'N/A'}
-                  </Typography>
-                </Grid>
-              </Grid>
-            </Box>
-
-            {/* Eficiencia */}
-            <Box sx={{ mb: 2, p: 2, bgcolor: 'background.neutral', borderRadius: 1 }}>
-              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                Eficiencia
-              </Typography>
-              <Typography variant="h4" color="primary" fontWeight="bold">
-                {eficiencia !== 'N/A' ? `${eficiencia}%` : 'N/A'}
-              </Typography>
-            </Box>
-
-            {/* Otros datos adicionales */}
-            <Divider sx={{ my: 2 }} />
-            <Grid container spacing={2}>
+      <Grid container spacing={2}>
+        {/* AGUA CRUDA */}
+        <Grid item xs={12}>
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              AGUA CRUDA
+            </Typography>
+            
+            <Grid container spacing={2} sx={{ mb: 2 }}>
               <Grid item xs={6}>
                 <Typography variant="body2" color="text.secondary">
-                  TDS
-                </Typography>
-                <Typography variant="body1">
-                  {tds !== undefined ? `${tds.toFixed(1)}` : 'N/A'} 
-                  <Typography component="span" variant="caption"> ppm</Typography>
+                  ENTRADA: {processedTiwaterData?.caudales?.cruda_lmin || processedTiwaterData?.caudales?.cruda || '3.0'} L/MIN
                 </Typography>
               </Grid>
               <Grid item xs={6}>
                 <Typography variant="body2" color="text.secondary">
-                  Nivel Purificada
-                </Typography>
-                <Typography variant="body1">
-                  {levelPurificada !== undefined ? `${levelPurificada.toFixed(1)}` : 'N/A'} 
-                  <Typography component="span" variant="caption"> %</Typography>
-                </Typography>
-              </Grid>
-              <Grid item xs={6}>
-                <Typography variant="body2" color="text.secondary">
-                  Nivel Recuperada
-                </Typography>
-                <Typography variant="body1">
-                  {levelRecuperada !== undefined ? `${levelRecuperada.toFixed(1)}` : 'N/A'} 
-                  <Typography component="span" variant="caption"> %</Typography>
-                </Typography>
-              </Grid>
-              <Grid item xs={6}>
-                <Typography variant="body2" color="text.secondary">
-                  Presión Entrada
-                </Typography>
-                <Typography variant="body1">
-                  {presionIn !== undefined ? `${presionIn.toFixed(1)}` : 'N/A'} 
-                  <Typography component="span" variant="caption"> PSI</Typography>
+                  RECUPERACIÓN: {processedTiwaterData?.caudales?.recuperacion || '2.0'} L/MIN
                 </Typography>
               </Grid>
             </Grid>
-          </Card>
-        );
-      })}
-    </Box>
+
+            {/* Tanque visual SVG */}
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
+              <WaterTankSVG
+                percentage={aguaCrudaData?.nivel || 80}
+                liters={calcularLitros(aguaCrudaData?.nivel || 80)}
+                color="primary"
+              />
+            </Box>
+
+            {/* Gráfica histórica - siempre visible */}
+            <Box sx={{ mt: 2, height: 100 }}>
+              {aguaCrudaData?.chartData ? (
+                <NivelMiniChart chart={aguaCrudaData.chartData} title="Histórico de Nivel del tanque Agua cruda" />
+              ) : (
+                <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }}>
+                  <Typography variant="caption" color="text.secondary" align="center">
+                    No hay datos históricos disponibles
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          </Box>
+        </Grid>
+
+        {/* AGUA PURIFICADA */}
+        <Grid item xs={12}>
+          <Box>
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              AGUA PURIFICADA
+            </Typography>
+            
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+              <Grid item xs={6}>
+                <Typography variant="body2" color="text.secondary">
+                  ENTRADA: {processedTiwaterData?.caudales?.purificada || '2.5'} L/MIN
+                </Typography>
+              </Grid>
+            </Grid>
+
+            {/* Tanque visual SVG */}
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
+              <WaterTankSVG
+                percentage={aguaPurificadaData?.nivel || 90}
+                liters={calcularLitros(aguaPurificadaData?.nivel || 90)}
+                color="info"
+              />
+            </Box>
+
+            {/* Gráfica histórica - siempre visible */}
+            <Box sx={{ mt: 2, height: 100 }}>
+              {aguaPurificadaData?.chartData ? (
+                <NivelMiniChart chart={aguaPurificadaData.chartData} title="Histórico de Nivel del tanque Agua purificada" />
+              ) : (
+                <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }}>
+                  <Typography variant="caption" color="text.secondary" align="center">
+                    No hay datos históricos disponibles
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          </Box>
+        </Grid>
+      </Grid>
+    </Card>
   );
 }
 
 /* -------------------------------------------------------------------------- */
-/* 🧱 Sección 2: Niveles con Gráficas */
+/* 🧱 Card: Osmosis Inversa (Bottom-Right) */
 /* -------------------------------------------------------------------------- */
 
-function NivelesSection({ niveles, chartDataNiveles }: any) {
-  if (niveles.length === 0) {
+function OsmosisInversaCard({ osmosis, metricas, tiwaterData, tiwaterProduct }: any) {
+  // Extraer datos de osmosis
+  let osmosisData: any = null;
+  if (osmosis && osmosis.length > 0) {
+    const p = osmosis[0];
+    const flowRate1 = p.status?.find((s: any) => s.code === 'flowrate_speed_1')?.value;
+    const flowRate2 = p.status?.find((s: any) => s.code === 'flowrate_speed_2')?.value;
+    const totalFlujo = (flowRate1 || 0) + (flowRate2 || 0);
+    const eficiencia = totalFlujo > 0 
+      ? ((flowRate1 || 0) / totalFlujo * 100).toFixed(1)
+      : null;
+
+    osmosisData = {
+      produccion: flowRate1,
+      rechazo: flowRate2,
+      eficiencia
+    };
+  }
+
+  // Si hay datos de TIWater, usarlos como fallback
+  if (!osmosisData && (tiwaterData || tiwaterProduct)) {
+    const findStatusValue = (codes: string[], status: any[]) => {
+      const found = status?.find((s: any) => 
+        codes.some(code => 
+          s.code === code || s.label === code ||
+          s.code?.toLowerCase() === code.toLowerCase() || 
+          s.label?.toLowerCase() === code.toLowerCase()
+        )
+      );
+      return found?.value !== null && found?.value !== undefined ? Number(found.value) : null;
+    };
+
+    const status = tiwaterProduct?.status || [];
+    const produccion = findStatusValue(['Flujo Producción', 'flowrate_speed_1', 'flujo_produccion'], status) || tiwaterData?.caudales?.purificada;
+    const rechazo = findStatusValue(['Flujo Rechazo', 'flowrate_speed_2', 'flujo_rechazo'], status) || tiwaterData?.caudales?.rechazo;
+    const total = (produccion || 0) + (rechazo || 0);
+    const eficiencia = total > 0 ? ((produccion || 0) / total * 100).toFixed(1) : null;
+
+    osmosisData = {
+      produccion,
+      rechazo,
+      eficiencia
+    };
+  }
+
+  // Extraer corrientes para las máquinas
+  const getCorriente = (ch: string) => {
+    if (tiwaterData?.corrientes) {
+      return tiwaterData.corrientes[ch] || null;
+    }
+    if (tiwaterProduct?.status) {
+      const found = tiwaterProduct.status.find((s: any) => 
+        s.code?.toLowerCase().includes(ch.toLowerCase()) || 
+        s.label?.toLowerCase().includes(ch.toLowerCase())
+      );
+      return found?.value ? Number(found.value) : null;
+    }
     return null;
+  };
+
+  // Extraer presión CO2
+  const getPresionCO2 = () => {
+    if (tiwaterData?.presiones?.co2) return tiwaterData.presiones.co2;
+    if (tiwaterProduct?.status) {
+      const found = tiwaterProduct.status.find((s: any) => 
+        s.code?.toLowerCase().includes('presion') || 
+        s.code?.toLowerCase().includes('co2') ||
+        s.label?.toLowerCase().includes('presion') ||
+        s.label?.toLowerCase().includes('co2')
+      );
+      return found?.value ? Number(found.value) : null;
+    }
+    return null;
+  };
+
+  const ch1 = getCorriente('ch1') || 3.32;
+  const ch2 = getCorriente('ch2') || 2.32;
+  const ch3 = getCorriente('ch3') || 3.32;
+  const ch4 = getCorriente('ch4') || 2.32;
+  const presionCO2 = getPresionCO2() || 320.79;
+
+  return (
+    <Card variant="outlined" sx={{ p: 2, height: '100%', border: '2px solid', borderColor: 'primary.main' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="h6" fontWeight="bold">
+            💧 OSMOSIS INVERSA
+          </Typography>
+        </Box>
+        <Button variant="text" size="small" sx={{ minWidth: 'auto', p: 0.5 }}>
+          →
+        </Button>
+      </Box>
+      <Divider sx={{ mb: 2 }} />
+
+      {/* Métricas de Osmosis */}
+      <Box sx={{ mb: 3 }}>
+        <Grid container spacing={2} sx={{ mb: 2 }}>
+          <Grid item xs={12}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography variant="body2">
+                PRODUCCION: {osmosisData?.produccion !== null && osmosisData?.produccion !== undefined 
+                  ? `${osmosisData.produccion.toFixed(1)} L/MIN` 
+                  : 'N/A'}
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'success.main' }} />
+                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'error.main' }} />
+              </Box>
+            </Box>
+          </Grid>
+          <Grid item xs={12}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography variant="body2">
+                RECHAZO: {osmosisData?.rechazo !== null && osmosisData?.rechazo !== undefined 
+                  ? `${osmosisData.rechazo.toFixed(1)} L/MIN` 
+                  : 'N/A'}
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'success.main' }} />
+                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'error.main' }} />
+              </Box>
+            </Box>
+          </Grid>
+          <Grid item xs={12}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography variant="body2">
+                EFICIENCIA: {osmosisData?.eficiencia !== null && osmosisData?.eficiencia !== undefined 
+                  ? `${osmosisData.eficiencia}%` 
+                  : 'N/A'}
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'success.main' }} />
+                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'error.main' }} />
+              </Box>
+            </Box>
+          </Grid>
+        </Grid>
+      </Box>
+
+      {/* Máquinas */}
+      <Grid container spacing={2}>
+        {/* Máquina Nieve */}
+        <Grid item xs={12}>
+          <Card variant="outlined" sx={{ p: 1.5, bgcolor: 'primary.lighter', border: '1px solid', borderColor: 'primary.main' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <Typography variant="body2" fontWeight="bold">
+                🍦 MAQUINA NIEVE
+              </Typography>
+            </Box>
+            <Grid container spacing={1}>
+              <Grid item xs={6}>
+                <Typography variant="caption" color="text.secondary">
+                  IZQ.: {ch1.toFixed(2)} A
+                </Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="caption" color="text.secondary">
+                  DER.: {ch2.toFixed(2)} A
+                </Typography>
+              </Grid>
+            </Grid>
+          </Card>
+        </Grid>
+
+        {/* Máquina Frappe */}
+        <Grid item xs={12}>
+          <Card variant="outlined" sx={{ p: 1.5, bgcolor: 'primary.lighter', border: '1px solid', borderColor: 'primary.main' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <Typography variant="body2" fontWeight="bold">
+                🥤 MAQUINA FRAPPE
+              </Typography>
+            </Box>
+            <Grid container spacing={1}>
+              <Grid item xs={6}>
+                <Typography variant="caption" color="text.secondary">
+                  IZQ.: {ch3.toFixed(2)} A
+                </Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="caption" color="text.secondary">
+                  DER.: {ch4.toFixed(2)} A
+                </Typography>
+              </Grid>
+            </Grid>
+          </Card>
+        </Grid>
+
+        {/* Máquina Carbonatada */}
+        <Grid item xs={12}>
+          <Card variant="outlined" sx={{ p: 1.5, bgcolor: 'primary.lighter', border: '1px solid', borderColor: 'primary.main' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <Typography variant="body2" fontWeight="bold">
+                🥤 MAQUINA CARBONATADA
+              </Typography>
+            </Box>
+            <Typography variant="caption" color="text.secondary">
+              {presionCO2.toFixed(2)} PSI
+            </Typography>
+          </Card>
+        </Grid>
+      </Grid>
+    </Card>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* 🧱 Componente: Gráfica Mini de Niveles (para card de almacenamiento) */
+/* -------------------------------------------------------------------------- */
+
+function NivelMiniChart({ chart, title }: { chart: any; title: string }) {
+  const theme = useTheme();
+
+  const hasData = chart && chart.categories && chart.categories.length > 0 && chart.series && chart.series.length > 0;
+  
+  const chartOptions = useChart({
+    chart: {
+      type: 'line',
+      toolbar: { show: false },
+      zoom: { enabled: false },
+      sparkline: { enabled: true },
+    },
+    colors: [theme.palette.primary.main],
+    stroke: {
+      width: 2,
+      curve: 'smooth',
+    },
+    markers: {
+      size: 2,
+      strokeWidth: 1,
+    },
+    xaxis: {
+      categories: chart?.categories || [],
+      labels: {
+        show: false,
+      },
+      axisTicks: {
+        show: false,
+      },
+    },
+    yaxis: {
+      labels: {
+        show: false,
+      },
+      min: 0,
+      max: 100,
+    },
+    tooltip: {
+      enabled: true,
+      y: {
+        formatter: (value: number) => `${value.toFixed(1)}%`,
+      },
+    },
+    legend: {
+      show: false,
+    },
+    grid: {
+      show: false,
+    },
+  });
+
+  const seriesWithYaxis = chart?.series || [];
+
+  if (!hasData) {
+    return (
+      <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Typography variant="caption" color="text.secondary">
+          No hay datos históricos
+        </Typography>
+      </Box>
+    );
   }
 
   return (
-    <Box>
-      {niveles.map((nivel: any) => {
-        // Buscar el chartData correspondiente a este nivel
-        const chartData = chartDataNiveles?.find((cd: any) => cd.nivelId === nivel._id || cd.nivelId === nivel.id);
-        const valorActual = nivel.status?.find((s: any) => s.code === 'liquid_level_percent')?.value;
-
-        return (
-          <Box key={nivel._id || nivel.id} sx={{ mb: 3 }}>
-            {/* Card con información del nivel */}
-            <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6">{nivel.name || 'Nivel'}</Typography>
-                <Chip 
-                  label={nivel.online ? 'Online' : 'Offline'} 
-                  color={nivel.online ? 'success' : 'error'} 
-                  size="small" 
-                />
-              </Box>
-              <Divider sx={{ mb: 2 }} />
-              <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'background.neutral', borderRadius: 1 }}>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Porcentaje de Nivel
-                </Typography>
-                <Typography variant="h3" color="primary" fontWeight="bold">
-                  {valorActual !== undefined && valorActual !== null 
-                    ? `${Number(valorActual).toFixed(1)}%` 
-                    : 'N/A'}
-                </Typography>
-              </Box>
-            </Card>
-
-            {/* Gráfica histórica */}
-            {chartData && (
-              <NivelHistoricoChart nivelName={nivel.name} chart={chartData} />
-            )}
-          </Box>
-        );
-      })}
+    <Box sx={{ height: '100%' }}>
+      <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+        {title}
+      </Typography>
+      <Chart
+        type="line"
+        series={seriesWithYaxis}
+        options={chartOptions}
+        height={80}
+      />
     </Box>
   );
 }
@@ -443,7 +927,7 @@ function NivelesSection({ niveles, chartDataNiveles }: any) {
 /* -------------------------------------------------------------------------- */
 /* 🧱 Componente: Gráfica Histórica de Niveles */
 /* -------------------------------------------------------------------------- */
-
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function NivelHistoricoChart({ nivelName, chart }: { nivelName: string; chart: any }) {
   const theme = useTheme();
 
@@ -541,7 +1025,7 @@ function NivelHistoricoChart({ nivelName, chart }: { nivelName: string; chart: a
 /* -------------------------------------------------------------------------- */
 /* 🧱 Sección 3: Métricas */
 /* -------------------------------------------------------------------------- */
-
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function MetricasSection({ metricas }: any) {
   if (metricas.length === 0) {
     return (
@@ -597,98 +1081,84 @@ function MetricasSection({ metricas }: any) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* 🧱 Sección: Datos Generales */
+/* 🧱 Card: Estado de la Tienda (Top-Left) */
 /* -------------------------------------------------------------------------- */
 
-function DatosGenerales({ punto }: any) {
+function EstadoTiendaCard({ punto }: any) {
+  // Determinar si está online basándose en si hay datos activos
+  // Verificar si hay controladores online, osmosis systems online, o productos con datos recientes
+  const isOnline = punto.online || false;
+  
+  // Obtener ubicación por defecto (la misma que se usa en el mapa)
+  const defaultCity = 'Hermosillo';
+  const defaultState = 'Sonora';
+  
+  // Usar ubicación del punto si existe, sino usar la ubicación por defecto del mapa
+  // Verificar si tiene datos de ubicación válidos
+  const hasCityData = punto.city?.city && punto.city?.state;
+  
+  const ciudad = hasCityData ? punto.city.city : defaultCity;
+  const estado = hasCityData ? punto.city.state : defaultState;
+  
   return (
-    <Paper sx={{ p: 3, mb: 4 }}>
-      <Typography variant="h5" gutterBottom fontWeight="bold">
-        {punto.name}
-      </Typography>
-      <Divider sx={{ mb: 3 }} />
+    <Card variant="outlined" sx={{ p: 2, height: '100%', border: '2px solid', borderColor: 'primary.main' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+        <Box
+          sx={{
+            width: 12,
+            height: 12,
+            borderRadius: '50%',
+            bgcolor: isOnline ? 'success.main' : 'error.main',
+          }}
+        />
+        <Typography variant="body1" fontWeight="medium">
+          ESTATUS: {isOnline ? 'ONLINE' : 'OFFLINE'}
+        </Typography>
+        <Box
+          sx={{
+            width: 12,
+            height: 12,
+            borderRadius: '50%',
+            bgcolor: isOnline ? 'success.main' : 'error.main',
+          }}
+        />
+      </Box>
 
-      <Grid container spacing={3}>
-        {/* Información General - Lado Izquierdo */}
-        <Grid item xs={12} md={6}>
-          <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Box>
-              <Typography variant="overline" color="text.secondary" fontSize="0.75rem">
-                Cliente
-              </Typography>
-              <Typography variant="h6" fontWeight="medium">
-                {punto.cliente?.name || 'N/A'}
-              </Typography>
-            </Box>
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="body1" fontWeight="medium">
+          UBICACIÓN: {ciudad}, {estado}
+        </Typography>
+      </Box>
 
-            <Box>
-              <Typography variant="overline" color="text.secondary" fontSize="0.75rem">
-                Ubicación
-              </Typography>
-              <Typography variant="body1" fontWeight="medium">
-                {punto.city?.city || 'N/A'}, {punto.city?.state || 'N/A'}
-              </Typography>
-              {punto.city?.lat && punto.city?.lon && (
-                <Typography variant="body2" color="text.secondary">
-                  Lat: {punto.city.lat.toFixed(4)}, Lon: {punto.city.lon.toFixed(4)}
-                </Typography>
-              )}
-            </Box>
-
-            <Box>
-              <Typography variant="overline" color="text.secondary" fontSize="0.75rem">
-                Estado del Sistema
-              </Typography>
-              <Box sx={{ mt: 1 }}>
-                <Chip
-                  label={punto.online ? 'En Línea' : 'Offline'}
-                  color={punto.online ? 'success' : 'error'}
-                  size="medium"
-                  sx={{ fontWeight: 'bold' }}
-                />
-              </Box>
-            </Box>
-
-            <Box>
-              <Typography variant="overline" color="text.secondary" fontSize="0.75rem">
-                Productos Instalados
-              </Typography>
-              <Typography variant="h4" color="primary" fontWeight="bold">
-                {punto.productos?.length || 0}
-              </Typography>
-            </Box>
-          </Box>
-        </Grid>
-
-        {/* Mapa - Lado Derecho */}
-        <Grid item xs={12} md={6}>
-          <Paper
-            elevation={0}
-            sx={{
-              bgcolor: 'background.neutral',
-              borderRadius: 2,
-              overflow: 'hidden',
-              height: '350px',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
-            <MapComponent 
-              lat={punto.lat || punto.city?.lat || 29.149162901939928}
-              long={punto.long || punto.city?.lon || -110.96483231003234}
-            />
-          </Paper>
-        </Grid>
-      </Grid>
-    </Paper>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Typography variant="body1" fontWeight="medium">
+          FUNCIONAMIENTO:
+        </Typography>
+        <Box
+          sx={{
+            width: 12,
+            height: 12,
+            borderRadius: '50%',
+            bgcolor: isOnline ? 'success.main' : 'error.main',
+          }}
+        />
+        <Box
+          sx={{
+            width: 12,
+            height: 12,
+            borderRadius: '50%',
+            bgcolor: isOnline ? 'success.main' : 'error.main',
+          }}
+        />
+      </Box>
+    </Card>
   );
 }
 
 /* -------------------------------------------------------------------------- */
 /* 🧱 Dashboard TIWater - Datos de Sensores en Tiempo Real */
 /* -------------------------------------------------------------------------- */
-
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function TiwaterDashboard({ data, product, loading }: { data: any; product?: any; loading: boolean }) {
   const theme = useTheme();
 
@@ -1269,6 +1739,113 @@ function MetricCard({ title, value, unit, icon, color, subtitle }: {
 }
 
 /* -------------------------------------------------------------------------- */
+/* 🧱 Componente: Tanque de Agua SVG */
+/* -------------------------------------------------------------------------- */
+
+function WaterTankSVG({ 
+  percentage, 
+  liters, 
+  color = 'primary' 
+}: { 
+  percentage: number; 
+  liters: number;
+  color?: 'primary' | 'info' | 'success' | 'warning';
+}) {
+  const theme = useTheme();
+  const colorMap: Record<string, string> = {
+    primary: theme.palette.primary.main,
+    info: theme.palette.info.main,
+    success: theme.palette.success.main,
+    warning: theme.palette.warning.main,
+  };
+  
+  const fillColor = colorMap[color] || theme.palette.primary.main;
+  const clampedPercentage = Math.max(0, Math.min(100, percentage));
+  const fillHeight = (clampedPercentage / 100) * 140; // Altura del cuerpo del tanque (140px)
+  const yPosition = 180 - fillHeight; // Posición Y desde abajo (180 es la base del tanque)
+
+  // Generar ID único para evitar conflictos con múltiples instancias
+  const gradientId = `waterGradient-${color}-${Math.random().toString(36).substr(2, 9)}`;
+
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+      <svg
+        width="120"
+        height="200"
+        viewBox="0 0 120 200"
+        style={{ maxWidth: '100%', height: 'auto' }}
+      >
+        {/* Definiciones para gradiente */}
+        <defs>
+          <linearGradient id={gradientId} x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor={fillColor} stopOpacity="0.7" />
+            <stop offset="50%" stopColor={fillColor} stopOpacity="0.9" />
+            <stop offset="100%" stopColor={fillColor} stopOpacity="1" />
+          </linearGradient>
+        </defs>
+
+        {/* Cuerpo del tanque (rectángulo principal) */}
+        <rect
+          x="20"
+          y="40"
+          width="80"
+          height="140"
+          rx="5"
+          fill="#f5f5f5"
+          stroke="#bdbdbd"
+          strokeWidth="2"
+        />
+
+        {/* Agua dentro del tanque - se llena desde abajo */}
+        {clampedPercentage > 0 && (
+          <rect
+            x="22"
+            y={yPosition}
+            width="76"
+            height={fillHeight}
+            rx="4"
+            fill={`url(#${gradientId})`}
+            style={{ 
+              transition: 'y 0.5s ease, height 0.5s ease',
+            }}
+          />
+        )}
+
+        {/* Tapa superior del tanque (elipse) */}
+        <ellipse
+          cx="60"
+          cy="40"
+          rx="40"
+          ry="8"
+          fill="#d0d0d0"
+          stroke="#999"
+          strokeWidth="2"
+        />
+
+        {/* Líneas de nivel decorativas en el tanque */}
+        <line x1="25" y1="70" x2="95" y2="70" stroke="#ccc" strokeWidth="1" opacity="0.4" />
+        <line x1="25" y1="110" x2="95" y2="110" stroke="#ccc" strokeWidth="1" opacity="0.4" />
+        <line x1="25" y1="150" x2="95" y2="150" stroke="#ccc" strokeWidth="1" opacity="0.4" />
+
+        {/* Válvula o salida en la parte inferior */}
+        <rect x="55" y="180" width="10" height="15" rx="2" fill="#666" />
+        <circle cx="60" cy="195" r="3" fill="#666" />
+      </svg>
+
+      {/* Información del tanque */}
+      <Box sx={{ textAlign: 'center', mt: 1 }}>
+        <Typography variant="h6" fontWeight="bold" sx={{ color: fillColor }}>
+          {clampedPercentage.toFixed(0)}%
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {liters} LITROS
+        </Typography>
+      </Box>
+    </Box>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* 🧱 Componente: Mapa */
 /* -------------------------------------------------------------------------- */
 
@@ -1285,7 +1862,7 @@ function MapComponent({ lat, long }: { lat: number; long: number }) {
   const mapUrl = `https://www.google.com/maps?q=${mapLat},${mapLon}&z=15&output=embed&hl=es`;
   
   return (
-    <Box sx={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', borderRadius: 2 }}>
+    <Box sx={{ width: '100%', height: '400px', position: 'relative', overflow: 'hidden', borderRadius: 1 }}>
       <iframe
         width="100%"
         height="100%"
