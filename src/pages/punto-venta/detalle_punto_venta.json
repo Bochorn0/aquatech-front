@@ -1,0 +1,443 @@
+{
+    "success": true,
+    "data": {
+        "_id": "pg-2",
+        "id": "2",
+        "name": "Punto de Venta CODIGO_TIENDA_001",
+        "codigo_tienda": "CODIGO_TIENDA_001",
+        "cliente": null,
+        "city": null,
+        "productos": [
+            {
+                "_id": "tiwater-0",
+                "id": "tiwater-system",
+                "name": "Sistema TIWater 1",
+                "product_type": "TIWater",
+                "status": [
+                    {
+                        "code": "acumulado_cruda",
+                        "value": 2214.3,
+                        "label": "Acumulado Cruda",
+                        "unit": "L",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "caudal_cruda",
+                        "value": 1.45,
+                        "label": "Caudal Cruda",
+                        "unit": "L/min",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "caudal_cruda_lmin",
+                        "value": 24.167,
+                        "label": "Caudal Cruda (L/min)",
+                        "unit": "L/min",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "corriente_ch1",
+                        "value": 3.32,
+                        "label": "Corriente Canal 1",
+                        "unit": "A",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "corriente_ch2",
+                        "value": 3.27,
+                        "label": "Corriente Canal 2",
+                        "unit": "A",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "corriente_ch3",
+                        "value": 1.17,
+                        "label": "Corriente Canal 3",
+                        "unit": "A",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "corriente_ch4",
+                        "value": 2.54,
+                        "label": "Corriente Canal 4",
+                        "unit": "A",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "eficiencia",
+                        "value": 55.6,
+                        "label": "Eficiencia",
+                        "unit": "%",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "flowrate_speed_1",
+                        "value": 0.2,
+                        "label": "Flujo Producción",
+                        "unit": "L/min",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "flowrate_speed_2",
+                        "value": 0.16,
+                        "label": "Flujo Rechazo",
+                        "unit": "L/min",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "flowrate_recuperacion",
+                        "value": 2.03,
+                        "label": "Flujo Recuperación",
+                        "unit": "L/min",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "nivel_cruda_absoluto",
+                        "value": 67.55,
+                        "label": "Nivel Cruda (absoluto)",
+                        "unit": "mm",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "level_purificada",
+                        "value": 7.5,
+                        "label": "Nivel Purificada",
+                        "unit": "%",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "nivel_purificada_absoluto",
+                        "value": 82.91,
+                        "label": "Nivel Purificada (absoluto)",
+                        "unit": "mm",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "level_recuperada",
+                        "value": 6.1,
+                        "label": "Nivel Recuperada",
+                        "unit": "%",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "presion_co2",
+                        "value": 320.79,
+                        "label": "Presión CO2",
+                        "unit": "PSI",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "vida",
+                        "value": 1,
+                        "label": "Vida del Sistema",
+                        "unit": "días",
+                        "timestamp": "2026-01-15T00:56:26.429Z"
+                    }
+                ],
+                "online": false,
+                "lastUpdate": null,
+                "historico": {
+                    "product": "Nivel tiwater-system",
+                    "date": "2026-01-09",
+                    "total_logs": 1838,
+                    "hours_with_data": [
+                        {
+                            "hora": "09:00 a.m.",
+                            "total_logs": 87,
+                            "estadisticas": {
+                                "liquid_level_percent_promedio": 3.1
+                            }
+                        },
+                        {
+                            "hora": "10:00 a.m.",
+                            "total_logs": 300,
+                            "estadisticas": {
+                                "liquid_level_percent_promedio": 30.3
+                            }
+                        },
+                        {
+                            "hora": "11:00 a.m.",
+                            "total_logs": 300,
+                            "estadisticas": {
+                                "liquid_level_percent_promedio": 23
+                            }
+                        },
+                        {
+                            "hora": "12:00 p.m.",
+                            "total_logs": 300,
+                            "estadisticas": {
+                                "liquid_level_percent_promedio": 94.7
+                            }
+                        },
+                        {
+                            "hora": "01:00 p.m.",
+                            "total_logs": 299,
+                            "estadisticas": {
+                                "liquid_level_percent_promedio": 72.3
+                            }
+                        },
+                        {
+                            "hora": "02:00 p.m.",
+                            "total_logs": 300,
+                            "estadisticas": {
+                                "liquid_level_percent_promedio": 4.7
+                            }
+                        },
+                        {
+                            "hora": "03:00 p.m.",
+                            "total_logs": 252,
+                            "estadisticas": {
+                                "liquid_level_percent_promedio": 7.5
+                            }
+                        }
+                    ]
+                },
+                "historico_diario": {
+                    "product": "Nivel tiwater-system",
+                    "start_date": "2025-12-10",
+                    "end_date": "2026-01-10",
+                    "total_logs": 1987,
+                    "days_with_data": [
+                        {
+                            "fecha": "2026-01-08",
+                            "total_logs": 149,
+                            "estadisticas": {
+                                "liquid_level_percent_promedio": 95.1
+                            }
+                        },
+                        {
+                            "fecha": "2026-01-09",
+                            "total_logs": 1838,
+                            "estadisticas": {
+                                "liquid_level_percent_promedio": 7.5
+                            }
+                        }
+                    ]
+                }
+            }
+        ],
+        "controladores": [],
+        "online": false,
+        "owner": null,
+        "clientId": null,
+        "status": "active",
+        "lat": null,
+        "long": null,
+        "address": null,
+        "contactId": null,
+        "createdAt": "2026-01-08T21:29:07.733Z",
+        "updatedAt": "2026-01-08T21:29:07.733Z",
+        "meta": {
+            "source": "MQTT",
+            "gateway_ip": null,
+            "created_from": "sensor_data"
+        },
+        "osmosisSystems": [
+            {
+                "resourceId": "tiwater-system",
+                "resourceType": "tiwater",
+                "status": [
+                    {
+                        "code": "acumulado_cruda",
+                        "value": 2214.3,
+                        "label": "Acumulado Cruda",
+                        "unit": "L",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "caudal_cruda",
+                        "value": 1.45,
+                        "label": "Caudal Cruda",
+                        "unit": "L/min",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "caudal_cruda_lmin",
+                        "value": 24.167,
+                        "label": "Caudal Cruda (L/min)",
+                        "unit": "L/min",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "corriente_ch1",
+                        "value": 3.32,
+                        "label": "Corriente Canal 1",
+                        "unit": "A",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "corriente_ch2",
+                        "value": 3.27,
+                        "label": "Corriente Canal 2",
+                        "unit": "A",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "corriente_ch3",
+                        "value": 1.17,
+                        "label": "Corriente Canal 3",
+                        "unit": "A",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "corriente_ch4",
+                        "value": 2.54,
+                        "label": "Corriente Canal 4",
+                        "unit": "A",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "eficiencia",
+                        "value": 55.6,
+                        "label": "Eficiencia",
+                        "unit": "%",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "flowrate_speed_1",
+                        "value": 0.2,
+                        "label": "Flujo Producción",
+                        "unit": "L/min",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "flowrate_speed_2",
+                        "value": 0.16,
+                        "label": "Flujo Rechazo",
+                        "unit": "L/min",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "flowrate_recuperacion",
+                        "value": 2.03,
+                        "label": "Flujo Recuperación",
+                        "unit": "L/min",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "nivel_cruda_absoluto",
+                        "value": 67.55,
+                        "label": "Nivel Cruda (absoluto)",
+                        "unit": "mm",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "level_purificada",
+                        "value": 7.5,
+                        "label": "Nivel Purificada",
+                        "unit": "%",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "nivel_purificada_absoluto",
+                        "value": 82.91,
+                        "label": "Nivel Purificada (absoluto)",
+                        "unit": "mm",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "level_recuperada",
+                        "value": 6.1,
+                        "label": "Nivel Recuperada",
+                        "unit": "%",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "presion_co2",
+                        "value": 320.79,
+                        "label": "Presión CO2",
+                        "unit": "PSI",
+                        "timestamp": "2026-01-15T00:56:26.428Z"
+                    },
+                    {
+                        "code": "vida",
+                        "value": 1,
+                        "label": "Vida del Sistema",
+                        "unit": "días",
+                        "timestamp": "2026-01-15T00:56:26.429Z"
+                    }
+                ],
+                "online": null,
+                "lastUpdate": null,
+                "historico": {
+                    "product": "Nivel tiwater-system",
+                    "date": "2026-01-09",
+                    "total_logs": 1838,
+                    "hours_with_data": [
+                        {
+                            "hora": "09:00 a.m.",
+                            "total_logs": 87,
+                            "estadisticas": {
+                                "liquid_level_percent_promedio": 3.1
+                            }
+                        },
+                        {
+                            "hora": "10:00 a.m.",
+                            "total_logs": 300,
+                            "estadisticas": {
+                                "liquid_level_percent_promedio": 30.3
+                            }
+                        },
+                        {
+                            "hora": "11:00 a.m.",
+                            "total_logs": 300,
+                            "estadisticas": {
+                                "liquid_level_percent_promedio": 23
+                            }
+                        },
+                        {
+                            "hora": "12:00 p.m.",
+                            "total_logs": 300,
+                            "estadisticas": {
+                                "liquid_level_percent_promedio": 94.7
+                            }
+                        },
+                        {
+                            "hora": "01:00 p.m.",
+                            "total_logs": 299,
+                            "estadisticas": {
+                                "liquid_level_percent_promedio": 72.3
+                            }
+                        },
+                        {
+                            "hora": "02:00 p.m.",
+                            "total_logs": 300,
+                            "estadisticas": {
+                                "liquid_level_percent_promedio": 4.7
+                            }
+                        },
+                        {
+                            "hora": "03:00 p.m.",
+                            "total_logs": 252,
+                            "estadisticas": {
+                                "liquid_level_percent_promedio": 7.5
+                            }
+                        }
+                    ]
+                },
+                "historico_diario": {
+                    "product": "Nivel tiwater-system",
+                    "start_date": "2025-12-10",
+                    "end_date": "2026-01-10",
+                    "total_logs": 1987,
+                    "days_with_data": [
+                        {
+                            "fecha": "2026-01-08",
+                            "total_logs": 149,
+                            "estadisticas": {
+                                "liquid_level_percent_promedio": 95.1
+                            }
+                        },
+                        {
+                            "fecha": "2026-01-09",
+                            "total_logs": 1838,
+                            "estadisticas": {
+                                "liquid_level_percent_promedio": 7.5
+                            }
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+}
