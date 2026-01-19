@@ -27,6 +27,8 @@ export const CustomizationPage = lazy(() => import('src/pages/personalizacion'))
 export const MapsPage = lazy(() => import('src/pages/maps'));
 export const ProductsDetailPage = lazy(() => import('src/pages/products/product-details'));
 export const MQTTDocumentationPage = lazy(() => import('src/pages/mqtt-documentation'));
+export const TIWaterCatalogPage = lazy(() => import('src/pages/tiwater-catalog'));
+export const TIWaterCatalogProductPage = lazy(() => import('src/pages/tiwater-catalog/tiwater-catalog-product'));
 export const Page404 = lazy(() => import('src/pages/not_fund'));
 export const Logout =  function handleTokenLogout() {
   localStorage.removeItem('token');
@@ -228,6 +230,26 @@ export function Router() {
             </TokenProtectedRoute>
           ),
           path: 'api-ti-water',
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <PermissionProtectedRoute requiredPath="/tiwater-catalog">
+                <TIWaterCatalogPage />
+              </PermissionProtectedRoute>
+            </TokenProtectedRoute>
+          ),
+          path: 'tiwater-catalog',
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <PermissionProtectedRoute requiredPath="/tiwater-catalog">
+                <TIWaterCatalogProductPage />
+              </PermissionProtectedRoute>
+            </TokenProtectedRoute>
+          ),
+          path: 'tiwater-catalog/:id',
         }
         // {
         //   element: (

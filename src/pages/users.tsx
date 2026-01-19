@@ -55,6 +55,7 @@ export default function UserRoleManagement() {
     { path: '/usuarios', label: 'Usuarios' },
     { path: '/controladores', label: 'Controladores' },
     { path: '/puntoVenta', label: 'Puntos De Venta' },
+    { path: '/tiwater-catalog', label: 'Catálogo TI Water' },
     { path: '/api-ti-water', label: 'API TI Water' },
   ];
   const [userModalOpen, setUserModalOpen] = useState(false);

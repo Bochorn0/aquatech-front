@@ -69,6 +69,11 @@ export const allNavItems = [
     // ),
   },
   {
+    title: 'Catálogo TI Water',
+    path: '/tiwater-catalog',
+    icon: icon('ic-products'),
+  },
+  {
     title: 'API TI Water',
     path: '/api-ti-water',
     icon: icon('ic-configuration'),
