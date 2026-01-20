@@ -38,20 +38,25 @@ interface Status {
 
   export type  Metric = {
     _id?: string;
+    id?: string; // For PostgreSQL compatibility
     cliente: String;
+    clientId?: string; // For PostgreSQL compatibility
     client_name: string;
-    product_type: string;
+    product_type?: string; // For v1 (MongoDB) compatibility
+    punto_venta_id?: string; // For v2 (PostgreSQL)
+    punto_venta_name?: string; // For v2 (PostgreSQL)
     tds_range: number;
     production_volume_range: number;
-    temperature_range: number;
+    temperature_range?: number; // For v1 (MongoDB) compatibility
     rejected_volume_range: number;
     flow_rate_speed_range: number;
     active_time: number;
-    filter_only_online: boolean;
+    filter_only_online?: boolean; // For v1 (MongoDB) compatibility
     metrics_description: string;
   }
   export type Cliente = {
     _id?: string;
+    id?: string; // For PostgreSQL compatibility
     name: string;
     email: string;
     phone?: string;
@@ -68,6 +73,7 @@ interface Status {
   
   export type City = {
     _id?: string;
+    id?: string; // For PostgreSQL compatibility
     state: string;
     city: string;
     lat: number;
@@ -214,11 +220,12 @@ export interface Controller {
 }
 
 export interface PuntosVenta {
-    _id: string;
-    cliente: Cliente;
+    _id?: string;
+    id?: string; // For PostgreSQL compatibility
+    cliente: Cliente | string;
     client_name: string;
-    city: City;
+    city: City | string;
     city_name: String;
     name: String;
-    productos: Product[];
+    productos: Product[] | string[];
 }

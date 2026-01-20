@@ -4,12 +4,10 @@ import { useState, useEffect } from "react";
 
 import {
   Box,
-  Chip,
   Grid,
   Paper,
   Table,
   Select,
-  Switch,
   Button,
   Dialog,
   Checkbox,
@@ -32,7 +30,6 @@ import {
 import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
 import { CONFIG } from "src/config-global";
-import { get, post, patch, remove } from "src/api/axiosHelper";
 
 import { SvgColor } from 'src/components/svg-color';
 
@@ -73,8 +70,6 @@ const estados = [
   'Zacatecas',
 ];
 
-const ProductTypes = ['Osmosis', 'Nivel']
-
 const defaultCity: City = {
     state: "",
     city: "",
@@ -82,7 +77,7 @@ const defaultCity: City = {
     lon: 0,
   }
 const defaultclient = { _id: '', name: '' , email:'', address: {city: '', state: '', country: '', street: '', zip: '', lat: '', lon: ''}}
-const defaultMetric = { _id: '', cliente: '', client_name: '', product_type: '', tds_range: 0, production_volume_range: 0, temperature_range: 0, rejected_volume_range: 0, flow_rate_speed_range: 0, active_time: 0, metrics_description: '', filter_only_online: true }
+const defaultMetric = { _id: '', cliente: '', client_name: '', punto_venta_id: '', punto_venta_name: '', tds_range: 0, production_volume_range: 0, rejected_volume_range: 0, flow_rate_speed_range: 0, active_time: 0, metrics_description: '' }
 
 const defaultProduct: Product = {
     id: "",
@@ -99,7 +94,31 @@ const defaultProduct: Product = {
     lon: 0  
 }
 const defaultPv = { _id: '', name: '' , client_name:'', cliente: defaultclient, city: defaultCity, city_name: '', productos: [defaultProduct]}
-export function CustomizationPage() {
+
+// Helper function to make v2.0 API calls
+const apiV2Call = async (endpoint: string, method: string = 'GET', data?: any) => {
+  const options: RequestInit = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${localStorage.getItem('token')}`
+    }
+  };
+  
+  if (data && (method === 'POST' || method === 'PATCH')) {
+    options.body = JSON.stringify(data);
+  }
+  
+  const response = await fetch(`${CONFIG.API_BASE_URL_V2}${endpoint}`, options);
+  
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  
+  return response.json();
+};
+
+export function CustomizationPageV2() {
   const [metrics, setMetrics] = useState<Metric[]>([]);
   const [puntosVenta, setPuntosVenta] = useState<PuntosVenta[]>([]);
 
@@ -131,8 +150,8 @@ export function CustomizationPage() {
 
   const fetchMetrics = async () => {
     try {
-      const response = await get<Metric[]>(`/metrics`);
-      setMetrics(response);
+      const response = await apiV2Call('/metrics');
+      setMetrics(Array.isArray(response) ? response : []);
     } catch (error) {
       console.error("Error fetching metrics:", error);
     }
@@ -140,17 +159,15 @@ export function CustomizationPage() {
 
   const fetchClients = async () => {
     try {
-      const response = await get<Cliente[]>(`/clients`);
-      let filteredClients = response.filter(client => client.name !== 'All');
+      const response = await apiV2Call('/clients');
+      let filteredClients = (Array.isArray(response) ? response : []).filter((client: Cliente) => client.name !== 'All');
 
       const user = localStorage.getItem('user');
       if (user) {
         const client_ = JSON.parse(user).cliente as Cliente;
-        console.log('client_',client_);
         if (client_.name && client_.name !== 'All') {
-        filteredClients = filteredClients.filter(client => client.name === client_.name);
+          filteredClients = filteredClients.filter((client: Cliente) => client.name === client_.name);
         }
-        console.log('filteredClients',filteredClients);
       }
       setClients(filteredClients);
     } catch (error) {
@@ -160,6 +177,8 @@ export function CustomizationPage() {
 
   const fetchProducts = async () => {
     try {
+      // Products still come from v1.0 (MongoDB) for now
+      const { get } = await import("src/api/axiosHelper");
       const response = await get<Product[]>(`/products`);
       setProducts(response);
     } catch (error) {
@@ -169,56 +188,55 @@ export function CustomizationPage() {
 
   const fetchCities = async () => {
     try {
-      const response = await get<City[]>(`/cities`);
-      setCities(response);
+      const response = await apiV2Call('/cities');
+      setCities(Array.isArray(response) ? response : []);
     } catch (error) {
       console.error("Error fetching cities:", error);
     }
   };
 
-const fetchPuntosVenta = async () => {
-  try {
-    const response = await get<PuntosVenta[]>(`/puntoVentas/all`);
+  const fetchPuntosVenta = async () => {
+    try {
+      const response = await apiV2Call('/puntoVentas/all');
+      const data = Array.isArray(response) ? response : [];
+      
+      // Normalize puntos de venta for display
+      const formatted = data.map((pv: any) => ({
+        ...pv,
+        cliente: pv.cliente?._id || pv.cliente || pv.clientId || '',
+        client_name: pv.cliente?.name || '',
+        city: pv.city?._id || pv.city || '',
+        city_name: pv.city?.city || '',
+        productos: pv.productos || []
+      }));
 
-    // Normalizamos todos los puntos de venta
-    const formatted = response.map((pv) => ({
-      ...pv,
-      cliente: typeof pv.cliente === 'object' && pv.cliente !== null ? pv.cliente._id : pv.cliente,
-      client_name: typeof pv.cliente === 'object' && pv.cliente !== null ? pv.cliente.name : "",
-      city: typeof pv.city === 'object' && pv.city !== null ? pv.city._id : pv.city,
-      city_name: typeof pv.city === 'object' && pv.city !== null ? pv.city.city : "",
-      productos: Array.isArray(pv.productos) ? pv.productos.map((p: any) => typeof p === 'object' && p !== null ? p._id : p) : []
-    }));
-
-    setPuntosVenta(formatted as unknown as PuntosVenta[]);
-
-  } catch (error) {
-    console.error("Error fetching puntos de venta:", error);
-  }
-};
-
+      setPuntosVenta(formatted as unknown as PuntosVenta[]);
+    } catch (error) {
+      console.error("Error fetching puntos de venta:", error);
+    }
+  };
 
   const handleChange = (e: any) => {
     const { name, value } = e.target;
-    console.log('e',e);
-      setFormData((prevData) => ({
-        ...prevData,
-        [name]: value,
-      }));
+    setFormData((prevData) => ({
+      ...prevData,
+      [name]: value,
+    }));
   };
 
   const handleSubmit = async () => {
     setLoading(true);
     try {
       if (editingId) {
-        await patch<Metric>(`/metrics/${editingId}`, formData);
+        await apiV2Call(`/metrics/${editingId}`, 'PATCH', formData);
       } else {
-        await post<Metric>(`/metrics`, formData);
+        await apiV2Call('/metrics', 'POST', formData);
       }
       handleCloseModal();
       fetchMetrics();
     } catch (error) {
       console.error("Error submitting metric:", error);
+      Swal.fire('Error', 'Error al guardar métrica', 'error');
     } finally {
       setLoading(false);
     }
@@ -226,14 +244,13 @@ const fetchPuntosVenta = async () => {
 
   const handleEdit = (metric: Metric) => {
     setFormData(metric);
-    setEditingId(metric._id || null);
+    setEditingId(metric._id || metric.id || null);
     setModalOpen(true);
   };
 
   const handleClientEdit = (client: Cliente) => {
-    console.log('client edit',client);
     if (!client.address) {
-      client.address = defaultclient.address
+      client.address = defaultclient.address;
     }
     setClientFormData(client);
     setClientModalOpen(true);
@@ -257,17 +274,18 @@ const fetchPuntosVenta = async () => {
     confirmButtonText: 'Sí, Continuar',
     cancelButtonText: 'Cancelar',
   });
-  
 
   const handleDelete = async (id: string) => {
     try {
       const result = await confirmationAlert();
       if (result.isConfirmed) {
-        await remove<Metric>(`/metrics/${id}`);
+        await apiV2Call(`/metrics/${id}`, 'DELETE');
         fetchMetrics();
+        Swal.fire('Éxito', 'Métrica eliminada', 'success');
       }
     } catch (error) {
       console.error("Error deleting metric:", error);
+      Swal.fire('Error', 'Error al eliminar métrica', 'error');
     }
   };
 
@@ -275,11 +293,13 @@ const fetchPuntosVenta = async () => {
     try {
       const result = await confirmationAlert();
       if (result.isConfirmed) {
-        await remove<Cliente>(`/clients/${id}`);
+        await apiV2Call(`/clients/${id}`, 'DELETE');
         fetchClients();
+        Swal.fire('Éxito', 'Cliente eliminado', 'success');
       }
     } catch (error) {
       console.error("Error deleting client:", error);
+      Swal.fire('Error', 'Error al eliminar cliente', 'error');
     }
   };
 
@@ -287,11 +307,13 @@ const fetchPuntosVenta = async () => {
     try {
       const result = await confirmationAlert();
       if (result.isConfirmed) {
-        await remove<City>(`/cities/${id}`);
+        await apiV2Call(`/cities/${id}`, 'DELETE');
         fetchCities();
+        Swal.fire('Éxito', 'Ciudad eliminada', 'success');
       }
     } catch (error) {
       console.error("Error deleting city:", error);
+      Swal.fire('Error', 'Error al eliminar ciudad', 'error');
     }
   };
 
@@ -299,11 +321,13 @@ const fetchPuntosVenta = async () => {
     try {
       const result = await confirmationAlert();
       if (result.isConfirmed) {
-        await remove<City>(`/puntoVentas/${id}`);
+        await apiV2Call(`/puntoVentas/${id}`, 'DELETE');
         fetchPuntosVenta();
+        Swal.fire('Éxito', 'Punto de venta eliminado', 'success');
       }
     } catch (error) {
       console.error("Error deleting PuntoVenta:", error);
+      Swal.fire('Error', 'Error al eliminar punto de venta', 'error');
     }
   };
 
@@ -318,11 +342,10 @@ const fetchPuntosVenta = async () => {
     setEditingId(null);
   };
 
-  const handleClientChange = (e:any) => {
+  const handleClientChange = (e: any) => {
     const { name, value } = e.target;
     if (name.includes("address")) {
-      const [addressKey, addressField] = name.split(".");
-      console.log('addressKey',addressKey);
+      const [, addressField] = name.split(".");
       setClientFormData((prevData) => ({
         ...prevData,
         address: {
@@ -330,8 +353,7 @@ const fetchPuntosVenta = async () => {
           [addressField]: value,
         },
       }));
-    }
-    else {
+    } else {
       setClientFormData((prevData) => ({
         ...prevData,
         [name]: value,
@@ -339,8 +361,7 @@ const fetchPuntosVenta = async () => {
     }
   };
   
-  const handleCityChange = (e : any) => {
-    console.log('e',e);
+  const handleCityChange = (e: any) => {
     const { name, value } = e.target;
     setCityFormData((prevData) => ({
       ...prevData,
@@ -348,28 +369,29 @@ const fetchPuntosVenta = async () => {
     }));
   };
 
-const handlePvChange = (e: any) => {
-  const { name, value } = e.target;
-  setPvFormData((prevData) => ({
-    ...prevData,
-    [name]: name === "productos" ? (typeof value === "string" ? value.split(",") : value) : value
-  }));
-};
+  const handlePvChange = (e: any) => {
+    const { name, value } = e.target;
+    setPvFormData((prevData) => ({
+      ...prevData,
+      [name]: name === "productos" ? (typeof value === "string" ? value.split(",") : value) : value
+    }));
+  };
 
-
-  
   const handleClientSubmit = async () => {
     setLoading(true);
     try {
-      if (clientFormData._id) {
-        await patch<Cliente>(`/clients/${clientFormData._id}`, clientFormData);
+      if (clientFormData._id || clientFormData.id) {
+        const id = clientFormData._id || clientFormData.id;
+        await apiV2Call(`/clients/${id}`, 'PATCH', clientFormData);
       } else {
-        await post<Cliente>(`/clients`, clientFormData);
+        await apiV2Call('/clients', 'POST', clientFormData);
       }
       handleCloseClientModal();
       fetchClients();
+      Swal.fire('Éxito', 'Cliente guardado', 'success');
     } catch (error) {
       console.error("Error submitting client:", error);
+      Swal.fire('Error', 'Error al guardar cliente', 'error');
     } finally {
       setLoading(false);
     }
@@ -378,15 +400,18 @@ const handlePvChange = (e: any) => {
   const handleCitySubmit = async () => {
     setLoading(true);
     try {
-      if (cityFormData._id) {
-        await patch<City>(`/cities/${cityFormData._id}`, cityFormData);
+      if (cityFormData._id || cityFormData.id) {
+        const id = cityFormData._id || cityFormData.id;
+        await apiV2Call(`/cities/${id}`, 'PATCH', cityFormData);
       } else {
-        await post<City>(`/cities`, cityFormData);
+        await apiV2Call('/cities', 'POST', cityFormData);
       }
       handleCloseCityModal();
       fetchCities();
+      Swal.fire('Éxito', 'Ciudad guardada', 'success');
     } catch (error) {
       console.error("Error submitting city:", error);
+      Swal.fire('Error', 'Error al guardar ciudad', 'error');
     } finally {
       setLoading(false);
     }
@@ -395,15 +420,18 @@ const handlePvChange = (e: any) => {
   const handlePvSubmit = async () => {
     setLoading(true);
     try {
-      if (pvFormData._id) {
-        await patch<City>(`/puntoVentas/${pvFormData._id}`, pvFormData);
+      if (pvFormData._id || pvFormData.id) {
+        const id = pvFormData._id || pvFormData.id;
+        await apiV2Call(`/puntoVentas/${id}`, 'PATCH', pvFormData);
       } else {
-        await post<City>(`/puntoVentas`, pvFormData);
+        await apiV2Call('/puntoVentas', 'POST', pvFormData);
       }
       handleClosePvModal();
       fetchPuntosVenta();
+      Swal.fire('Éxito', 'Punto de venta guardado', 'success');
     } catch (error) {
       console.error("Error submitting punto de venta:", error);
+      Swal.fire('Error', 'Error al guardar punto de venta', 'error');
     } finally {
       setLoading(false);
     }
@@ -411,7 +439,6 @@ const handlePvChange = (e: any) => {
 
   const handleOpenClientModal = () => {
     setClientFormData(defaultclient);
-    console.log('clientFormData',clientFormData);
     setClientModalOpen(true);
   };
 
@@ -423,6 +450,7 @@ const handlePvChange = (e: any) => {
     setCityFormData(defaultCity);
     setCityModalOpen(true);
   };
+  
   const handleOpenPvModal = () => {
     setPvFormData(defaultPv);
     setPvModalOpen(true);
@@ -439,35 +467,38 @@ const handlePvChange = (e: any) => {
   return (
     <>
       <Helmet>
-        <title>Personalizar configuraciones - {CONFIG.appName}</title>
+        <title>Personalizar configuraciones V2 - {CONFIG.appName}</title>
       </Helmet>
       <Box sx={{ p: 2 }}>
-
-      <CustomTabs value={tabIndex}
-            onChange={(e, newValue) => setTabIndex(newValue)}
-            indicatorColor="primary"
-            textColor="primary"
-            variant="fullWidth" centered>
+        <CustomTabs 
+          value={tabIndex}
+          onChange={(e, newValue) => setTabIndex(newValue)}
+          indicatorColor="primary"
+          textColor="primary"
+          variant="fullWidth" 
+          centered
+        >
           <CustomTab label="Métricas" />
           <CustomTab label="PuntosVenta" />
           <CustomTab label="Clientes" />
           <CustomTab label="Ciudades" />
-      </CustomTabs>
+        </CustomTabs>
+        
         {tabIndex === 0 && (
           <Grid container spacing={2}>
             <Grid item xs={12}>
-              <Box sx={{ overflowX: 'auto' }}> {/* Ensures table responsiveness */}
+              <Box sx={{ overflowX: 'auto' }}>
                 <Grid container>
                   <Grid item xs={12} sm={9}>
                     <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
-                    Lista de métricas
+                      Lista de métricas
                     </Typography>
                   </Grid>
                   <Grid item xs={12} sm={3} textAlign='right'>
                     <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
-                    <Button variant="contained" color="primary" onClick={handleOpenModal} fullWidth>
-                      Nueva Métrica
-                    </Button>
+                      <Button variant="contained" color="primary" onClick={handleOpenModal} fullWidth>
+                        Nueva Métrica
+                      </Button>
                     </Typography>
                   </Grid>
                 </Grid>
@@ -479,26 +510,24 @@ const handlePvChange = (e: any) => {
                       <TableHead>
                         <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
                           <StyledTableCellHeader>Cliente</StyledTableCellHeader>
-                          <StyledTableCellHeader>Tipo de Producto</StyledTableCellHeader>
+                          <StyledTableCellHeader>Punto de Venta</StyledTableCellHeader>
                           <StyledTableCellHeader>Rango TDS</StyledTableCellHeader>
                           <StyledTableCellHeader>Volumen de Producción</StyledTableCellHeader>
-                          <StyledTableCellHeader>Temperatura</StyledTableCellHeader>
                           <StyledTableCellHeader>Acciones</StyledTableCellHeader>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {metrics.map((metric) => (
-                          <StyledTableRow key={metric._id}>
+                          <StyledTableRow key={metric._id || metric.id}>
                             <StyledTableCell>{metric.client_name}</StyledTableCell>
-                            <StyledTableCell>{metric.product_type}</StyledTableCell>
+                            <StyledTableCell>{metric.punto_venta_name || '-'}</StyledTableCell>
                             <StyledTableCell>{metric.tds_range}</StyledTableCell>
                             <StyledTableCell>{metric.production_volume_range}</StyledTableCell>
-                            <StyledTableCell>{metric.temperature_range}</StyledTableCell>
                             <StyledTableCell>
                               <IconButton onClick={() => handleEdit(metric)} sx={{ mr: 1, color: 'primary.main' }}>
                                 <SvgColor src='./assets/icons/actions/edit.svg' />
                               </IconButton>
-                              <IconButton onClick={() => handleDelete(metric._id!)} sx={{ mr: 1, color: 'danger.main' }}>
+                              <IconButton onClick={() => handleDelete(metric._id || metric.id || '')} sx={{ mr: 1, color: 'danger.main' }}>
                                 <SvgColor src='./assets/icons/actions/delete.svg' />
                               </IconButton>
                             </StyledTableCell>
@@ -516,18 +545,18 @@ const handlePvChange = (e: any) => {
         {tabIndex === 1 && (
           <Grid container spacing={2}>
             <Grid item xs={12}>
-              <Box sx={{ overflowX: 'auto' }}> {/* Ensures table responsiveness */}
+              <Box sx={{ overflowX: 'auto' }}>
                 <Grid container>
                   <Grid item xs={12} sm={9}>
                     <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
-                    Lista de Puntos de venta
+                      Lista de Puntos de venta 
                     </Typography>
                   </Grid>
                   <Grid item xs={12} sm={3} textAlign='right'>
                     <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
-                    <Button variant="contained" color="primary" onClick={handleOpenPvModal} fullWidth>
-                      Nuevo Punto de Venta
-                    </Button>
+                      <Button variant="contained" color="primary" onClick={handleOpenPvModal} fullWidth>
+                        Nuevo Punto de Venta
+                      </Button>
                     </Typography>
                   </Grid>
                 </Grid>
@@ -547,16 +576,16 @@ const handlePvChange = (e: any) => {
                       </TableHead>
                       <TableBody>
                         {puntosVenta.map((pv) => (
-                          <StyledTableRow key={pv._id}>
+                          <StyledTableRow key={pv._id || pv.id}>
                             <StyledTableCell>{pv.client_name}</StyledTableCell>
                             <StyledTableCell>{pv.name}</StyledTableCell>
                             <StyledTableCell>{pv.city_name}</StyledTableCell>
-                            <StyledTableCell>{pv.productos.length}</StyledTableCell>
+                            <StyledTableCell>{pv.productos?.length || 0}</StyledTableCell>
                             <StyledTableCell>
                               <IconButton onClick={() => handlePvEdit(pv)} sx={{ mr: 1, color: 'primary.main' }}>
                                 <SvgColor src='./assets/icons/actions/edit.svg' />
                               </IconButton>
-                              <IconButton onClick={() => handlePvDelete(pv._id!)} sx={{ mr: 1, color: 'danger.main' }}>
+                              <IconButton onClick={() => handlePvDelete(pv._id || pv.id || '')} sx={{ mr: 1, color: 'danger.main' }}>
                                 <SvgColor src='./assets/icons/actions/delete.svg' />
                               </IconButton>
                             </StyledTableCell>
@@ -574,18 +603,18 @@ const handlePvChange = (e: any) => {
         {tabIndex === 2 && (
           <Grid container spacing={2}>
             <Grid item xs={12}>
-              <Box sx={{ overflowX: 'auto' }}> {/* Ensures table responsiveness */}
+              <Box sx={{ overflowX: 'auto' }}>
                 <Grid container>
                   <Grid item xs={12} sm={9}>
                     <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
-                    Lista de clientes
+                      Lista de clientes 
                     </Typography>
                   </Grid>
                   <Grid item xs={12} sm={3} textAlign='right'>
                     <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
-                    <Button variant="contained" color="primary" onClick={handleOpenClientModal} fullWidth>
-                      Nuevo Cliente
-                    </Button>
+                      <Button variant="contained" color="primary" onClick={handleOpenClientModal} fullWidth>
+                        Nuevo Cliente
+                      </Button>
                     </Typography>
                   </Grid>
                 </Grid>
@@ -604,7 +633,7 @@ const handlePvChange = (e: any) => {
                       </TableHead>
                       <TableBody>
                         {clients.map((client) => (
-                          <StyledTableRow key={client._id}>
+                          <StyledTableRow key={client._id || client.id}>
                             <StyledTableCell>{client.name}</StyledTableCell>
                             <StyledTableCell>{client.email}</StyledTableCell>
                             <StyledTableCell>{client.phone}</StyledTableCell>
@@ -612,7 +641,7 @@ const handlePvChange = (e: any) => {
                               <IconButton sx={{ mr: 1, color: 'primary.main' }} onClick={() => handleClientEdit(client)}>
                                 <SvgColor src='./assets/icons/actions/edit.svg' />
                               </IconButton>
-                              <IconButton sx={{ mr: 1, color: 'danger.main' }} onClick={() => handleClientDelete(client._id!)}>
+                              <IconButton sx={{ mr: 1, color: 'danger.main' }} onClick={() => handleClientDelete(client._id || client.id || '')}>
                                 <SvgColor src='./assets/icons/actions/delete.svg' />
                               </IconButton>
                             </StyledTableCell>
@@ -626,21 +655,22 @@ const handlePvChange = (e: any) => {
             </Grid>
           </Grid>
         )}
+        
         {tabIndex === 3 && (
           <Grid container spacing={2}>
             <Grid item xs={12}>
-              <Box sx={{ overflowX: 'auto' }}> {/* Ensures table responsiveness */}
+              <Box sx={{ overflowX: 'auto' }}>
                 <Grid container>
                   <Grid item xs={12} sm={9}>
                     <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
-                    Lista de ciudades
+                      Lista de ciudades 
                     </Typography>
                   </Grid>
                   <Grid item xs={12} sm={3} textAlign='right'>
                     <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
-                    <Button variant="contained" color="primary" onClick={handleOpenCityModal} fullWidth>
-                      Nueva Ciudad
-                    </Button>
+                      <Button variant="contained" color="primary" onClick={handleOpenCityModal} fullWidth>
+                        Nueva Ciudad
+                      </Button>
                     </Typography>
                   </Grid>
                 </Grid>
@@ -660,7 +690,7 @@ const handlePvChange = (e: any) => {
                       </TableHead>
                       <TableBody>
                         {cities.map((city) => (
-                          <StyledTableRow key={city._id}>
+                          <StyledTableRow key={city._id || city.id}>
                             <StyledTableCell>{city.state}</StyledTableCell>
                             <StyledTableCell>{city.city}</StyledTableCell>
                             <StyledTableCell>{city.lat}</StyledTableCell>
@@ -669,7 +699,7 @@ const handlePvChange = (e: any) => {
                               <IconButton sx={{ mr: 1, color: 'primary.main' }} onClick={() => handleCityEdit(city)}>
                                 <SvgColor src='./assets/icons/actions/edit.svg' />
                               </IconButton>
-                              <IconButton sx={{ mr: 1, color: 'danger.main' }} onClick={() => handleCityDelete(city._id!)}>
+                              <IconButton sx={{ mr: 1, color: 'danger.main' }} onClick={() => handleCityDelete(city._id || city.id || '')}>
                                 <SvgColor src='./assets/icons/actions/delete.svg' />
                               </IconButton>
                             </StyledTableCell>
@@ -683,203 +713,183 @@ const handlePvChange = (e: any) => {
             </Grid>
           </Grid>
         )}
-       {/* Modal for Creating / Editing */}
-       <Grid item xs={12}>
-        <Dialog open={modalOpen} onClose={handleCloseModal} fullWidth maxWidth="sm">
-          <DialogTitle>{editingId ? "Editar Métrica" : "Nueva Métrica"}</DialogTitle>
-          <DialogContent>
-            <Box display="flex" flexDirection="column" gap={2} mt={1}>
-              <FormControl fullWidth>
-                <InputLabel>Cliente</InputLabel>
-                <Select value={formData.cliente} name="cliente" onChange={handleChange} fullWidth>
-                  {clients.map((cliente) => (
-                    <MenuItem key={cliente._id} value={cliente._id}>{cliente.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl fullWidth>
-                <InputLabel>Tipo de Producto</InputLabel>
-                <Select value={formData.product_type} name="product_type" onChange={handleChange} fullWidth>
-                  {ProductTypes.map((type) => (
-                    <MenuItem key={type} value={type}>{type}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <TextField label="Rango Tds" name="tds_range" type="number" value={formData.tds_range} onChange={handleChange} fullWidth />
-              <TextField label="Volumen de producción" name="production_volume_range" type="number" value={formData.production_volume_range} onChange={handleChange} fullWidth />
-              <TextField label="Rango de temperatura" name="temperature_range" type="number" value={formData.temperature_range} onChange={handleChange} fullWidth />
-              <TextField label="Volumen de rechazo" name="rejected_volume_range" type="number" value={formData.rejected_volume_range} onChange={handleChange} fullWidth />
-              <TextField label="Rango de velocidad de flujo" name="flow_rate_speed_range" type="number" value={formData.flow_rate_speed_range} onChange={handleChange} fullWidth />
-              <Chip
-                  label="Filtrar solo activos"
-                  color='default'
-                  sx={{ display: 'flex', alignItems: 'center', padding: '5px' }}
-                  icon={
-                    <Switch
-                      title="Toma en cuenta solo los productos en linea al usar las metricas"
-                      checked={formData.filter_only_online} 
-                      onChange={(e) => setFormData((prevData) => ({ ...prevData, filter_only_online: e.target.checked }))}
-                    />
-                  }
-                />
-              {/* <TextField label="tiempo activo" name="active_time" type="number" value={formData.active_time} onChange={handleChange} fullWidth /> */}
-              <TextField label="Descripción" name="metrics_description" value={formData.metrics_description} onChange={handleChange} fullWidth multiline rows={3} />
-
-            </Box>
-          </DialogContent>
+        
+        {/* Modal for Creating / Editing Metrics */}
+        <Grid item xs={12}>
+          <Dialog open={modalOpen} onClose={handleCloseModal} fullWidth maxWidth="sm">
+            <DialogTitle>{editingId ? "Editar Métrica" : "Nueva Métrica"}</DialogTitle>
+            <DialogContent>
+              <Box display="flex" flexDirection="column" gap={2} mt={1}>
+                <FormControl fullWidth>
+                  <InputLabel>Cliente</InputLabel>
+                  <Select value={formData.cliente || formData.clientId || ''} name="cliente" onChange={handleChange} fullWidth>
+                    {clients.map((cliente) => (
+                      <MenuItem key={cliente._id || cliente.id} value={cliente._id || cliente.id}>{cliente.name}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl fullWidth>
+                  <InputLabel>Punto de Venta</InputLabel>
+                  <Select value={formData.punto_venta_id || ''} name="punto_venta_id" onChange={handleChange} fullWidth>
+                    {puntosVenta.map((pv) => (
+                      <MenuItem key={pv._id || pv.id} value={pv._id || pv.id}>{pv.name}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <TextField label="Rango Tds" name="tds_range" type="number" value={formData.tds_range} onChange={handleChange} fullWidth />
+                <TextField label="Volumen de producción" name="production_volume_range" type="number" value={formData.production_volume_range} onChange={handleChange} fullWidth />
+                <TextField label="Volumen de rechazo" name="rejected_volume_range" type="number" value={formData.rejected_volume_range} onChange={handleChange} fullWidth />
+                <TextField label="Rango de velocidad de flujo" name="flow_rate_speed_range" type="number" value={formData.flow_rate_speed_range} onChange={handleChange} fullWidth />
+                <TextField label="Descripción" name="metrics_description" value={formData.metrics_description} onChange={handleChange} fullWidth multiline rows={3} />
+              </Box>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleCloseModal} color="secondary">Cancelar</Button>
+              <Button onClick={handleSubmit} variant="contained" color="primary" disabled={loading}>
+                {loading ? <CircularProgress size={24} /> : editingId ? "Actualizar" : "Guardar"}
+              </Button>
+            </DialogActions>
+          </Dialog>
           
-          <DialogActions>
-            <Button onClick={handleCloseModal} color="secondary">Cancelar</Button>
-            <Button onClick={handleSubmit} variant="contained" color="primary" disabled={loading}>
-              {loading ? <CircularProgress size={24} /> : editingId ? "Actualizar" : "Guardar"}
-            </Button>
-          </DialogActions>
-        </Dialog>
-        <Dialog open={clientModalOpen} onClose={handleCloseClientModal} fullWidth maxWidth="sm">
-          <DialogTitle>{clientFormData._id ? "Editar Cliente" : "Nuevo Cliente"}</DialogTitle>
-          <DialogContent>
-            <Box display="flex" flexDirection="column" gap={2} mt={1}>
-              <TextField label="Nombre" name="name" value={clientFormData.name} onChange={handleClientChange} fullWidth />
-              <TextField label="Email" name="email" value={clientFormData.email} onChange={handleClientChange} fullWidth />
-              <TextField label="Teléfono" name="phone" value={clientFormData.phone} onChange={handleClientChange} fullWidth />
-              {/* Address Fields */}
-              <TextField label="Dirección" name="address.street" value={clientFormData.address.street} onChange={handleClientChange} fullWidth />
-              <TextField label="Ciudad" name="address.city" value={clientFormData.address.city} onChange={handleClientChange} fullWidth />
-              <FormControl fullWidth>
-                <InputLabel>Estado</InputLabel>
-                <Select value={clientFormData.address.state} name="address.state" onChange={handleClientChange} fullWidth>
-                  {estados.map((state) => (
-                    <MenuItem key={state} value={state}>{state}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <TextField label="Código Postal" name="address.zip" value={clientFormData.address.zip} onChange={handleClientChange} fullWidth />
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseClientModal} color="secondary">Cancelar</Button>
-            <Button onClick={handleClientSubmit} variant="contained" color="primary" disabled={loading}>
-              {loading ? <CircularProgress size={24} /> : clientFormData._id ? "Actualizar" : "Guardar"}
-            </Button>
-          </DialogActions>
-        </Dialog>
-        <Dialog open={cityModalOpen} onClose={handleCloseCityModal} fullWidth maxWidth="sm">
-          <DialogTitle>{cityFormData._id ? "Editar Ciudad" : "Nueva Ciudad"}</DialogTitle>
-          <DialogContent>
-            <Box display="flex" flexDirection="column" gap={2} mt={1}>
-              <FormControl fullWidth>
-                <InputLabel>Estado</InputLabel>
-                <Select value={cityFormData.state} name="state" onChange={handleCityChange} fullWidth>
-                  {estados.map((state) => (
-                    <MenuItem key={state} value={state}>{state}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <TextField label="Ciudad" name="city" value={cityFormData.city} onChange={handleCityChange} fullWidth />
-              <TextField label="Latitud" name="lat" type="number" value={cityFormData.lat} onChange={handleCityChange} fullWidth />
-              <TextField label="Longitud" name="lon" type="number" value={cityFormData.lon} onChange={handleCityChange} fullWidth />
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseCityModal} color="secondary">Cancelar</Button>
-            <Button onClick={handleCitySubmit} variant="contained" color="primary" disabled={loading}>
-              {loading ? <CircularProgress size={24} /> : cityFormData._id ? "Actualizar" : "Guardar"}
-            </Button>
-          </DialogActions>
-        </Dialog>
-        <Dialog open={pvModalOpen} onClose={handleClosePvModal} fullWidth maxWidth="sm">
-          <DialogTitle>
-            {pvFormData._id ? "Editar Punto de Venta" : "Nuevo Punto de Venta"}
-          </DialogTitle>
-
-          <DialogContent>
-            <Box display="flex" flexDirection="column" gap={2} mt={1}>
-              {/* Nombre */}
-              <TextField
-                label="Nombre"
-                name="name"
-                value={pvFormData.name || ""}
-                onChange={handlePvChange}
-                fullWidth
-              />
-
-              {/* Productos */}
-              <FormControl fullWidth>
-                <InputLabel>Productos</InputLabel>
-                <Select
-                  multiple
-                  name="productos"
-                  value={pvFormData.productos || []}
+          {/* Client Modal */}
+          <Dialog open={clientModalOpen} onClose={handleCloseClientModal} fullWidth maxWidth="sm">
+            <DialogTitle>{clientFormData._id || clientFormData.id ? "Editar Cliente" : "Nuevo Cliente"}</DialogTitle>
+            <DialogContent>
+              <Box display="flex" flexDirection="column" gap={2} mt={1}>
+                <TextField label="Nombre" name="name" value={clientFormData.name} onChange={handleClientChange} fullWidth />
+                <TextField label="Email" name="email" value={clientFormData.email} onChange={handleClientChange} fullWidth />
+                <TextField label="Teléfono" name="phone" value={clientFormData.phone} onChange={handleClientChange} fullWidth />
+                <TextField label="Dirección" name="address.street" value={clientFormData.address.street} onChange={handleClientChange} fullWidth />
+                <TextField label="Ciudad" name="address.city" value={clientFormData.address.city} onChange={handleClientChange} fullWidth />
+                <FormControl fullWidth>
+                  <InputLabel>Estado</InputLabel>
+                  <Select value={clientFormData.address.state} name="address.state" onChange={handleClientChange} fullWidth>
+                    {estados.map((state) => (
+                      <MenuItem key={state} value={state}>{state}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <TextField label="Código Postal" name="address.zip" value={clientFormData.address.zip} onChange={handleClientChange} fullWidth />
+              </Box>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleCloseClientModal} color="secondary">Cancelar</Button>
+              <Button onClick={handleClientSubmit} variant="contained" color="primary" disabled={loading}>
+                {loading ? <CircularProgress size={24} /> : (clientFormData._id || clientFormData.id) ? "Actualizar" : "Guardar"}
+              </Button>
+            </DialogActions>
+          </Dialog>
+          
+          {/* City Modal */}
+          <Dialog open={cityModalOpen} onClose={handleCloseCityModal} fullWidth maxWidth="sm">
+            <DialogTitle>{cityFormData._id || cityFormData.id ? "Editar Ciudad" : "Nueva Ciudad"}</DialogTitle>
+            <DialogContent>
+              <Box display="flex" flexDirection="column" gap={2} mt={1}>
+                <FormControl fullWidth>
+                  <InputLabel>Estado</InputLabel>
+                  <Select value={cityFormData.state} name="state" onChange={handleCityChange} fullWidth>
+                    {estados.map((state) => (
+                      <MenuItem key={state} value={state}>{state}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <TextField label="Ciudad" name="city" value={cityFormData.city} onChange={handleCityChange} fullWidth />
+                <TextField label="Latitud" name="lat" type="number" value={cityFormData.lat} onChange={handleCityChange} fullWidth />
+                <TextField label="Longitud" name="lon" type="number" value={cityFormData.lon} onChange={handleCityChange} fullWidth />
+              </Box>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleCloseCityModal} color="secondary">Cancelar</Button>
+              <Button onClick={handleCitySubmit} variant="contained" color="primary" disabled={loading}>
+                {loading ? <CircularProgress size={24} /> : (cityFormData._id || cityFormData.id) ? "Actualizar" : "Guardar"}
+              </Button>
+            </DialogActions>
+          </Dialog>
+          
+          {/* PuntoVenta Modal */}
+          <Dialog open={pvModalOpen} onClose={handleClosePvModal} fullWidth maxWidth="sm">
+            <DialogTitle>
+              {pvFormData._id || pvFormData.id ? "Editar Punto de Venta" : "Nuevo Punto de Venta"}
+            </DialogTitle>
+            <DialogContent>
+              <Box display="flex" flexDirection="column" gap={2} mt={1}>
+                <TextField
+                  label="Nombre"
+                  name="name"
+                  value={pvFormData.name || ""}
                   onChange={handlePvChange}
-                  renderValue={(selected) =>
-                    products
-                      .filter((p) => selected.includes(p._id))
-                      .map((p) => p.name)
-                      .join(", ")
-                  }
-                >
-                  {products.map((prod) => (
-                    <MenuItem key={prod._id} value={prod._id}>
-                      <Checkbox checked={pvFormData.productos?.includes(prod._id)} />
-                      <ListItemText primary={prod.name} />
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              {/* Ciudad */}
-              <FormControl fullWidth>
-                <InputLabel>Ciudad</InputLabel>
-                <Select
-                  value={pvFormData.city || ""}
-                  name="city"
-                  onChange={handlePvChange}
-                >
-                  {cities.map((c) => (
-                    <MenuItem key={c._id} value={c._id}>
-                      {c.city || c._id}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              {/* Cliente */}
-              <FormControl fullWidth>
-                <InputLabel>Cliente</InputLabel>
-                <Select
-                  value={pvFormData.cliente || ""}
-                  name="cliente"
-                  onChange={handlePvChange}
-                >
-                  {clients.map((cli) => (
-                    <MenuItem key={cli._id} value={cli._id}>
-                      {cli.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
-          </DialogContent>
-
-          <DialogActions>
-            <Button onClick={handleClosePvModal} color="secondary">
-              Cancelar
-            </Button>
-            <Button
-              onClick={handlePvSubmit}
-              variant="contained"
-              color="primary"
-              disabled={loading}
-            >
-              {loading ? <CircularProgress size={24} /> : pvFormData._id ? "Actualizar" : "Guardar"}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-      </Grid>
+                  fullWidth
+                />
+                <FormControl fullWidth>
+                  <InputLabel>Productos</InputLabel>
+                  <Select
+                    multiple
+                    name="productos"
+                    value={pvFormData.productos || []}
+                    onChange={handlePvChange}
+                    renderValue={(selected) =>
+                      products
+                        .filter((p) => selected.includes(p._id))
+                        .map((p) => p.name)
+                        .join(", ")
+                    }
+                  >
+                    {products.map((prod) => (
+                      <MenuItem key={prod._id} value={prod._id}>
+                        <Checkbox checked={pvFormData.productos?.includes(prod._id)} />
+                        <ListItemText primary={prod.name} />
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl fullWidth>
+                  <InputLabel>Ciudad</InputLabel>
+                  <Select
+                    value={pvFormData.city || ""}
+                    name="city"
+                    onChange={handlePvChange}
+                  >
+                    {cities.map((c) => (
+                      <MenuItem key={c._id || c.id} value={c._id || c.id}>
+                        {c.city || c._id || c.id}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl fullWidth>
+                  <InputLabel>Cliente</InputLabel>
+                  <Select
+                    value={pvFormData.cliente || ""}
+                    name="cliente"
+                    onChange={handlePvChange}
+                  >
+                    {clients.map((cli) => (
+                      <MenuItem key={cli._id || cli.id} value={cli._id || cli.id}>
+                        {cli.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleClosePvModal} color="secondary">
+                Cancelar
+              </Button>
+              <Button
+                onClick={handlePvSubmit}
+                variant="contained"
+                color="primary"
+                disabled={loading}
+              >
+                {loading ? <CircularProgress size={24} /> : (pvFormData._id || pvFormData.id) ? "Actualizar" : "Guardar"}
+              </Button>
+            </DialogActions>
+          </Dialog>
+        </Grid>
       </Box>
     </>
   );
 }
 
-export default CustomizationPage;
+export default CustomizationPageV2;

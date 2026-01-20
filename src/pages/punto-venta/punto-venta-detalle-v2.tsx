@@ -43,8 +43,8 @@ export default function PuntoVentaDetalleV2() {
 
     const fetchPuntoVentaDetails = async () => {
       try {
-        // Use v2.0 endpoint for PostgreSQL data
-        const response = await fetch(`${CONFIG.API_BASE_URL_V2}/puntoVentas/${id}/detalle`, {
+        // Use v2.0 endpoint for PostgreSQL data (supports both id and codigo_tienda)
+        const response = await fetch(`${CONFIG.API_BASE_URL_V2}/puntoVentas/${id}`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -1129,6 +1129,14 @@ function EstadoTiendaCard({ punto }: any) {
           UBICACIÓN: {ciudad}, {estado}
         </Typography>
       </Box>
+
+      {punto.cliente?.name && (
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="body1" fontWeight="medium">
+            CLIENTE: {punto.cliente.name}
+          </Typography>
+        </Box>
+      )}
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Typography variant="body1" fontWeight="medium">

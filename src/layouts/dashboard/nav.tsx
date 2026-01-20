@@ -16,6 +16,8 @@ import { varAlpha } from 'src/theme/styles';
 import { Logo } from 'src/components/logo';
 import { Scrollbar } from 'src/components/scrollbar';
 
+import { NavSubMenu } from '../components/nav-submenu';
+
 // ----------------------------------------------------------------------
 
 export type NavContentProps = {
@@ -24,6 +26,14 @@ export type NavContentProps = {
     title: string;
     icon: React.ReactNode;
     info?: React.ReactNode;
+    requiredPath?: string;
+    defaultPath?: string;
+    submenu?: boolean;
+    subItems?: Array<{
+      title: string;
+      path: string;
+      requiredPath: string;
+    }>;
   }[];
   slots?: {
     topArea?: React.ReactNode;
@@ -120,7 +130,21 @@ export function NavContent({ data, slots, sx }: NavContentProps) {
         <Box component="nav" display="flex" flex="1 1 auto" flexDirection="column" sx={sx}>
           <Box component="ul" gap={0.5} display="flex" flexDirection="column">
             {data.map((item) => {
-              const isActived = item.path === pathname;
+              // If item has submenu, render NavSubMenu component
+              if (item.submenu && item.subItems) {
+                return (
+                  <NavSubMenu
+                    key={item.title}
+                    title={item.title}
+                    icon={item.icon}
+                    items={item.subItems}
+                    defaultPath={item.defaultPath || item.path}
+                  />
+                );
+              }
+
+              // Otherwise, render regular menu item
+              const isActived = item.path === pathname || pathname.startsWith(`${item.path}/`);
 
               return (
                 <ListItem disableGutters disablePadding key={item.title}>

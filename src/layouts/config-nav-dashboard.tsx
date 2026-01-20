@@ -18,55 +18,56 @@ export const allNavItems = [
     title: 'Equipos',
     path: '/equipos',
     icon: icon('ic-products'),
-    // info: (
-    //   <Label color="error" variant="inverted">
-    //   </Label>
-    // ),
   },
-  // {
-  //   title: 'Regiones',
-  //   path: '/Regiones',
-  //   icon: icon('ic-map'),
-  //   info: (
-  //     <Label color="error" variant="inverted">
-  //       +1002
-  //     </Label>
-  //   ),
-  // },
   {
     title: 'Personalizacion',
-    path: '/personalizacion',
+    path: '/Personalizacion', // Default to v2
     icon: icon('ic-configuration'),
+    requiredPath: '/personalizacion', // Permission required to see this menu item (parent)
+    submenu: true, // Indicates this has a submenu
+    defaultPath: '/Personalizacion', // Default path when clicking main item (v2)
+    subItems: [
+      {
+        title: 'V2',
+        path: '/Personalizacion',
+        requiredPath: '/personalizacion/v2', // Separate permission for v2
+      },
+      {
+        title: 'V1',
+        path: '/v1/Personalizacion',
+        requiredPath: '/personalizacion/v1', // Separate permission for v1
+      },
+    ],
   },
   {
     title: 'Usuarios',
     path: '/usuarios',
     icon: icon('ic-user'),
-    // info: (
-    //   <Label color="error" variant="inverted">
-    //     {/* amount */}
-    //   </Label>
-    // ),
   },
   {
     title: 'Controladores',
     path: '/controladores',
     icon: icon('ic-controllers'),
-    // info: (
-    //   <Label color="error" variant="inverted">
-    //     {/* amount */}
-    //   </Label>
-    // ),
   },
   {
     title: 'Puntos De Venta',
-    path: '/puntoVenta',
+    path: '/PuntoVenta', // Default to v2
     icon: icon('ic-building'),
-    // info: (
-    //   <Label color="error" variant="inverted">
-    //     {/* amount */}
-    //   </Label>
-    // ),
+    requiredPath: '/puntoVenta', // Permission required to see this menu item (parent)
+    submenu: true, // Indicates this has a submenu
+    defaultPath: '/PuntoVenta', // Default path when clicking main item (v2)
+    subItems: [
+      {
+        title: 'V2',
+        path: '/PuntoVenta',
+        requiredPath: '/puntoVenta/v2', // Separate permission for v2
+      },
+      {
+        title: 'V1',
+        path: '/v1/PuntoVenta',
+        requiredPath: '/puntoVenta/v1', // Separate permission for v1
+      },
+    ],
   },
   {
     title: 'Catálogo TI Water',
@@ -78,14 +79,4 @@ export const allNavItems = [
     path: '/api-ti-water',
     icon: icon('ic-configuration'),
   },
-  // {
-  //   title: 'R',
-  //   path: '/login',
-  //   icon: icon('ic-lock'),
-  // },
-  // {
-  //   title: 'Not found',
-  //   path: '/404',
-  //   icon: icon('ic-disabled'),
-  // },
 ];

@@ -89,10 +89,10 @@ export function hasPermission(routePath: string): boolean {
 
 /**
  * Filtra un array de items del menú según los permisos del usuario
- * @param menuItems - Array de items del menú con propiedad 'path'
+ * @param menuItems - Array de items del menú con propiedad 'path' y opcionalmente 'subItems'
  * @returns Array filtrado de items del menú
  */
-export function filterMenuByPermissions<T extends { path: string }>(menuItems: T[]): T[] {
+export function filterMenuByPermissions<T extends { path: string; requiredPath?: string; submenu?: boolean; subItems?: Array<{ path: string; requiredPath: string }> }>(menuItems: T[]): T[] {
   const permissions = getUserPermissions();
 
   // Si no hay permisos definidos, retornar todos los items (comportamiento por defecto)
@@ -104,6 +104,42 @@ export function filterMenuByPermissions<T extends { path: string }>(menuItems: T
   // Filtrar items según permisos (normalizando ambas rutas)
   const normalizedPermissions = permissions.map(normalizeRoute);
   const filtered = menuItems.filter((item) => {
+    // For items with submenu, check both parent permission and sub-item permissions
+    if (item.submenu && item.subItems) {
+      // First check if parent item has permission (requiredPath)
+      if (item.requiredPath) {
+        const normalizedParentPath = normalizeRoute(item.requiredPath);
+        const hasParentAccess = normalizedPermissions.includes(normalizedParentPath);
+        
+        if (!hasParentAccess) {
+          console.log(`[Menu Filter] Filtering out submenu: ${item.path} (parent permission ${item.requiredPath} not granted)`);
+          return false;
+        }
+      }
+      
+      // Then check if at least one subItem has permission
+      const hasSubItemAccess = item.subItems.some((subItem) => {
+        const normalizedSubPath = normalizeRoute(subItem.requiredPath);
+        return normalizedPermissions.includes(normalizedSubPath);
+      });
+      
+      if (!hasSubItemAccess) {
+        console.log(`[Menu Filter] Filtering out submenu: ${item.path} (no sub-items have permission)`);
+      }
+      return hasSubItemAccess;
+    }
+
+    // For regular items, check requiredPath if provided, otherwise check the main path
+    if (item.requiredPath) {
+      const normalizedRequiredPath = normalizeRoute(item.requiredPath);
+      const hasAccess = normalizedPermissions.includes(normalizedRequiredPath);
+      if (!hasAccess) {
+        console.log(`[Menu Filter] Filtering out: ${item.path} (requiredPath ${item.requiredPath} not in permissions)`);
+      }
+      return hasAccess;
+    }
+
+    // Fallback to checking the main path
     const normalizedItemPath = normalizeRoute(item.path);
     const hasAccess = normalizedPermissions.includes(normalizedItemPath);
     if (!hasAccess) {

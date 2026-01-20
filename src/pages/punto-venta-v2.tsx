@@ -7,15 +7,14 @@ import { Box, Grid, Table, Paper, Button, Select, MenuItem, TableRow, TableBody,
 
 import { StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
-import { get } from "src/api/axiosHelper";
 import { CONFIG } from 'src/config-global';
 
 import type  { PuntosVenta } from './types';
 
 // ---------------------------------------------
-// 📦 COMPONENTE PRINCIPAL (v1.0 - MongoDB)
+// 📦 COMPONENTE PRINCIPAL (v2.0 - PostgreSQL)
 // ---------------------------------------------
-export default function PuntoVentaTableList() {
+export default function PuntoVentaTableListV2() {
   const [puntosVenta, setPuntosVenta] = useState<PuntosVenta[]>([]);
   const [filtered, setFiltered] = useState<PuntosVenta[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,54 +29,46 @@ export default function PuntoVentaTableList() {
   const navigate = useNavigate();
 
   // ---------------------------------------------
-  // 🔹 Cargar datos desde API (MongoDB v1.0)
+  // 🔹 Cargar datos desde API (PostgreSQL v2.0)
   // ---------------------------------------------
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Use v1.0 API endpoint for MongoDB data
-        const data = await get<PuntosVenta[]>('/puntoVentas/all');
+        // Use v2.0 API endpoint for PostgreSQL data
+        const response = await fetch(`${CONFIG.API_BASE_URL_V2}/puntoVentas/all`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        // Handle both direct array response and wrapped response
+        const data: PuntosVenta[] = Array.isArray(result) ? result : (result.data || result);
         setPuntosVenta(data);
         setFiltered(data);
 
         // Generar filtros únicos
         const uniqueCities = Array.from(
-          new Set(data.map((pv) => typeof pv.city === 'object' && pv.city !== null ? pv.city.city : '').filter(Boolean))
+          new Set(data.map((pv: PuntosVenta) => typeof pv.city === 'object' && pv.city !== null ? pv.city.city : '').filter(Boolean) as string[])
         );
         const uniqueClients = Array.from(
-          new Set(data.map((pv) => typeof pv.cliente === 'object' && pv.cliente !== null ? pv.cliente.name : '').filter(Boolean))
+          new Set(data.map((pv: PuntosVenta) => typeof pv.cliente === 'object' && pv.cliente !== null ? pv.cliente.name : '').filter(Boolean) as string[])
         );
 
-        setCityFilters(uniqueCities as string[]);
-        setClientFilters(uniqueClients as string[]);
+        setCityFilters(uniqueCities);
+        setClientFilters(uniqueClients);
       } catch (error) {
         console.error('Error al obtener puntos de venta:', error);
       } finally {
         setLoading(false);
       }
     };
-
-
-    // const fetchPuntosVenta = async () => {
-    //   try {
-    //     const response = await get<PuntosVenta[]>(`/puntoVentas/all`);
-
-    //     // Normalizamos todos los puntos de venta
-    //     const formatted = response.map((pv) => ({
-    //       ...pv,
-    //       cliente: pv.cliente?._id || pv.cliente,
-    //       client_name: pv.cliente?.name || "",
-    //       city: pv.city?._id || pv.city,
-    //       city_name: pv.city?.city || "",
-    //       productos: pv.productos?.map((p) => p._id) || []
-    //     }));
-
-    //     setPuntosVenta(formatted as unknown as PuntosVenta[]);
-
-    //   } catch (error) {
-    //     console.error("Error fetching puntos de venta:", error);
-    //   }
-    // };
 
     fetchData();
   }, []);
@@ -126,7 +117,7 @@ export default function PuntoVentaTableList() {
   return (
     <>
       <Helmet>
-        <title>{`Puntos de Venta - ${CONFIG.appName}`}</title>
+        <title>{`Puntos de Venta V2 - ${CONFIG.appName}`}</title>
       </Helmet>
 
       {/* Filtros */}
@@ -186,7 +177,7 @@ export default function PuntoVentaTableList() {
                 <Grid item xs={12} sm={3} textAlign="right" sx={{ p: 2 }}>
                   <CSVLink
                     data={filtered}
-                    filename={`PuntosVenta_${new Date().toISOString()}.csv`}
+                    filename={`PuntosVenta_V2_${new Date().toISOString()}.csv`}
                     style={{ textDecoration: 'none' }}
                   >
                     {/* <Button variant="contained" color="primary" fullWidth>
@@ -210,26 +201,30 @@ export default function PuntoVentaTableList() {
                 <TableBody>
                   {filtered
                     .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                    .map((pv) => (
-                      <StyledTableRow key={pv._id}>
-                        <StyledTableCell>{pv.name}</StyledTableCell>
-                        <StyledTableCell>{typeof pv.cliente === 'object' && pv.cliente !== null ? pv.cliente.name : 'N/A'}</StyledTableCell>
-                        <StyledTableCell>{typeof pv.city === 'object' && pv.city !== null ? pv.city.city : 'N/A'}</StyledTableCell>
-                        <StyledTableCell>{typeof pv.city === 'object' && pv.city !== null ? pv.city.state : 'N/A'}</StyledTableCell>
-                        <StyledTableCell>
-                          {pv.productos?.length ?? 0}
-                        </StyledTableCell>
-                        <StyledTableCell>
-                          <Button
-                              variant="contained"
-                              color="inherit"
-                              onClick={() => navigate(`/v1/PuntoVenta/${pv._id}`)}
-                            >
-                            Detalles
-                          </Button>
-                        </StyledTableCell>
-                      </StyledTableRow>
-                    ))}
+                    .map((pv) => {
+                      // Handle both MongoDB _id and PostgreSQL id
+                      const puntoId = pv._id || (pv as any).id || '';
+                      return (
+                        <StyledTableRow key={puntoId}>
+                          <StyledTableCell>{pv.name}</StyledTableCell>
+                          <StyledTableCell>{typeof pv.cliente === 'object' && pv.cliente !== null ? pv.cliente.name : 'N/A'}</StyledTableCell>
+                          <StyledTableCell>{typeof pv.city === 'object' && pv.city !== null ? pv.city.city : 'N/A'}</StyledTableCell>
+                          <StyledTableCell>{typeof pv.city === 'object' && pv.city !== null ? pv.city.state : 'N/A'}</StyledTableCell>
+                          <StyledTableCell>
+                            {pv.productos?.length ?? 0}
+                          </StyledTableCell>
+                          <StyledTableCell>
+                            <Button
+                                variant="contained"
+                                color="inherit"
+                                onClick={() => navigate(`/PuntoVenta/${puntoId}`)}
+                              >
+                              Detalles
+                            </Button>
+                          </StyledTableCell>
+                        </StyledTableRow>
+                      );
+                    })}
                 </TableBody>
               </Table>
             </Box>

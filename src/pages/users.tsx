@@ -51,12 +51,18 @@ export default function UserRoleManagement() {
   const availableRoutes = [
     { path: '/', label: 'Dashboard' },
     { path: '/equipos', label: 'Equipos' },
-    { path: '/personalizacion', label: 'Personalizacion' },
     { path: '/usuarios', label: 'Usuarios' },
     { path: '/controladores', label: 'Controladores' },
-    { path: '/puntoVenta', label: 'Puntos De Venta' },
     { path: '/tiwater-catalog', label: 'Catálogo TI Water' },
     { path: '/api-ti-water', label: 'API TI Water' },
+    // Puntos De Venta - Parent and versions
+    { path: '/puntoVenta', label: 'Puntos De Venta (Parent - Required for submenu)' },
+    { path: '/puntoVenta/v1', label: 'Puntos De Venta V1 (MongoDB)' },
+    { path: '/puntoVenta/v2', label: 'Puntos De Venta V2 (PostgreSQL)' },
+    // Personalizacion - Parent and versions
+    { path: '/personalizacion', label: 'Personalizacion (Parent - Required for submenu)' },
+    { path: '/personalizacion/v1', label: 'Personalizacion V1 (MongoDB)' },
+    { path: '/personalizacion/v2', label: 'Personalizacion V2 (PostgreSQL)' },
   ];
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [roleModalOpen, setRoleModalOpen] = useState(false);
@@ -409,22 +415,44 @@ export default function UserRoleManagement() {
                   Permisos de Menú (Rutas Permitidas)
                 </Typography>
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
-                  Selecciona las rutas que los usuarios con este rol podrán ver en el menú
+                  Selecciona las rutas que los usuarios con este rol podrán ver en el menú.
+                  <br />
+                  <strong>Nota:</strong> Para ver submenus (v1/v2), se requiere el permiso del parent (ej: /puntoVenta) más el permiso específico de la versión (ej: /puntoVenta/v1 o /puntoVenta/v2).
                 </Typography>
-                <Paper variant="outlined" sx={{ p: 2, maxHeight: 300, overflow: 'auto' }}>
+                <Paper variant="outlined" sx={{ p: 2, maxHeight: 400, overflow: 'auto' }}>
                   <FormGroup>
-                    {availableRoutes.map((route) => (
-                      <FormControlLabel
-                        key={route.path}
-                        control={
-                          <Checkbox
-                            checked={(roleForm.permissions || []).includes(route.path)}
-                            onChange={() => handlePermissionChange(route.path)}
-                          />
-                        }
-                        label={route.label}
-                      />
-                    ))}
+                    {availableRoutes.map((route) => {
+                      const isParentRoute = route.path === '/puntoVenta' || route.path === '/personalizacion';
+                      return (
+                        <FormControlLabel
+                          key={route.path}
+                          control={
+                            <Checkbox
+                              checked={(roleForm.permissions || []).includes(route.path)}
+                              onChange={() => handlePermissionChange(route.path)}
+                            />
+                          }
+                          label={
+                            <Box>
+                              <Typography variant="body2">
+                                {route.label}
+                              </Typography>
+                              {isParentRoute && (
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                  Requerido para mostrar el submenu
+                                </Typography>
+                              )}
+                            </Box>
+                          }
+                          sx={{ 
+                            mb: isParentRoute ? 1 : 0.5,
+                            pl: route.path.includes('/v1') || route.path.includes('/v2') ? 2 : 0,
+                            borderLeft: route.path.includes('/v1') || route.path.includes('/v2') ? '2px solid' : 'none',
+                            borderColor: 'divider'
+                          }}
+                        />
+                      );
+                    })}
                   </FormGroup>
                 </Paper>
               </Box>

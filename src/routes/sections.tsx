@@ -17,6 +17,7 @@ export const HomePage = lazy(() => import('src/pages/home'));
 export const UserPage = lazy(() => import('src/pages/users'));
 export const Controllers = lazy(() => import('src/pages/controllers'));
 export const PuntoVenta = lazy(() => import('src/pages/punto-venta'));
+export const PuntoVentaV2 = lazy(() => import('src/pages/punto-venta-v2'));
 export const PuntoVentaDetalle = lazy(() => import('src/pages/punto-venta/punto-venta-detalle'));
 export const PuntoVentaDetalleV2 = lazy(() => import('src/pages/punto-venta/punto-venta-detalle-v2'));
 export const ProfilePage = lazy(() => import('src/pages/users/user-profile'));
@@ -24,6 +25,7 @@ export const LoginPage = lazy(() => import('src/pages/login'));
 export const RegisterPage = lazy(() => import('src/pages/register'));
 export const ProductsPage = lazy(() => import('src/pages/products'));
 export const CustomizationPage = lazy(() => import('src/pages/personalizacion'));
+export const CustomizationPageV2 = lazy(() => import('src/pages/personalizacion-v2'));
 export const MapsPage = lazy(() => import('src/pages/maps'));
 export const ProductsDetailPage = lazy(() => import('src/pages/products/product-details'));
 export const MQTTDocumentationPage = lazy(() => import('src/pages/mqtt-documentation'));
@@ -143,8 +145,28 @@ export function Router() {
         {
           element: (
             <TokenProtectedRoute>
-              <PermissionProtectedRoute requiredPath="/puntoVenta">
+              <PermissionProtectedRoute requiredPath="/puntoVenta/v1">
                 <PuntoVenta />
+              </PermissionProtectedRoute>
+            </TokenProtectedRoute>
+          ),
+          path: 'v1/PuntoVenta',
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <PermissionProtectedRoute requiredPath="/puntoVenta/v1">
+                <PuntoVentaDetalle />
+              </PermissionProtectedRoute>
+            </TokenProtectedRoute>
+          ),
+          path: 'v1/PuntoVenta/:id',
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <PermissionProtectedRoute requiredPath="/puntoVenta/v2">
+                <PuntoVentaV2 />
               </PermissionProtectedRoute>
             </TokenProtectedRoute>
           ),
@@ -153,22 +175,12 @@ export function Router() {
         {
           element: (
             <TokenProtectedRoute>
-              <PermissionProtectedRoute requiredPath="/puntoVenta">
-                <PuntoVentaDetalle />
-              </PermissionProtectedRoute>
-            </TokenProtectedRoute>
-          ),
-          path: 'PuntoVenta/:id',
-        },
-        {
-          element: (
-            <TokenProtectedRoute>
-              <PermissionProtectedRoute requiredPath="/puntoVenta">
+              <PermissionProtectedRoute requiredPath="/puntoVenta/v2">
                 <PuntoVentaDetalleV2 />
               </PermissionProtectedRoute>
             </TokenProtectedRoute>
           ),
-          path: 'PuntoVenta/:id/v2',
+          path: 'PuntoVenta/:id',
         },
         {
           element: (
@@ -214,8 +226,18 @@ export function Router() {
         {
           element: (
             <TokenProtectedRoute>
-              <PermissionProtectedRoute requiredPath="/personalizacion">
+              <PermissionProtectedRoute requiredPath="/personalizacion/v1">
                 <CustomizationPage />
+              </PermissionProtectedRoute>
+            </TokenProtectedRoute>
+          ),
+          path: 'v1/Personalizacion',
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <PermissionProtectedRoute requiredPath="/personalizacion/v2">
+                <CustomizationPageV2 />
               </PermissionProtectedRoute>
             </TokenProtectedRoute>
           ),
