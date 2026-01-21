@@ -4,36 +4,41 @@ import { useState, useEffect } from "react";
 
 import {
   Box,
+  Chip,
   Grid,
   Paper,
   Table,
-  Select,
   Button,
   Dialog,
-  Checkbox,
+  Select,
+  Switch,
   MenuItem,
   TableRow,
+  Accordion,
   TableBody,
   TableHead,
   TextField,
-  InputLabel,
   IconButton,
+  InputLabel,
   Typography,
-  FormControl,
   DialogTitle,
-  ListItemText,
-  DialogContent,
+  FormControl,
   DialogActions,
-  CircularProgress
+  DialogContent,
+  AccordionDetails,
+  AccordionSummary,
+  CircularProgress,
+  FormControlLabel
 } from "@mui/material";
 
 import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
 import { CONFIG } from "src/config-global";
 
+import { Iconify } from 'src/components/iconify';
 import { SvgColor } from 'src/components/svg-color';
 
-import type { City, Metric, Cliente, Product, PuntosVenta } from './types';
+import type { City, Metric, Cliente, PuntosVenta, MetricAlert } from './types';
 
 const estados = [
   'Aguascalientes',
@@ -77,23 +82,99 @@ const defaultCity: City = {
     lon: 0,
   }
 const defaultclient = { _id: '', name: '' , email:'', address: {city: '', state: '', country: '', street: '', zip: '', lat: '', lon: ''}}
-const defaultMetric = { _id: '', cliente: '', client_name: '', punto_venta_id: '', punto_venta_name: '', tds_range: 0, production_volume_range: 0, rejected_volume_range: 0, flow_rate_speed_range: 0, active_time: 0, metrics_description: '' }
-
-const defaultProduct: Product = {
-    id: "",
-    name: "",
-    city: "",
-    state: "",
-    product_type: "",
-    cliente: defaultclient,
-    drive: "",
-    online: false,
-    icon: "",
-    status: [],
-    lat: 0,
-    lon: 0  
+const defaultMetric: Metric = { 
+  _id: '', 
+  cliente: '', 
+  client_name: '', 
+  punto_venta_id: '', 
+  punto_venta_name: '', 
+  metric_name: '',
+  metric_type: '',
+  sensor_type: '',
+  sensor_unit: '',
+  rules: [],
+  conditions: undefined,
+  enabled: true,
+  read_only: false,
+  display_order: 0
 }
-const defaultPv = { _id: '', name: '' , client_name:'', cliente: defaultclient, city: defaultCity, city_name: '', productos: [defaultProduct]}
+
+const defaultAlert: MetricAlert = {
+  usuario: '',
+  correo: '',
+  celular: '',
+  celularAlert: false,
+  dashboardAlert: false,
+  emailAlert: false,
+  preventivo: false,
+  correctivo: false
+}
+
+// Available metric types from specification
+const METRIC_TYPES = [
+  { value: 'conectados', label: 'CONECTADOS', sensorTypes: ['online'], unit: '' },
+  { value: 'tds', label: 'TDS', sensorTypes: ['tds'], unit: 'PPM' },
+  { value: 'produccion', label: 'PRODUCCION', sensorTypes: ['flujo_produccion'], unit: 'L/MIN' },
+  { value: 'eficiencia', label: 'EFICIENCIA', sensorTypes: ['eficiencia'], unit: '%' },
+  { value: 'recuperacion', label: 'RECUPERACION', sensorTypes: ['acumulado_cruda', 'flujo_rechazo'], unit: '%' },
+  { value: 'nivel_agua_cruda', label: 'NIVEL AGUA CRUDA', sensorTypes: ['nivel_cruda', 'caudal_cruda'], unit: '%' },
+  { value: 'nivel_agua_purificada', label: 'NIVEL AGUA PURIFICADA', sensorTypes: ['nivel_purificada', 'flujo_produccion'], unit: '%' },
+  { value: 'co2', label: 'CO2', sensorTypes: ['presion_co2'], unit: 'PSI' },
+  { value: 'amperaje_nieve', label: 'AMPERAJE MAQUINA NIEVE', sensorTypes: ['corriente_ch1', 'corriente_ch2', 'corriente_ch3', 'corriente_ch4'], unit: 'A', readOnly: true },
+  { value: 'amperaje_frappe', label: 'AMPERAJE MAQUINA FRAPEE', sensorTypes: ['corriente_ch1', 'corriente_ch2', 'corriente_ch3', 'corriente_ch4'], unit: 'A', readOnly: true },
+];
+
+// Available sensor types from the system
+const SENSOR_TYPES = [
+  { value: 'tds', label: 'TDS', unit: 'PPM' },
+  { value: 'flujo_produccion', label: 'Flujo Producción', unit: 'L/min' },
+  { value: 'flujo_rechazo', label: 'Flujo Rechazo', unit: 'L/min' },
+  { value: 'flujo_recuperacion', label: 'Flujo Recuperación', unit: 'L/min' },
+  { value: 'eficiencia', label: 'Eficiencia', unit: '%' },
+  { value: 'nivel_cruda', label: 'Nivel Cruda', unit: 'mm' },
+  { value: 'nivel_purificada', label: 'Nivel Purificada', unit: 'mm' },
+  { value: 'electronivel_purificada', label: 'Nivel Electrónico Purificada', unit: '%' },
+  { value: 'electronivel_recuperada', label: 'Nivel Electrónico Recuperada', unit: '%' },
+  { value: 'caudal_cruda', label: 'Caudal Cruda', unit: 'L/min' },
+  { value: 'caudal_cruda_lmin', label: 'Caudal Cruda (L/min)', unit: 'L/min' },
+  { value: 'acumulado_cruda', label: 'Acumulado Cruda', unit: 'L' },
+  { value: 'presion_co2', label: 'Presión CO2', unit: 'PSI' },
+  { value: 'corriente_ch1', label: 'Corriente Canal 1', unit: 'A' },
+  { value: 'corriente_ch2', label: 'Corriente Canal 2', unit: 'A' },
+  { value: 'corriente_ch3', label: 'Corriente Canal 3', unit: 'A' },
+  { value: 'corriente_ch4', label: 'Corriente Canal 4', unit: 'A' },
+  { value: 'vida', label: 'Vida', unit: 'días' },
+  { value: 'online', label: 'Online', unit: '' },
+];
+
+// Color options
+const COLOR_OPTIONS = [
+  { value: '#00B050', label: 'Verde (Normal)' },
+  { value: '#FFFF00', label: 'Amarillo (Preventivo)' },
+  { value: '#EE0000', label: 'Rojo (Correctivo)' },
+];
+
+interface SensorConfig {
+  id?: string;
+  _id?: string;
+  puntoVentaId?: string;
+  sensorName?: string;
+  sensorType?: string;
+  resourceId?: string;
+  resourceType?: string;
+  label?: string;
+  unit?: string;
+  minValue?: number;
+  maxValue?: number;
+  enabled?: boolean;
+  latestReading?: {
+    value: number;
+    timestamp: string;
+    createdAt: string;
+  };
+}
+
+const defaultPv = { _id: '', name: '' , client_name:'', cliente: defaultclient, city: defaultCity, city_name: '', productos: []}
 
 // Helper function to make v2.0 API calls
 const apiV2Call = async (endpoint: string, method: string = 'GET', data?: any) => {
@@ -123,6 +204,8 @@ export function CustomizationPageV2() {
   const [puntosVenta, setPuntosVenta] = useState<PuntosVenta[]>([]);
 
   const [formData, setFormData] = useState<Metric>(defaultMetric);
+  const [metricAlerts, setMetricAlerts] = useState<MetricAlert[]>([]);
+  const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [clientFormData, setClientFormData] = useState<Cliente>(defaultclient);
   
   const [cityFormData, setCityFormData] = useState<City>(defaultCity);
@@ -138,15 +221,98 @@ export function CustomizationPageV2() {
   const [cities, setCities] = useState<City[]>([]);
   const [clients, setClients] = useState<Cliente[]>([]);
   const [tabIndex, setTabIndex] = useState(0);
-  const [products, setProducts] = useState<Product[]>([]);
+  // Sensors state for edit modal
+  const [editPvSensors, setEditPvSensors] = useState<SensorConfig[]>([]);
+  const [editPvId, setEditPvId] = useState<string | null>(null);
+  
+  // Sensors state for view modal
+  const [viewSensors, setViewSensors] = useState<SensorConfig[]>([]);
+  const [viewPvId, setViewPvId] = useState<string | null>(null);
+  const [sensorsModalOpen, setSensorsModalOpen] = useState(false);
+  const [viewingPvName, setViewingPvName] = useState<string>('');
+
+  // Helper to ensure string type
+  const toStr = (val: any): string => String(val);
+
+  // Helper to safely format dates
+  const formatDate = (timestamp: string | null | undefined, fallbackTimestamp?: string | null): string => {
+    // Try primary timestamp first
+    if (timestamp) {
+      try {
+        // Check if timestamp looks invalid (e.g., year > 10000 or weird format)
+        const dateStr = String(timestamp);
+        
+        // Check for obviously invalid years in the string
+        const yearMatch = dateStr.match(/[+-]?(\d{4,})/);
+        if (yearMatch) {
+          const year = parseInt(yearMatch[1], 10);
+          if (year > 2100 || year < 1900) {
+            // Invalid year, try fallback
+            if (fallbackTimestamp) {
+              return formatDate(fallbackTimestamp);
+            }
+            return 'Fecha inválida';
+          }
+        }
+        
+        const date = new Date(timestamp);
+        
+        // Check if date is valid
+        if (Number.isNaN(date.getTime())) {
+          if (fallbackTimestamp) {
+            return formatDate(fallbackTimestamp);
+          }
+          return 'Fecha inválida';
+        }
+        
+        // Check if year is reasonable (between 1900 and 2100)
+        const year = date.getFullYear();
+        if (year < 1900 || year > 2100) {
+          if (fallbackTimestamp) {
+            return formatDate(fallbackTimestamp);
+          }
+          return 'Fecha inválida';
+        }
+        
+        return date.toLocaleString('es-MX', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
+      } catch (error) {
+        console.warn('[formatDate] Error parsing timestamp:', timestamp, error);
+        if (fallbackTimestamp) {
+          return formatDate(fallbackTimestamp);
+        }
+        return 'Fecha inválida';
+      }
+    }
+    
+    // Try fallback if primary is missing
+    if (fallbackTimestamp) {
+      return formatDate(fallbackTimestamp);
+    }
+    
+    return '-';
+  };
 
   useEffect(() => {
     fetchMetrics();
     fetchClients();
     fetchCities();
     fetchPuntosVenta();
-    fetchProducts();
   }, []);
+
+  // Debug: Monitor sensors state changes
+  useEffect(() => {
+    console.log('[useEffect] Edit sensors state changed:', editPvSensors);
+    console.log('[useEffect] Edit pvId:', editPvId);
+    console.log('[useEffect] View sensors state changed:', viewSensors);
+    console.log('[useEffect] View pvId:', viewPvId);
+  }, [editPvSensors, editPvId, viewSensors, viewPvId]);
 
   const fetchMetrics = async () => {
     try {
@@ -169,27 +335,73 @@ export function CustomizationPageV2() {
           filteredClients = filteredClients.filter((client: Cliente) => client.name === client_.name);
         }
       }
-      setClients(filteredClients);
+      // Deduplicate clients by id - more robust comparison
+      const seen = new Set<string | number>();
+      const uniqueClients = filteredClients.filter((client: Cliente) => {
+        const clientId = client._id || client.id;
+        if (!clientId) return false; // Skip entries without ID
+        const idStr = String(clientId);
+        if (seen.has(idStr)) {
+          return false; // Duplicate
+        }
+        seen.add(idStr);
+        return true;
+      });
+      console.log('[fetchClients] Total clients:', filteredClients.length, 'Unique:', uniqueClients.length);
+      setClients(uniqueClients);
     } catch (error) {
       console.error("Error fetching clients:", error);
     }
   };
 
-  const fetchProducts = async () => {
+  const fetchSensorsForEdit = async (pvId: string) => {
     try {
-      // Products still come from v1.0 (MongoDB) for now
-      const { get } = await import("src/api/axiosHelper");
-      const response = await get<Product[]>(`/products`);
-      setProducts(response);
+      console.log('[fetchSensorsForEdit] Fetching sensors for pvId:', pvId);
+      const response = await apiV2Call(`/puntoVentas/${pvId}/sensors`);
+      console.log('[fetchSensorsForEdit] Response received:', response);
+      console.log('[fetchSensorsForEdit] Is array?', Array.isArray(response));
+      const sensorsData = Array.isArray(response) ? response : (response?.data || response?.sensors || []);
+      console.log('[fetchSensorsForEdit] Setting edit sensors:', sensorsData);
+      setEditPvSensors(sensorsData);
     } catch (error) {
-      console.error("Error fetching products:", error);
+      console.error("Error fetching sensors for edit:", error);
+      setEditPvSensors([]);
+    }
+  };
+
+  const fetchSensorsForView = async (pvId: string) => {
+    try {
+      console.log('[fetchSensorsForView] Fetching sensors for pvId:', pvId);
+      const response = await apiV2Call(`/puntoVentas/${pvId}/sensors`);
+      console.log('[fetchSensorsForView] Response received:', response);
+      console.log('[fetchSensorsForView] Is array?', Array.isArray(response));
+      const sensorsData = Array.isArray(response) ? response : (response?.data || response?.sensors || []);
+      console.log('[fetchSensorsForView] Setting view sensors:', sensorsData);
+      setViewSensors(sensorsData);
+    } catch (error) {
+      console.error("Error fetching sensors for view:", error);
+      setViewSensors([]);
     }
   };
 
   const fetchCities = async () => {
     try {
       const response = await apiV2Call('/cities');
-      setCities(Array.isArray(response) ? response : []);
+      const citiesData = Array.isArray(response) ? response : [];
+      // Deduplicate cities by id - more robust comparison
+      const seen = new Set<string | number>();
+      const uniqueCities = citiesData.filter((city: City) => {
+        const cityId = city._id || city.id;
+        if (!cityId) return false; // Skip entries without ID
+        const idStr = String(cityId);
+        if (seen.has(idStr)) {
+          return false; // Duplicate
+        }
+        seen.add(idStr);
+        return true;
+      });
+      console.log('[fetchCities] Total cities:', citiesData.length, 'Unique:', uniqueCities.length);
+      setCities(uniqueCities);
     } catch (error) {
       console.error("Error fetching cities:", error);
     }
@@ -207,7 +419,7 @@ export function CustomizationPageV2() {
         client_name: pv.cliente?.name || '',
         city: pv.city?._id || pv.city || '',
         city_name: pv.city?.city || '',
-        productos: pv.productos || []
+        productos: [] // Products removed - using sensors instead
       }));
 
       setPuntosVenta(formatted as unknown as PuntosVenta[]);
@@ -218,22 +430,91 @@ export function CustomizationPageV2() {
 
   const handleChange = (e: any) => {
     const { name, value } = e.target;
-    setFormData((prevData) => ({
-      ...prevData,
-      [name]: value,
-    }));
+    
+    // If cliente changes, filter puntosVenta and clear punto_venta_id if it doesn't belong to new cliente
+    if (name === 'cliente') {
+      const selectedClienteId = value;
+      
+      // Check if current punto_venta_id belongs to the new cliente
+      const currentPvId = formData.punto_venta_id;
+      const currentPv = puntosVenta.find(pv => String(pv._id || pv.id) === String(currentPvId));
+      const shouldClearPv = selectedClienteId && currentPv && (
+        typeof currentPv.cliente === 'object' && currentPv.cliente !== null
+          ? String((currentPv.cliente as any)._id || (currentPv.cliente as any).id) !== String(selectedClienteId)
+          : String(currentPv.cliente) !== String(selectedClienteId)
+      );
+      
+      setFormData((prevData) => ({
+        ...prevData,
+        [name]: value,
+        punto_venta_id: shouldClearPv ? '' : prevData.punto_venta_id,
+      }));
+    } else {
+      setFormData((prevData) => ({
+        ...prevData,
+        [name]: value,
+      }));
+    }
   };
 
   const handleSubmit = async () => {
     setLoading(true);
     try {
+      let savedMetricId = editingId;
+      
+      // Save or update metric
       if (editingId) {
-        await apiV2Call(`/metrics/${editingId}`, 'PATCH', formData);
+        const updated = await apiV2Call(`/metrics/${editingId}`, 'PATCH', formData);
+        savedMetricId = updated.id || updated._id || editingId;
       } else {
-        await apiV2Call('/metrics', 'POST', formData);
+        const created = await apiV2Call('/metrics', 'POST', formData);
+        savedMetricId = created.id || created._id;
       }
+      
+      // Save alerts if metric was saved successfully
+      if (savedMetricId && metricAlerts.length > 0) {
+        // Get existing alerts to compare
+        const existingAlerts = await apiV2Call(`/metrics/${savedMetricId}/alerts`);
+        const existingIds = new Set((Array.isArray(existingAlerts) ? existingAlerts : []).map((a: MetricAlert) => a.id || a._id));
+        
+        // Process alerts in parallel
+        const alertPromises = metricAlerts
+          .filter(alert => alert.usuario && alert.correo)
+          .map(async (alert) => {
+            const alertData = {
+              usuario: alert.usuario,
+              correo: alert.correo,
+              celular: alert.celular,
+              celularAlert: alert.celularAlert || alert.celular_alert,
+              dashboardAlert: alert.dashboardAlert || alert.dashboard_alert,
+              emailAlert: alert.emailAlert || alert.email_alert,
+              preventivo: alert.preventivo,
+              correctivo: alert.correctivo
+            };
+            
+            if (alert.id || alert._id) {
+              // Update existing alert
+              const alertId = alert.id || alert._id;
+              await apiV2Call(`/metrics/${savedMetricId}/alerts/${alertId}`, 'PATCH', alertData);
+              existingIds.delete(String(alertId));
+            } else {
+              // Create new alert
+              await apiV2Call(`/metrics/${savedMetricId}/alerts`, 'POST', alertData);
+            }
+          });
+        
+        await Promise.all(alertPromises);
+        
+        // Delete alerts that were removed
+        const deletePromises = Array.from(existingIds).map(existingId =>
+          apiV2Call(`/metrics/${savedMetricId}/alerts/${existingId}`, 'DELETE')
+        );
+        await Promise.all(deletePromises);
+      }
+      
       handleCloseModal();
       fetchMetrics();
+      Swal.fire('Éxito', 'Métrica guardada exitosamente', 'success');
     } catch (error) {
       console.error("Error submitting metric:", error);
       Swal.fire('Error', 'Error al guardar métrica', 'error');
@@ -242,10 +523,47 @@ export function CustomizationPageV2() {
     }
   };
 
-  const handleEdit = (metric: Metric) => {
+  const fetchMetricAlerts = async (metricId: string) => {
+    if (!metricId) {
+      setMetricAlerts([]);
+      return;
+    }
+    setLoadingAlerts(true);
+    try {
+      const response = await apiV2Call(`/metrics/${metricId}/alerts`);
+      setMetricAlerts(Array.isArray(response) ? response : []);
+    } catch (error) {
+      console.error("Error fetching metric alerts:", error);
+      setMetricAlerts([]);
+    } finally {
+      setLoadingAlerts(false);
+    }
+  };
+
+  const handleAddAlert = () => {
+    const newAlert = { ...defaultAlert };
+    setMetricAlerts([...metricAlerts, newAlert]);
+  };
+
+  const handleUpdateAlert = (index: number, field: keyof MetricAlert, value: any) => {
+    const newAlerts = [...metricAlerts];
+    newAlerts[index] = { ...newAlerts[index], [field]: value };
+    setMetricAlerts(newAlerts);
+  };
+
+  const handleDeleteAlert = (index: number) => {
+    const newAlerts = metricAlerts.filter((_, i) => i !== index);
+    setMetricAlerts(newAlerts);
+  };
+
+  const handleEdit = async (metric: Metric) => {
     setFormData(metric);
     setEditingId(metric._id || metric.id || null);
     setModalOpen(true);
+    // Fetch alerts for this metric
+    if (metric._id || metric.id) {
+      await fetchMetricAlerts(metric._id || metric.id || '');
+    }
   };
 
   const handleClientEdit = (client: Cliente) => {
@@ -261,8 +579,14 @@ export function CustomizationPageV2() {
     setCityModalOpen(true);
   };
 
-  const handlePvEdit = (pv: PuntosVenta) => {
+  const handlePvEdit = async (pv: PuntosVenta) => {
+    const pvId = pv._id || pv.id || null;
+    console.log('[handlePvEdit] Editing puntoVenta:', pv, 'pvId:', pvId);
     setPvFormData(pv);
+    setEditPvId(pvId ? String(pvId) : null);
+    if (pvId) {
+      await fetchSensorsForEdit(String(pvId));
+    }
     setPvModalOpen(true);
   };
 
@@ -339,7 +663,9 @@ export function CustomizationPageV2() {
 
   const handleCloseModal = () => {
     setModalOpen(false);
+    setFormData(defaultMetric);
     setEditingId(null);
+    setMetricAlerts([]);
   };
 
   const handleClientChange = (e: any) => {
@@ -373,7 +699,7 @@ export function CustomizationPageV2() {
     const { name, value } = e.target;
     setPvFormData((prevData) => ({
       ...prevData,
-      [name]: name === "productos" ? (typeof value === "string" ? value.split(",") : value) : value
+      [name]: value
     }));
   };
 
@@ -437,6 +763,20 @@ export function CustomizationPageV2() {
     }
   };
 
+  const handleSensorDelete = async (sensorId: string) => {
+    try {
+      const result = await confirmationAlert();
+      if (result.isConfirmed && editPvId) {
+        await apiV2Call(`/puntoVentas/${editPvId}/sensors/${sensorId}`, 'DELETE');
+        await fetchSensorsForEdit(editPvId);
+        Swal.fire('Éxito', 'Sensor eliminado', 'success');
+      }
+    } catch (error) {
+      console.error("Error deleting sensor:", error);
+      Swal.fire('Error', 'Error al eliminar sensor', 'error');
+    }
+  };
+
   const handleOpenClientModal = () => {
     setClientFormData(defaultclient);
     setClientModalOpen(true);
@@ -453,6 +793,8 @@ export function CustomizationPageV2() {
   
   const handleOpenPvModal = () => {
     setPvFormData(defaultPv);
+    setEditPvId(null);
+    setEditPvSensors([]);
     setPvModalOpen(true);
   };
 
@@ -462,6 +804,8 @@ export function CustomizationPageV2() {
 
   const handleClosePvModal = () => {
     setPvModalOpen(false);
+    setEditPvId(null);
+    setEditPvSensors([]);
   };
   
   return (
@@ -511,18 +855,26 @@ export function CustomizationPageV2() {
                         <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
                           <StyledTableCellHeader>Cliente</StyledTableCellHeader>
                           <StyledTableCellHeader>Punto de Venta</StyledTableCellHeader>
-                          <StyledTableCellHeader>Rango TDS</StyledTableCellHeader>
-                          <StyledTableCellHeader>Volumen de Producción</StyledTableCellHeader>
+                          <StyledTableCellHeader>Tipo de Métrica</StyledTableCellHeader>
+                          <StyledTableCellHeader>Sensor</StyledTableCellHeader>
+                          <StyledTableCellHeader>Estado</StyledTableCellHeader>
                           <StyledTableCellHeader>Acciones</StyledTableCellHeader>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {metrics.map((metric) => (
                           <StyledTableRow key={metric._id || metric.id}>
-                            <StyledTableCell>{metric.client_name}</StyledTableCell>
-                            <StyledTableCell>{metric.punto_venta_name || '-'}</StyledTableCell>
-                            <StyledTableCell>{metric.tds_range}</StyledTableCell>
-                            <StyledTableCell>{metric.production_volume_range}</StyledTableCell>
+                            <StyledTableCell>{metric.client_name || '-'}</StyledTableCell>
+                            <StyledTableCell>{metric.punto_venta_name || 'Todos'}</StyledTableCell>
+                            <StyledTableCell>{metric.metric_name || metric.metric_type || 'Legacy'}</StyledTableCell>
+                            <StyledTableCell>{metric.sensor_type ? `${metric.sensor_type} (${metric.sensor_unit || ''})` : '-'}</StyledTableCell>
+                            <StyledTableCell>
+                              <Chip 
+                                label={metric.enabled !== false ? 'Activo' : 'Inactivo'} 
+                                color={metric.enabled !== false ? 'success' : 'default'} 
+                                size="small"
+                              />
+                            </StyledTableCell>
                             <StyledTableCell>
                               <IconButton onClick={() => handleEdit(metric)} sx={{ mr: 1, color: 'primary.main' }}>
                                 <SvgColor src='./assets/icons/actions/edit.svg' />
@@ -570,7 +922,7 @@ export function CustomizationPageV2() {
                           <StyledTableCellHeader>Cliente</StyledTableCellHeader>
                           <StyledTableCellHeader>Nombre</StyledTableCellHeader>
                           <StyledTableCellHeader>Ciudad</StyledTableCellHeader>
-                          <StyledTableCellHeader># Productos</StyledTableCellHeader>
+                          <StyledTableCellHeader>Sensores</StyledTableCellHeader>
                           <StyledTableCellHeader>Acciones</StyledTableCellHeader>
                         </TableRow>
                       </TableHead>
@@ -580,7 +932,25 @@ export function CustomizationPageV2() {
                             <StyledTableCell>{pv.client_name}</StyledTableCell>
                             <StyledTableCell>{pv.name}</StyledTableCell>
                             <StyledTableCell>{pv.city_name}</StyledTableCell>
-                            <StyledTableCell>{pv.productos?.length || 0}</StyledTableCell>
+                            <StyledTableCell>
+                              <Button 
+                                size="small" 
+                                variant="outlined"
+                                onClick={async () => {
+                                  const pvId = pv._id || pv.id || '';
+                                  if (pvId) {
+                                    const pvIdStr = toStr(pvId);
+                                    await fetchSensorsForView(pvIdStr);
+                                    setViewPvId(pvIdStr);
+                                    const pvName = (pv.name || '') as string;
+                                    setViewingPvName(pvName);
+                                    setSensorsModalOpen(true);
+                                  }
+                                }}
+                              >
+                                Ver Sensores
+                              </Button>
+                            </StyledTableCell>
                             <StyledTableCell>
                               <IconButton onClick={() => handlePvEdit(pv)} sx={{ mr: 1, color: 'primary.main' }}>
                                 <SvgColor src='./assets/icons/actions/edit.svg' />
@@ -714,33 +1084,408 @@ export function CustomizationPageV2() {
           </Grid>
         )}
         
-        {/* Modal for Creating / Editing Metrics */}
+        {/* Modal for Creating / Editing Metrics - Interactive Configuration */}
         <Grid item xs={12}>
-          <Dialog open={modalOpen} onClose={handleCloseModal} fullWidth maxWidth="sm">
+          <Dialog open={modalOpen} onClose={handleCloseModal} fullWidth maxWidth="lg">
             <DialogTitle>{editingId ? "Editar Métrica" : "Nueva Métrica"}</DialogTitle>
             <DialogContent>
-              <Box display="flex" flexDirection="column" gap={2} mt={1}>
-                <FormControl fullWidth>
-                  <InputLabel>Cliente</InputLabel>
-                  <Select value={formData.cliente || formData.clientId || ''} name="cliente" onChange={handleChange} fullWidth>
-                    {clients.map((cliente) => (
-                      <MenuItem key={cliente._id || cliente.id} value={cliente._id || cliente.id}>{cliente.name}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <FormControl fullWidth>
-                  <InputLabel>Punto de Venta</InputLabel>
-                  <Select value={formData.punto_venta_id || ''} name="punto_venta_id" onChange={handleChange} fullWidth>
-                    {puntosVenta.map((pv) => (
-                      <MenuItem key={pv._id || pv.id} value={pv._id || pv.id}>{pv.name}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <TextField label="Rango Tds" name="tds_range" type="number" value={formData.tds_range} onChange={handleChange} fullWidth />
-                <TextField label="Volumen de producción" name="production_volume_range" type="number" value={formData.production_volume_range} onChange={handleChange} fullWidth />
-                <TextField label="Volumen de rechazo" name="rejected_volume_range" type="number" value={formData.rejected_volume_range} onChange={handleChange} fullWidth />
-                <TextField label="Rango de velocidad de flujo" name="flow_rate_speed_range" type="number" value={formData.flow_rate_speed_range} onChange={handleChange} fullWidth />
-                <TextField label="Descripción" name="metrics_description" value={formData.metrics_description} onChange={handleChange} fullWidth multiline rows={3} />
+              <Box display="flex" flexDirection="column" gap={2} mt={1} sx={{ maxHeight: '70vh', overflowY: 'auto' }}>
+                {/* Basic Information */}
+                <Accordion defaultExpanded>
+                  <AccordionSummary expandIcon={<Iconify icon="solar:alt-arrow-down-bold-duotone" width={24} />}>
+                    <Typography variant="h6">Información Básica</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} sm={6}>
+                        <FormControl fullWidth>
+                          <InputLabel>Cliente</InputLabel>
+                          <Select value={formData.cliente || formData.clientId || ''} name="cliente" onChange={handleChange}>
+                            {clients.map((cliente) => (
+                              <MenuItem key={cliente._id || cliente.id} value={cliente._id || cliente.id}>{cliente.name}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <FormControl fullWidth>
+                          <InputLabel>Punto de Venta</InputLabel>
+                          <Select 
+                            value={formData.punto_venta_id || ''} 
+                            name="punto_venta_id" 
+                            onChange={handleChange}
+                            disabled={!formData.cliente && !formData.clientId}
+                          >
+                            <MenuItem value="">Todos</MenuItem>
+                            {(() => {
+                              // Filter puntosVenta by selected cliente
+                              const selectedClienteId = formData.cliente || formData.clientId;
+                              const filteredPuntosVenta = selectedClienteId
+                                ? puntosVenta.filter((pv) => {
+                                    const pvClienteId = typeof pv.cliente === 'object' && pv.cliente !== null
+                                      ? (pv.cliente as any)._id || (pv.cliente as any).id
+                                      : pv.cliente;
+                                    return String(pvClienteId) === String(selectedClienteId);
+                                  })
+                                : puntosVenta;
+                              
+                              return filteredPuntosVenta.map((pv) => (
+                                <MenuItem key={pv._id || pv.id} value={pv._id || pv.id}>{pv.name}</MenuItem>
+                              ));
+                            })()}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <FormControl fullWidth>
+                          <InputLabel>Tipo de Métrica</InputLabel>
+                          <Select 
+                            value={formData.metric_type || ''} 
+                            name="metric_type" 
+                            onChange={(e) => {
+                              const selectedType = METRIC_TYPES.find(t => t.value === e.target.value);
+                              if (selectedType) {
+                                setFormData({
+                                  ...formData,
+                                  metric_type: e.target.value,
+                                  metric_name: selectedType.label,
+                                  sensor_type: selectedType.sensorTypes[0] || '',
+                                  sensor_unit: selectedType.unit,
+                                  read_only: selectedType.readOnly || false,
+                                  rules: []
+                                });
+                              }
+                            }}
+                          >
+                            {METRIC_TYPES.map((type) => (
+                              <MenuItem key={type.value} value={type.value}>{type.label}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <FormControl fullWidth>
+                          <InputLabel>Tipo de Sensor</InputLabel>
+                          <Select 
+                            value={formData.sensor_type || ''} 
+                            name="sensor_type" 
+                            onChange={handleChange}
+                            disabled={!formData.metric_type}
+                          >
+                            {formData.metric_type && METRIC_TYPES.find(t => t.value === formData.metric_type)?.sensorTypes.map((st) => {
+                              const sensor = SENSOR_TYPES.find(s => s.value === st);
+                              return sensor ? (
+                                <MenuItem key={sensor.value} value={sensor.value}>{sensor.label}</MenuItem>
+                              ) : null;
+                            })}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <TextField 
+                          label="Unidad" 
+                          name="sensor_unit" 
+                          value={formData.sensor_unit || ''} 
+                          onChange={handleChange} 
+                          fullWidth 
+                          disabled
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <TextField 
+                          label="Orden de Visualización" 
+                          name="display_order" 
+                          type="number" 
+                          value={formData.display_order || 0} 
+                          onChange={handleChange} 
+                          fullWidth 
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', gap: 2 }}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={formData.enabled !== false}
+                                onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
+                              />
+                            }
+                            label="Habilitado"
+                          />
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={formData.read_only || false}
+                                onChange={(e) => setFormData({ ...formData, read_only: e.target.checked })}
+                                disabled={METRIC_TYPES.find(t => t.value === formData.metric_type)?.readOnly}
+                              />
+                            }
+                            label="Solo Lectura"
+                          />
+                        </Box>
+                      </Grid>
+                    </Grid>
+                  </AccordionDetails>
+                </Accordion>
+
+                {/* Rules Configuration */}
+                <Accordion defaultExpanded>
+                  <AccordionSummary expandIcon={<Iconify icon="solar:alt-arrow-down-bold-duotone" width={24} />}>
+                    <Typography variant="h6">Configuración de Rangos y Colores</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                        <Typography variant="subtitle1">Reglas de Rango</Typography>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          startIcon={<Iconify icon="solar:add-circle-bold-duotone" width={20} />}
+                          onClick={() => {
+                            const newRules = [...(formData.rules || []), { min: null, max: null, color: '#00B050', label: '' }];
+                            setFormData({ ...formData, rules: newRules });
+                          }}
+                        >
+                          Agregar Regla
+                        </Button>
+                      </Box>
+                      {(formData.rules || []).map((rule, index) => (
+                        <Box key={index} sx={{ mb: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
+                          <Grid container spacing={2} alignItems="center">
+                            <Grid item xs={12} sm={3}>
+                              <TextField
+                                label="Mínimo"
+                                type="number"
+                                value={rule.min ?? ''}
+                                onChange={(e) => {
+                                  const newRules = [...(formData.rules || [])];
+                                  newRules[index].min = e.target.value === '' ? null : parseFloat(e.target.value);
+                                  setFormData({ ...formData, rules: newRules });
+                                }}
+                                fullWidth
+                                placeholder="Sin límite"
+                              />
+                            </Grid>
+                            <Grid item xs={12} sm={3}>
+                              <TextField
+                                label="Máximo"
+                                type="number"
+                                value={rule.max ?? ''}
+                                onChange={(e) => {
+                                  const newRules = [...(formData.rules || [])];
+                                  newRules[index].max = e.target.value === '' ? null : parseFloat(e.target.value);
+                                  setFormData({ ...formData, rules: newRules });
+                                }}
+                                fullWidth
+                                placeholder="Sin límite"
+                              />
+                            </Grid>
+                            <Grid item xs={12} sm={3}>
+                              <FormControl fullWidth>
+                                <InputLabel>Color</InputLabel>
+                                <Select
+                                  value={rule.color || '#00B050'}
+                                  onChange={(e) => {
+                                    const newRules = [...(formData.rules || [])];
+                                    newRules[index].color = e.target.value;
+                                    setFormData({ ...formData, rules: newRules });
+                                  }}
+                                >
+                                  {COLOR_OPTIONS.map((color) => (
+                                    <MenuItem key={color.value} value={color.value}>
+                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <Box sx={{ width: 20, height: 20, backgroundColor: color.value, border: '1px solid #ccc', borderRadius: 1 }} />
+                                        {color.label}
+                                      </Box>
+                                    </MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                            </Grid>
+                            <Grid item xs={12} sm={2}>
+                              <TextField
+                                label="Etiqueta"
+                                value={rule.label || ''}
+                                onChange={(e) => {
+                                  const newRules = [...(formData.rules || [])];
+                                  newRules[index].label = e.target.value;
+                                  setFormData({ ...formData, rules: newRules });
+                                }}
+                                fullWidth
+                              />
+                            </Grid>
+                            <Grid item xs={12} sm={1}>
+                              <IconButton
+                                color="error"
+                                onClick={() => {
+                                  const newRules = (formData.rules || []).filter((_, i) => i !== index);
+                                  setFormData({ ...formData, rules: newRules });
+                                }}
+                              >
+                                <SvgColor src='./assets/icons/actions/delete.svg' />
+                              </IconButton>
+                            </Grid>
+                          </Grid>
+                        </Box>
+                      ))}
+                      {(!formData.rules || formData.rules.length === 0) && (
+                        <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                          No hay reglas configuradas. Agrega una regla para definir los rangos y colores.
+                        </Typography>
+                      )}
+                    </Box>
+                  </AccordionDetails>
+                </Accordion>
+
+                {/* Conditions (for complex metrics) */}
+                {(formData.metric_type === 'nivel_agua_cruda' || formData.metric_type === 'nivel_agua_purificada') && (
+                  <Accordion>
+                    <AccordionSummary expandIcon={<Iconify icon="solar:alt-arrow-down-bold-duotone" width={24} />}>
+                      <Typography variant="h6">Condiciones Especiales</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Typography variant="body2" color="text.secondary">
+                        Las condiciones especiales para métricas complejas se configurarán en una versión futura.
+                      </Typography>
+                    </AccordionDetails>
+                  </Accordion>
+                )}
+
+                {/* Alerts/Notifications Section */}
+                <Accordion defaultExpanded={false}>
+                  <AccordionSummary expandIcon={<Iconify icon="solar:alt-arrow-down-bold-duotone" width={24} />}>
+                    <Typography variant="h6">Alertas y Notificaciones</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                        <Typography variant="subtitle1">Configuración de Alertas por Usuario</Typography>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          startIcon={<Iconify icon="solar:add-circle-bold-duotone" width={20} />}
+                          onClick={handleAddAlert}
+                          disabled={!editingId && !formData.metric_type}
+                        >
+                          Agregar Alerta
+                        </Button>
+                      </Box>
+                      {loadingAlerts ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                          <CircularProgress size={24} />
+                        </Box>
+                      ) : (
+                        <>
+                          {metricAlerts.length > 0 ? (
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow>
+                                  <StyledTableCellHeader>Usuario</StyledTableCellHeader>
+                                  <StyledTableCellHeader>Correo</StyledTableCellHeader>
+                                  <StyledTableCellHeader>Celular</StyledTableCellHeader>
+                                  <StyledTableCellHeader>Celular Alert</StyledTableCellHeader>
+                                  <StyledTableCellHeader>Dashboard Alert</StyledTableCellHeader>
+                                  <StyledTableCellHeader>Email Alert</StyledTableCellHeader>
+                                  <StyledTableCellHeader>Preventivo</StyledTableCellHeader>
+                                  <StyledTableCellHeader>Correctivo</StyledTableCellHeader>
+                                  <StyledTableCellHeader>Acciones</StyledTableCellHeader>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {metricAlerts.map((alert, index) => (
+                                  <TableRow key={index}>
+                                    <StyledTableCell>
+                                      <TextField
+                                        size="small"
+                                        value={alert.usuario || ''}
+                                        onChange={(e) => handleUpdateAlert(index, 'usuario', e.target.value)}
+                                        placeholder="Nombre del usuario"
+                                        fullWidth
+                                      />
+                                    </StyledTableCell>
+                                    <StyledTableCell>
+                                      <TextField
+                                        size="small"
+                                        type="email"
+                                        value={alert.correo || ''}
+                                        onChange={(e) => handleUpdateAlert(index, 'correo', e.target.value)}
+                                        placeholder="email@ejemplo.com"
+                                        fullWidth
+                                      />
+                                    </StyledTableCell>
+                                    <StyledTableCell>
+                                      <TextField
+                                        size="small"
+                                        value={alert.celular || ''}
+                                        onChange={(e) => handleUpdateAlert(index, 'celular', e.target.value)}
+                                        placeholder="+52 1234567890"
+                                        fullWidth
+                                        disabled={!(alert.celularAlert || alert.celular_alert)}
+                                      />
+                                    </StyledTableCell>
+                                    <StyledTableCell>
+                                      <Switch
+                                        checked={alert.celularAlert || alert.celular_alert || false}
+                                        onChange={(e) => {
+                                          handleUpdateAlert(index, 'celularAlert', e.target.checked);
+                                          if (!e.target.checked) {
+                                            handleUpdateAlert(index, 'celular', '');
+                                          }
+                                        }}
+                                        size="small"
+                                      />
+                                    </StyledTableCell>
+                                    <StyledTableCell>
+                                      <Switch
+                                        checked={alert.dashboardAlert || alert.dashboard_alert || false}
+                                        onChange={(e) => handleUpdateAlert(index, 'dashboardAlert', e.target.checked)}
+                                        size="small"
+                                      />
+                                    </StyledTableCell>
+                                    <StyledTableCell>
+                                      <Switch
+                                        checked={alert.emailAlert || alert.email_alert || false}
+                                        onChange={(e) => handleUpdateAlert(index, 'emailAlert', e.target.checked)}
+                                        size="small"
+                                      />
+                                    </StyledTableCell>
+                                    <StyledTableCell>
+                                      <Switch
+                                        checked={alert.preventivo || false}
+                                        onChange={(e) => handleUpdateAlert(index, 'preventivo', e.target.checked)}
+                                        size="small"
+                                      />
+                                    </StyledTableCell>
+                                    <StyledTableCell>
+                                      <Switch
+                                        checked={alert.correctivo || false}
+                                        onChange={(e) => handleUpdateAlert(index, 'correctivo', e.target.checked)}
+                                        size="small"
+                                      />
+                                    </StyledTableCell>
+                                    <StyledTableCell>
+                                      <IconButton
+                                        color="error"
+                                        size="small"
+                                        onClick={() => handleDeleteAlert(index)}
+                                      >
+                                        <SvgColor src='./assets/icons/actions/delete.svg' />
+                                      </IconButton>
+                                    </StyledTableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          ) : (
+                            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                              No hay alertas configuradas. Agrega una alerta para configurar notificaciones por usuario.
+                            </Typography>
+                          )}
+                        </>
+                      )}
+                    </Box>
+                  </AccordionDetails>
+                </Accordion>
               </Box>
             </DialogContent>
             <DialogActions>
@@ -807,7 +1552,7 @@ export function CustomizationPageV2() {
           </Dialog>
           
           {/* PuntoVenta Modal */}
-          <Dialog open={pvModalOpen} onClose={handleClosePvModal} fullWidth maxWidth="sm">
+          <Dialog open={pvModalOpen} onClose={handleClosePvModal} fullWidth maxWidth="md">
             <DialogTitle>
               {pvFormData._id || pvFormData.id ? "Editar Punto de Venta" : "Nuevo Punto de Venta"}
             </DialogTitle>
@@ -821,39 +1566,20 @@ export function CustomizationPageV2() {
                   fullWidth
                 />
                 <FormControl fullWidth>
-                  <InputLabel>Productos</InputLabel>
-                  <Select
-                    multiple
-                    name="productos"
-                    value={pvFormData.productos || []}
-                    onChange={handlePvChange}
-                    renderValue={(selected) =>
-                      products
-                        .filter((p) => selected.includes(p._id))
-                        .map((p) => p.name)
-                        .join(", ")
-                    }
-                  >
-                    {products.map((prod) => (
-                      <MenuItem key={prod._id} value={prod._id}>
-                        <Checkbox checked={pvFormData.productos?.includes(prod._id)} />
-                        <ListItemText primary={prod.name} />
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <FormControl fullWidth>
                   <InputLabel>Ciudad</InputLabel>
                   <Select
                     value={pvFormData.city || ""}
                     name="city"
                     onChange={handlePvChange}
                   >
-                    {cities.map((c) => (
-                      <MenuItem key={c._id || c.id} value={c._id || c.id}>
-                        {c.city || c._id || c.id}
-                      </MenuItem>
-                    ))}
+                    {cities.map((c, idx) => {
+                      const cityId = c._id || c.id || `city-${idx}`;
+                      return (
+                        <MenuItem key={cityId} value={cityId}>
+                          {c.city || cityId}
+                        </MenuItem>
+                      );
+                    })}
                   </Select>
                 </FormControl>
                 <FormControl fullWidth>
@@ -863,13 +1589,81 @@ export function CustomizationPageV2() {
                     name="cliente"
                     onChange={handlePvChange}
                   >
-                    {clients.map((cli) => (
-                      <MenuItem key={cli._id || cli.id} value={cli._id || cli.id}>
-                        {cli.name}
-                      </MenuItem>
-                    ))}
+                    {clients.map((cli, idx) => {
+                      const clientId = cli._id || cli.id || `client-${idx}`;
+                      return (
+                        <MenuItem key={clientId} value={clientId}>
+                          {cli.name}
+                        </MenuItem>
+                      );
+                    })}
                   </Select>
                 </FormControl>
+                
+                {/* Sensors Section - Only show when editing existing puntoVenta */}
+                {editPvId && (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="h6" gutterBottom>
+                      Sensores Configurados {editPvSensors.length > 0 && `(${editPvSensors.length})`}
+                    </Typography>
+                    {editPvSensors.length > 0 ? (
+                      <StyledTableContainer>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <StyledTableCellHeader>Nombre</StyledTableCellHeader>
+                              <StyledTableCellHeader>Tipo</StyledTableCellHeader>
+                              <StyledTableCellHeader>Último Valor</StyledTableCellHeader>
+                              <StyledTableCellHeader>Unidad</StyledTableCellHeader>
+                              <StyledTableCellHeader>Estado</StyledTableCellHeader>
+                              <StyledTableCellHeader>Última Lectura</StyledTableCellHeader>
+                              <StyledTableCellHeader>Acciones</StyledTableCellHeader>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {editPvSensors.map((sensor) => (
+                              <TableRow key={sensor.id || sensor._id}>
+                                <StyledTableCell>{sensor.sensorName || sensor.label || '-'}</StyledTableCell>
+                                <StyledTableCell>{sensor.sensorType || '-'}</StyledTableCell>
+                                <StyledTableCell>
+                                  {sensor.latestReading?.value !== null && sensor.latestReading?.value !== undefined
+                                    ? `${sensor.latestReading.value.toFixed(2)} ${sensor.unit || ''}`
+                                    : '-'}
+                                </StyledTableCell>
+                                <StyledTableCell>{sensor.unit || '-'}</StyledTableCell>
+                                <StyledTableCell>
+                                  <Chip 
+                                    label={sensor.enabled !== false ? 'Activo' : 'Inactivo'} 
+                                    color={sensor.enabled !== false ? 'success' : 'default'} 
+                                    size="small"
+                                  />
+                                </StyledTableCell>
+                                <StyledTableCell>
+                                  {formatDate(sensor.latestReading?.timestamp, sensor.latestReading?.createdAt)}
+                                </StyledTableCell>
+                                <StyledTableCell>
+                                  <IconButton 
+                                    size="small" 
+                                    onClick={() => handleSensorDelete(sensor.id || sensor._id || '')}
+                                    sx={{ color: 'error.main' }}
+                                  >
+                                    <SvgColor src='./assets/icons/actions/delete.svg' />
+                                  </IconButton>
+                                </StyledTableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </StyledTableContainer>
+                    ) : (
+                      <Box sx={{ p: 2, border: '1px solid #e0e0e0', borderRadius: 1, bgcolor: '#f5f5f5' }}>
+                        <Typography variant="body2" color="text.secondary">
+                          No hay sensores configurados aún. Los sensores se registrarán automáticamente cuando lleguen datos MQTT para este punto de venta.
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+                )}
               </Box>
             </DialogContent>
             <DialogActions>
@@ -883,6 +1677,72 @@ export function CustomizationPageV2() {
                 disabled={loading}
               >
                 {loading ? <CircularProgress size={24} /> : (pvFormData._id || pvFormData.id) ? "Actualizar" : "Guardar"}
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Sensors View Modal */}
+          <Dialog open={sensorsModalOpen} onClose={() => {
+            setSensorsModalOpen(false);
+            setViewSensors([]);
+            setViewPvId(null);
+          }} fullWidth maxWidth="lg">
+            <DialogTitle>
+              Sensores - {viewingPvName}
+            </DialogTitle>
+            <DialogContent>
+              <Box sx={{ mt: 2 }}>
+                {viewSensors.length > 0 ? (
+                  <StyledTableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <StyledTableCellHeader>Nombre</StyledTableCellHeader>
+                          <StyledTableCellHeader>Tipo</StyledTableCellHeader>
+                          <StyledTableCellHeader>Último Valor</StyledTableCellHeader>
+                          <StyledTableCellHeader>Unidad</StyledTableCellHeader>
+                          <StyledTableCellHeader>Estado</StyledTableCellHeader>
+                          <StyledTableCellHeader>Última Lectura</StyledTableCellHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {viewSensors.map((sensor) => (
+                          <TableRow key={sensor.id || sensor._id}>
+                            <StyledTableCell>{sensor.sensorName || sensor.label || '-'}</StyledTableCell>
+                            <StyledTableCell>{sensor.sensorType || '-'}</StyledTableCell>
+                            <StyledTableCell>
+                              {sensor.latestReading?.value !== null && sensor.latestReading?.value !== undefined
+                                ? `${sensor.latestReading.value.toFixed(2)} ${sensor.unit || ''}`
+                                : '-'}
+                            </StyledTableCell>
+                            <StyledTableCell>{sensor.unit || '-'}</StyledTableCell>
+                            <StyledTableCell>
+                              <Chip 
+                                label={sensor.enabled !== false ? 'Activo' : 'Inactivo'} 
+                                color={sensor.enabled !== false ? 'success' : 'default'} 
+                                size="small"
+                              />
+                            </StyledTableCell>
+                            <StyledTableCell>
+                              {formatDate(sensor.latestReading?.timestamp, sensor.latestReading?.createdAt)}
+                            </StyledTableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </StyledTableContainer>
+                ) : (
+                  <Box sx={{ p: 2, border: '1px solid #e0e0e0', borderRadius: 1, bgcolor: '#f5f5f5' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      No hay sensores configurados aún. Los sensores se registrarán automáticamente cuando lleguen datos MQTT para este punto de venta.
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setSensorsModalOpen(false)} color="primary">
+                Cerrar
               </Button>
             </DialogActions>
           </Dialog>

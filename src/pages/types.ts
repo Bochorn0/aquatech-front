@@ -36,23 +36,66 @@ interface Status {
     filter_only_online: boolean;
   }
 
+  export type MetricRule = {
+    min: number | null;
+    max: number | null;
+    color: string;
+    label: string;
+  };
+
+  export type MetricCondition = {
+    depends_on?: string;
+    flujo_condition?: string;
+    level_ranges?: MetricRule[];
+    rules?: any[];
+  };
+
+  export type MetricAlert = {
+    _id?: string;
+    id?: string;
+    metricId?: string;
+    metric_id?: string;
+    usuario: string;
+    correo: string;
+    celular?: string;
+    celularAlert?: boolean;
+    celular_alert?: boolean;
+    dashboardAlert?: boolean;
+    dashboard_alert?: boolean;
+    emailAlert?: boolean;
+    email_alert?: boolean;
+    preventivo?: boolean;
+    correctivo?: boolean;
+  };
+
   export type  Metric = {
     _id?: string;
     id?: string; // For PostgreSQL compatibility
     cliente: String;
     clientId?: string; // For PostgreSQL compatibility
-    client_name: string;
+    client_name?: string;
     product_type?: string; // For v1 (MongoDB) compatibility
     punto_venta_id?: string; // For v2 (PostgreSQL)
     punto_venta_name?: string; // For v2 (PostgreSQL)
-    tds_range: number;
-    production_volume_range: number;
+    // New configuration fields
+    metric_name?: string;
+    metric_type?: string;
+    sensor_type?: string;
+    sensor_unit?: string;
+    rules?: MetricRule[];
+    conditions?: MetricCondition;
+    enabled?: boolean;
+    read_only?: boolean;
+    display_order?: number;
+    // Legacy fields
+    tds_range?: number;
+    production_volume_range?: number;
     temperature_range?: number; // For v1 (MongoDB) compatibility
-    rejected_volume_range: number;
-    flow_rate_speed_range: number;
-    active_time: number;
+    rejected_volume_range?: number;
+    flow_rate_speed_range?: number;
+    active_time?: number;
     filter_only_online?: boolean; // For v1 (MongoDB) compatibility
-    metrics_description: string;
+    metrics_description?: string;
   }
   export type Cliente = {
     _id?: string;
