@@ -230,6 +230,9 @@ export function CustomizationPageV2() {
   const [viewPvId, setViewPvId] = useState<string | null>(null);
   const [sensorsModalOpen, setSensorsModalOpen] = useState(false);
   const [viewingPvName, setViewingPvName] = useState<string>('');
+  
+  // Dev mode state for puntoVenta
+  const [devModeEnabled, setDevModeEnabled] = useState<boolean>(false);
 
   // Helper to ensure string type
   const toStr = (val: any): string => String(val);
@@ -586,6 +589,10 @@ export function CustomizationPageV2() {
     setEditPvId(pvId ? String(pvId) : null);
     if (pvId) {
       await fetchSensorsForEdit(String(pvId));
+      // Load dev mode preference from localStorage
+      const devModeKey = `devMode_${pvId}`;
+      const stored = localStorage.getItem(devModeKey);
+      setDevModeEnabled(stored === 'true');
     }
     setPvModalOpen(true);
   };
@@ -1599,6 +1606,25 @@ export function CustomizationPageV2() {
                     })}
                   </Select>
                 </FormControl>
+                
+                {/* Dev Mode Toggle - Only show when editing existing puntoVenta */}
+                {editPvId && (
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={devModeEnabled}
+                        onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+                          const enabled = event.target.checked;
+                          setDevModeEnabled(enabled);
+                          const devModeKey = `devMode_${editPvId}`;
+                          localStorage.setItem(devModeKey, enabled.toString());
+                        }}
+                        color="primary"
+                      />
+                    }
+                    label="Habilitar Modo Desarrollo (Mostrar dropdown de escenarios)"
+                  />
+                )}
                 
                 {/* Sensors Section - Only show when editing existing puntoVenta */}
                 {editPvId && (

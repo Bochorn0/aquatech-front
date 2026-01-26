@@ -4,7 +4,21 @@ import { useParams } from 'react-router-dom';
 
 import { useTheme } from '@mui/material/styles';
 import CardHeader from '@mui/material/CardHeader';
-import { Box, Card, Chip, Grid, Alert, Button, Divider, Typography, CircularProgress } from '@mui/material';
+import { 
+  Box,
+  Card,
+  Chip,
+  Grid,
+  Alert,
+  Button,
+  Select,
+  Divider,
+  MenuItem,
+  InputLabel,
+  Typography,
+  FormControl,
+  CircularProgress
+} from '@mui/material';
 
 import { fNumber } from 'src/utils/format-number';
 
@@ -18,6 +32,9 @@ export default function PuntoVentaDetalleV2() {
   const [loading, setLoading] = useState<boolean>(true);
   const [chartDataNiveles, setChartDataNiveles] = useState<any>(null);
   const [tiwaterData, setTiwaterData] = useState<any>(null);
+  const [metricsConfig, setMetricsConfig] = useState<any[]>([]);
+  const [latestSensorTimestamp, setLatestSensorTimestamp] = useState<Date | null>(null);
+  const [selectedScenario, setSelectedScenario] = useState<string>('');
 
   useEffect(() => {
     const fetchTiwaterData = async (codigoTienda: string) => {
@@ -34,10 +51,69 @@ export default function PuntoVentaDetalleV2() {
           const result = await response.json();
           if (result.success && result.data) {
             setTiwaterData(result.data);
+            // Update latest sensor timestamp if available
+            if (result.data.timestamp) {
+              setLatestSensorTimestamp(new Date(result.data.timestamp));
+            }
           }
         }
       } catch (error) {
         console.error('Error fetching tiwater data:', error);
+      }
+    };
+
+    const fetchLatestSensorData = async (codigoTienda: string) => {
+      try {
+        const response = await fetch(`${CONFIG.API_BASE_URL}/sensor-data/latest?codigo_tienda=${codigoTienda}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.data?.timestamp) {
+            setLatestSensorTimestamp(new Date(result.data.timestamp));
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching latest sensor data:', error);
+      }
+    };
+
+    const fetchMetricsConfig = async (puntoVentaId: string, clienteId?: string) => {
+      try {
+        // Fetch metrics for this punto venta or cliente
+        let url = `${CONFIG.API_BASE_URL_V2}/metrics`;
+        const params = new URLSearchParams();
+        if (puntoVentaId) {
+          params.append('punto_venta_id', puntoVentaId);
+        }
+        if (clienteId) {
+          params.append('clientId', clienteId);
+        }
+        if (params.toString()) {
+          url += `?${params.toString()}`;
+        }
+
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (Array.isArray(result)) {
+            setMetricsConfig(result);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching metrics config:', error);
       }
     };
 
@@ -78,6 +154,14 @@ export default function PuntoVentaDetalleV2() {
         const codigoTienda = puntoData.codigo_tienda || id;
         if (codigoTienda) {
           fetchTiwaterData(codigoTienda);
+          fetchLatestSensorData(codigoTienda);
+        }
+        
+        // Fetch metrics configuration for this punto venta
+        const puntoVentaId = puntoData.id || puntoData._id;
+        const clienteId = puntoData.cliente?.id || puntoData.cliente?._id || puntoData.cliente;
+        if (puntoVentaId || clienteId) {
+          fetchMetricsConfig(puntoVentaId, clienteId);
         }
         
         setLoading(false);
@@ -117,32 +201,87 @@ export default function PuntoVentaDetalleV2() {
     console.log('[PuntoVentaDetalleV2] Status del producto:', tiwaterProduct.status);
   }
 
+  // Dev mode: Check if user is admin and showDev flag is enabled from localStorage
+  const userStr = localStorage.getItem('user');
+  const user = userStr ? JSON.parse(userStr) : null;
+  const isAdmin = user?.role?.name === 'admin' || user?.role === 'admin';
+  
+  // Get dev mode preference from localStorage for this puntoVenta
+  const devModeKey = `devMode_${id}`;
+  const showDev = localStorage.getItem(devModeKey) === 'true';
+  const showDevDropdown = showDev && isAdmin;
+
+  const handleGenerateScenario = () => {
+    if (!selectedScenario) {
+      console.warn('[Dev] No scenario selected');
+      return;
+    }
+    console.log('[Dev] Generating scenario:', selectedScenario);
+    // TODO: Implement scenario handlers
+  };
+
   return (
     <>
       <Helmet>
         <title>{`Detalle Punto de Venta V2 - ${CONFIG.appName}`}</title>
       </Helmet>
       <Box sx={{ p: 3 }}>
-        <Button
-          variant="outlined"
-          color="primary"
-          component="a"
-          href="/PuntoVenta"
-          sx={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 1,
-            padding: '8px 16px',
-            borderRadius: '4px',
-            textDecoration: 'none',
-            '&:hover': {
-              backgroundColor: 'primary.light',
-              color: 'white',
-            },
-          }}
-        >
-          Volver a Puntos de Venta
-        </Button>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Button
+            variant="outlined"
+            color="primary"
+            component="a"
+            href="/PuntoVenta"
+            sx={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 1,
+              padding: '8px 16px',
+              borderRadius: '4px',
+              textDecoration: 'none',
+              '&:hover': {
+                backgroundColor: 'primary.light',
+                color: 'white',
+              },
+            }}
+          >
+            Volver a Puntos de Venta
+          </Button>
+          
+          {/* Dev Dropdown - Only visible for admin && showDev */}
+          {showDevDropdown && (
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              <FormControl size="small" sx={{ minWidth: 300 }}>
+                <InputLabel>Dev Scenarios</InputLabel>
+                <Select
+                  value={selectedScenario}
+                  label="Dev Scenarios"
+                  onChange={(e) => {
+                    setSelectedScenario(e.target.value);
+                  }}
+                >
+                  <MenuItem value="generate-test-data">
+                    Generar datos de prueba del día para este puntoVenta
+                  </MenuItem>
+                  <MenuItem value="simulate-preventive-alert">
+                    Simular alerta preventiva de bajo nivel de agua
+                  </MenuItem>
+                  <MenuItem value="simulate-corrective-alert">
+                    Simular alerta correctiva de bajo nivel de agua
+                  </MenuItem>
+                </Select>
+              </FormControl>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={handleGenerateScenario}
+                disabled={!selectedScenario}
+              >
+                Generar
+              </Button>
+            </Box>
+          )}
+        </Box>
         <Divider sx={{ borderStyle: 'dashed', my: 2 }} />
 
         {/* Título de la tienda */}
@@ -154,7 +293,10 @@ export default function PuntoVentaDetalleV2() {
         <Grid container spacing={3}>
           {/* Top-Left: Estado de la Tienda */}
           <Grid item xs={12} md={6}>
-            <EstadoTiendaCard punto={punto} />
+            <EstadoTiendaCard 
+              punto={punto} 
+              latestSensorTimestamp={latestSensorTimestamp}
+            />
           </Grid>
 
           {/* Top-Right: Mapa */}
@@ -184,6 +326,7 @@ export default function PuntoVentaDetalleV2() {
               metricas={metricas}
               tiwaterData={tiwaterData}
               tiwaterProduct={tiwaterProduct}
+              metricsConfig={metricsConfig}
             />
           </Grid>
         </Grid>
@@ -636,7 +779,60 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
 /* 🧱 Card: Osmosis Inversa (Bottom-Right) */
 /* -------------------------------------------------------------------------- */
 
-function OsmosisInversaCard({ osmosis, metricas, tiwaterData, tiwaterProduct }: any) {
+// Helper function to evaluate metric status based on rules
+const evaluateMetricStatus = (value: number | null | undefined, metricName: string, metricsConfig: any[]): 'success' | 'warning' | 'error' => {
+  if (value === null || value === undefined) {
+    return 'success'; // Default to green if no value
+  }
+
+  // Map metric display names to metric_type values
+  const metricTypeMap: { [key: string]: string } = {
+    'PRODUCCION': 'produccion',
+    'RECHAZO': 'recuperacion', // RECHAZO maps to recuperacion metric type
+    'EFICIENCIA': 'eficiencia'
+  };
+
+  // Find metric configuration for this metric
+  // Try multiple matching strategies
+  const metricConfig = metricsConfig.find((m: any) => {
+    const metricType = metricTypeMap[metricName] || metricName.toLowerCase();
+    return (
+      m.metric_name?.toLowerCase() === metricName.toLowerCase() ||
+      m.sensor_type?.toLowerCase() === metricName.toLowerCase() ||
+      m.metric_type?.toLowerCase() === metricType ||
+      (metricName === 'PRODUCCION' && (m.metric_type === 'produccion' || m.sensor_type === 'flujo_produccion')) ||
+      (metricName === 'RECHAZO' && (m.metric_type === 'recuperacion' || m.sensor_type === 'flujo_rechazo')) ||
+      (metricName === 'EFICIENCIA' && m.metric_type === 'eficiencia')
+    );
+  });
+
+  if (!metricConfig || !metricConfig.rules || !Array.isArray(metricConfig.rules) || metricConfig.rules.length === 0) {
+    return 'success'; // Default to green if no rules configured
+  }
+
+  // Evaluate rules (rules are typically ordered: normal, preventivo, correctivo)
+  const matchingRule = metricConfig.rules.find((rule: any) => {
+    const min = rule.min !== null && rule.min !== undefined ? rule.min : -Infinity;
+    const max = rule.max !== null && rule.max !== undefined ? rule.max : Infinity;
+    return value >= min && value <= max;
+  });
+
+  if (matchingRule) {
+    // Determine color based on rule label or color
+    const color = matchingRule.color?.toLowerCase() || matchingRule.label?.toLowerCase() || '';
+    if (color.includes('rojo') || color.includes('red') || color.includes('correctivo') || color === '#ee0000' || color === '#ee0000') {
+      return 'error'; // Red
+    }
+    if (color.includes('amarillo') || color.includes('yellow') || color.includes('preventivo') || color === '#ffff00' || color === '#ffff00') {
+      return 'warning'; // Yellow
+    }
+    return 'success'; // Green (normal)
+  }
+
+  return 'success'; // Default to green if no rule matches
+};
+
+function OsmosisInversaCard({ osmosis, metricas, tiwaterData, tiwaterProduct, metricsConfig }: any) {
   // Extraer datos de osmosis
   let osmosisData: any = null;
   if (osmosis && osmosis.length > 0) {
@@ -741,10 +937,12 @@ function OsmosisInversaCard({ osmosis, metricas, tiwaterData, tiwaterProduct }: 
                   ? `${osmosisData.produccion.toFixed(1)} L/MIN` 
                   : 'N/A'}
               </Typography>
-              <Box sx={{ display: 'flex', gap: 0.5 }}>
-                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'success.main' }} />
-                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'error.main' }} />
-              </Box>
+              <Box sx={{ 
+                width: 8, 
+                height: 8, 
+                borderRadius: '50%', 
+                bgcolor: `${evaluateMetricStatus(osmosisData?.produccion, 'PRODUCCION', metricsConfig || [])}.main` 
+              }} />
             </Box>
           </Grid>
           <Grid item xs={12}>
@@ -754,10 +952,12 @@ function OsmosisInversaCard({ osmosis, metricas, tiwaterData, tiwaterProduct }: 
                   ? `${osmosisData.rechazo.toFixed(1)} L/MIN` 
                   : 'N/A'}
               </Typography>
-              <Box sx={{ display: 'flex', gap: 0.5 }}>
-                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'success.main' }} />
-                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'error.main' }} />
-              </Box>
+              <Box sx={{ 
+                width: 8, 
+                height: 8, 
+                borderRadius: '50%', 
+                bgcolor: `${evaluateMetricStatus(osmosisData?.rechazo, 'RECHAZO', metricsConfig || [])}.main` 
+              }} />
             </Box>
           </Grid>
           <Grid item xs={12}>
@@ -767,10 +967,12 @@ function OsmosisInversaCard({ osmosis, metricas, tiwaterData, tiwaterProduct }: 
                   ? `${osmosisData.eficiencia}%` 
                   : 'N/A'}
               </Typography>
-              <Box sx={{ display: 'flex', gap: 0.5 }}>
-                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'success.main' }} />
-                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'error.main' }} />
-              </Box>
+              <Box sx={{ 
+                width: 8, 
+                height: 8, 
+                borderRadius: '50%', 
+                bgcolor: `${evaluateMetricStatus(parseFloat(osmosisData?.eficiencia), 'EFICIENCIA', metricsConfig || [])}.main` 
+              }} />
             </Box>
           </Grid>
         </Grid>
@@ -1084,10 +1286,19 @@ function MetricasSection({ metricas }: any) {
 /* 🧱 Card: Estado de la Tienda (Top-Left) */
 /* -------------------------------------------------------------------------- */
 
-function EstadoTiendaCard({ punto }: any) {
-  // Determinar si está online basándose en si hay datos activos
-  // Verificar si hay controladores online, osmosis systems online, o productos con datos recientes
-  const isOnline = punto.online || false;
+function EstadoTiendaCard({ punto, latestSensorTimestamp }: any) {
+  // Determinar si está online: GREEN si recibimos datos MQTT en los últimos 5 minutos, RED si no
+  const FIVE_MINUTES_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
+  const now = new Date().getTime();
+  
+  let isOnline = false;
+  if (latestSensorTimestamp) {
+    const timestampMs = new Date(latestSensorTimestamp).getTime();
+    isOnline = (now - timestampMs) <= FIVE_MINUTES_MS;
+  } else {
+    // Fallback to punto.online if no timestamp available
+    isOnline = punto.online || false;
+  }
   
   // Obtener ubicación por defecto (la misma que se usa en el mapa)
   const defaultCity = 'Hermosillo';
@@ -1114,14 +1325,6 @@ function EstadoTiendaCard({ punto }: any) {
         <Typography variant="body1" fontWeight="medium">
           ESTATUS: {isOnline ? 'ONLINE' : 'OFFLINE'}
         </Typography>
-        <Box
-          sx={{
-            width: 12,
-            height: 12,
-            borderRadius: '50%',
-            bgcolor: isOnline ? 'success.main' : 'error.main',
-          }}
-        />
       </Box>
 
       <Box sx={{ mb: 2 }}>
@@ -1142,14 +1345,6 @@ function EstadoTiendaCard({ punto }: any) {
         <Typography variant="body1" fontWeight="medium">
           FUNCIONAMIENTO:
         </Typography>
-        <Box
-          sx={{
-            width: 12,
-            height: 12,
-            borderRadius: '50%',
-            bgcolor: isOnline ? 'success.main' : 'error.main',
-          }}
-        />
         <Box
           sx={{
             width: 12,
