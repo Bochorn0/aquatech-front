@@ -35,6 +35,7 @@ export default function PuntoVentaDetalleV2() {
   const [metricsConfig, setMetricsConfig] = useState<any[]>([]);
   const [latestSensorTimestamp, setLatestSensorTimestamp] = useState<Date | null>(null);
   const [selectedScenario, setSelectedScenario] = useState<string>('');
+  const [generating, setGenerating] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchTiwaterData = async (codigoTienda: string) => {
@@ -211,13 +212,44 @@ export default function PuntoVentaDetalleV2() {
   const showDev = localStorage.getItem(devModeKey) === 'true';
   const showDevDropdown = showDev && isAdmin;
 
-  const handleGenerateScenario = () => {
+  const handleGenerateScenario = async () => {
     if (!selectedScenario) {
       console.warn('[Dev] No scenario selected');
       return;
     }
-    console.log('[Dev] Generating scenario:', selectedScenario);
-    // TODO: Implement scenario handlers
+
+    if (selectedScenario === 'generate-daily-data') {
+      setGenerating(true);
+      try {
+        const response = await fetch(`${CONFIG.API_BASE_URL}/puntoVentas/${id}/generate-daily-data`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+          console.log('[Dev] Datos diarios generados:', result);
+          alert(`✅ ${result.message}\n\nPublicados: ${result.data.published}/24 mensajes\nTopic: ${result.data.topic}`);
+          // Recargar datos después de generar
+          window.location.reload();
+        } else {
+          console.error('[Dev] Error generando datos:', result);
+          alert(`❌ Error: ${result.message}`);
+        }
+      } catch (error) {
+        console.error('[Dev] Error en la petición:', error);
+        alert('❌ Error al generar datos diarios. Verifica la consola para más detalles.');
+      } finally {
+        setGenerating(false);
+      }
+    } else {
+      console.log('[Dev] Generating scenario:', selectedScenario);
+      // TODO: Implement other scenario handlers
+    }
   };
 
   return (
@@ -260,14 +292,8 @@ export default function PuntoVentaDetalleV2() {
                     setSelectedScenario(e.target.value);
                   }}
                 >
-                  <MenuItem value="generate-test-data">
-                    Generar datos de prueba del día para este puntoVenta
-                  </MenuItem>
-                  <MenuItem value="simulate-preventive-alert">
-                    Simular alerta preventiva de bajo nivel de agua
-                  </MenuItem>
-                  <MenuItem value="simulate-corrective-alert">
-                    Simular alerta correctiva de bajo nivel de agua
+                  <MenuItem value="generate-daily-data">
+                    Generar datos diarios (24 horas)
                   </MenuItem>
                 </Select>
               </FormControl>
@@ -275,9 +301,9 @@ export default function PuntoVentaDetalleV2() {
                 variant="contained"
                 color="primary"
                 onClick={handleGenerateScenario}
-                disabled={!selectedScenario}
+                disabled={!selectedScenario || generating}
               >
-                Generar
+                {generating ? 'Generando...' : 'Generar'}
               </Button>
             </Box>
           )}
@@ -289,9 +315,9 @@ export default function PuntoVentaDetalleV2() {
           {punto.name || 'NOMBRE TIENDA'}
         </Typography>
 
-        {/* Grid 2x2 Principal */}
+        {/* Grid Principal Reorganizado */}
         <Grid container spacing={3}>
-          {/* Top-Left: Estado de la Tienda */}
+          {/* Top-Left: Estado de la Tienda (con mapa integrado) */}
           <Grid item xs={12} md={6}>
             <EstadoTiendaCard 
               punto={punto} 
@@ -299,27 +325,7 @@ export default function PuntoVentaDetalleV2() {
             />
           </Grid>
 
-          {/* Top-Right: Mapa */}
-          <Grid item xs={12} md={6}>
-            <Card variant="outlined" sx={{ p: 2, height: '100%', border: '2px solid', borderColor: 'primary.main' }}>
-              <MapComponent 
-                lat={punto.lat || punto.city?.lat || 29.149162901939928}
-                long={punto.long || punto.city?.lon || -110.96483231003234}
-              />
-            </Card>
-          </Grid>
-
-          {/* Bottom-Left: Almacenamiento */}
-          <Grid item xs={12} md={6}>
-            <AlmacenamientoCard 
-              niveles={niveles} 
-              chartDataNiveles={chartDataNiveles}
-              tiwaterData={tiwaterData}
-              tiwaterProduct={tiwaterProduct}
-            />
-          </Grid>
-
-          {/* Bottom-Right: Osmosis Inversa */}
+          {/* Top-Right: Osmosis Inversa */}
           <Grid item xs={12} md={6}>
             <OsmosisInversaCard 
               osmosis={osmosis}
@@ -327,6 +333,16 @@ export default function PuntoVentaDetalleV2() {
               tiwaterData={tiwaterData}
               tiwaterProduct={tiwaterProduct}
               metricsConfig={metricsConfig}
+            />
+          </Grid>
+
+          {/* Bottom: Almacenamiento (Layout horizontal) */}
+          <Grid item xs={12}>
+            <AlmacenamientoCard 
+              niveles={niveles} 
+              chartDataNiveles={chartDataNiveles}
+              tiwaterData={tiwaterData}
+              tiwaterProduct={tiwaterProduct}
             />
           </Grid>
         </Grid>
@@ -676,23 +692,34 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
   });
 
   return (
-    <Card variant="outlined" sx={{ p: 2, height: '100%', border: '2px solid', borderColor: 'primary.main' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-        <Typography variant="h6" fontWeight="bold">
-          ALMACENAMIENTO
-        </Typography>
-        <Button variant="text" size="small" sx={{ minWidth: 'auto', p: 0.5 }}>
-          ←
-        </Button>
-      </Box>
-      <Divider sx={{ mb: 2 }} />
+    <Card 
+      variant="outlined" 
+      sx={{ 
+        p: 3, 
+        height: '100%', 
+        border: '2px solid', 
+        borderColor: 'primary.main',
+        borderRadius: 2,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        transition: 'box-shadow 0.3s ease',
+        background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(250,250,250,0.95) 100%)',
+        '&:hover': {
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        }
+      }}
+    >
+      <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, color: 'primary.main' }}>
+        Almacenamiento
+      </Typography>
+      <Divider sx={{ mb: 3, borderWidth: 1 }} />
 
-      <Grid container spacing={2}>
-        {/* AGUA CRUDA */}
-        <Grid item xs={12}>
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-              AGUA CRUDA
+      {/* Layout horizontal: Agua Cruda | Agua Purificada */}
+      <Grid container spacing={3}>
+        {/* AGUA CRUDA - Mitad izquierda */}
+        <Grid item xs={12} md={6}>
+          <Box sx={{ p: 2.5, borderRadius: 2, bgcolor: 'primary.lighter', border: '1px solid', borderColor: 'primary.main', height: '100%' }}>
+            <Typography variant="subtitle1" fontWeight="600" gutterBottom sx={{ color: 'primary.dark', mb: 2 }}>
+              Agua Cruda
             </Typography>
             
             <Grid container spacing={2} sx={{ mb: 2 }}>
@@ -718,7 +745,7 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
             </Box>
 
             {/* Gráfica histórica - siempre visible */}
-            <Box sx={{ mt: 2, height: 100 }}>
+            <Box sx={{ mt: 2, height: 200 }}>
               {aguaCrudaData?.chartData ? (
                 <NivelMiniChart chart={aguaCrudaData.chartData} title="Histórico de Nivel del tanque Agua cruda" />
               ) : (
@@ -732,11 +759,11 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
           </Box>
         </Grid>
 
-        {/* AGUA PURIFICADA */}
-        <Grid item xs={12}>
-          <Box>
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-              AGUA PURIFICADA
+        {/* AGUA PURIFICADA - Mitad derecha */}
+        <Grid item xs={12} md={6}>
+          <Box sx={{ p: 2.5, borderRadius: 2, bgcolor: 'info.lighter', border: '1px solid', borderColor: 'info.main', height: '100%' }}>
+            <Typography variant="subtitle1" fontWeight="600" gutterBottom sx={{ color: 'info.dark', mb: 2 }}>
+              Agua Purificada
             </Typography>
             
             <Grid container spacing={2} sx={{ mb: 2 }}>
@@ -757,7 +784,7 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
             </Box>
 
             {/* Gráfica histórica - siempre visible */}
-            <Box sx={{ mt: 2, height: 100 }}>
+            <Box sx={{ mt: 2, height: 200 }}>
               {aguaPurificadaData?.chartData ? (
                 <NivelMiniChart chart={aguaPurificadaData.chartData} title="Histórico de Nivel del tanque Agua purificada" />
               ) : (
@@ -914,18 +941,26 @@ function OsmosisInversaCard({ osmosis, metricas, tiwaterData, tiwaterProduct, me
   const presionCO2 = getPresionCO2() || 320.79;
 
   return (
-    <Card variant="outlined" sx={{ p: 2, height: '100%', border: '2px solid', borderColor: 'primary.main' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="h6" fontWeight="bold">
-            💧 OSMOSIS INVERSA
-          </Typography>
-        </Box>
-        <Button variant="text" size="small" sx={{ minWidth: 'auto', p: 0.5 }}>
-          →
-        </Button>
-      </Box>
-      <Divider sx={{ mb: 2 }} />
+    <Card 
+      variant="outlined" 
+      sx={{ 
+        p: 3, 
+        height: '100%', 
+        border: '2px solid', 
+        borderColor: 'primary.main',
+        borderRadius: 2,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        transition: 'box-shadow 0.3s ease',
+        background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(250,250,250,0.95) 100%)',
+        '&:hover': {
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        }
+      }}
+    >
+      <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, color: 'primary.main' }}>
+        💧 Osmosis Inversa
+      </Typography>
+      <Divider sx={{ mb: 3, borderWidth: 1 }} />
 
       {/* Métricas de Osmosis */}
       <Box sx={{ mb: 3 }}>
@@ -982,10 +1017,25 @@ function OsmosisInversaCard({ osmosis, metricas, tiwaterData, tiwaterProduct, me
       <Grid container spacing={2}>
         {/* Máquina Nieve */}
         <Grid item xs={12}>
-          <Card variant="outlined" sx={{ p: 1.5, bgcolor: 'primary.lighter', border: '1px solid', borderColor: 'primary.main' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <Typography variant="body2" fontWeight="bold">
-                🍦 MAQUINA NIEVE
+          <Card 
+            variant="outlined" 
+            sx={{ 
+              p: 2, 
+              bgcolor: 'primary.lighter', 
+              border: '1px solid', 
+              borderColor: 'primary.main',
+              borderRadius: 2,
+              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+              }
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+              <Typography variant="body2" fontWeight="600" sx={{ color: 'primary.dark' }}>
+                🍦 Máquina Nieve
               </Typography>
             </Box>
             <Grid container spacing={1}>
@@ -1005,10 +1055,25 @@ function OsmosisInversaCard({ osmosis, metricas, tiwaterData, tiwaterProduct, me
 
         {/* Máquina Frappe */}
         <Grid item xs={12}>
-          <Card variant="outlined" sx={{ p: 1.5, bgcolor: 'primary.lighter', border: '1px solid', borderColor: 'primary.main' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <Typography variant="body2" fontWeight="bold">
-                🥤 MAQUINA FRAPPE
+          <Card 
+            variant="outlined" 
+            sx={{ 
+              p: 2, 
+              bgcolor: 'primary.lighter', 
+              border: '1px solid', 
+              borderColor: 'primary.main',
+              borderRadius: 2,
+              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+              }
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+              <Typography variant="body2" fontWeight="600" sx={{ color: 'primary.dark' }}>
+                🥤 Máquina Frappe
               </Typography>
             </Box>
             <Grid container spacing={1}>
@@ -1028,10 +1093,25 @@ function OsmosisInversaCard({ osmosis, metricas, tiwaterData, tiwaterProduct, me
 
         {/* Máquina Carbonatada */}
         <Grid item xs={12}>
-          <Card variant="outlined" sx={{ p: 1.5, bgcolor: 'primary.lighter', border: '1px solid', borderColor: 'primary.main' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <Typography variant="body2" fontWeight="bold">
-                🥤 MAQUINA CARBONATADA
+          <Card 
+            variant="outlined" 
+            sx={{ 
+              p: 2, 
+              bgcolor: 'primary.lighter', 
+              border: '1px solid', 
+              borderColor: 'primary.main',
+              borderRadius: 2,
+              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+              }
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+              <Typography variant="body2" fontWeight="600" sx={{ color: 'primary.dark' }}>
+                🥤 Máquina Carbonatada
               </Typography>
             </Box>
             <Typography variant="caption" color="text.secondary">
@@ -1058,35 +1138,50 @@ function NivelMiniChart({ chart, title }: { chart: any; title: string }) {
       type: 'line',
       toolbar: { show: false },
       zoom: { enabled: false },
-      sparkline: { enabled: true },
+      sparkline: { enabled: false },
     },
     colors: [theme.palette.primary.main],
     stroke: {
-      width: 2,
+      width: 3,
       curve: 'smooth',
     },
     markers: {
-      size: 2,
-      strokeWidth: 1,
+      size: 4,
+      strokeWidth: 2,
+      hover: {
+        size: 6,
+      },
     },
     xaxis: {
       categories: chart?.categories || [],
       labels: {
-        show: false,
+        show: true,
+        rotate: -45,
+        rotateAlways: false,
+        style: {
+          fontSize: '10px',
+        },
+        maxHeight: 60,
       },
       axisTicks: {
-        show: false,
+        show: true,
       },
     },
     yaxis: {
       labels: {
-        show: false,
+        show: true,
+        style: {
+          fontSize: '11px',
+        },
+        formatter: (value: number) => `${value.toFixed(0)}%`,
       },
       min: 0,
       max: 100,
     },
     tooltip: {
       enabled: true,
+      shared: true,
+      intersect: false,
       y: {
         formatter: (value: number) => `${value.toFixed(1)}%`,
       },
@@ -1095,7 +1190,18 @@ function NivelMiniChart({ chart, title }: { chart: any; title: string }) {
       show: false,
     },
     grid: {
-      show: false,
+      show: true,
+      strokeDashArray: 3,
+      xaxis: {
+        lines: {
+          show: false,
+        },
+      },
+      yaxis: {
+        lines: {
+          show: true,
+        },
+      },
     },
   });
 
@@ -1113,14 +1219,14 @@ function NivelMiniChart({ chart, title }: { chart: any; title: string }) {
 
   return (
     <Box sx={{ height: '100%' }}>
-      <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+      <Typography variant="subtitle2" fontWeight="600" color="text.secondary" sx={{ mb: 1.5, display: 'block' }}>
         {title}
       </Typography>
       <Chart
         type="line"
         series={seriesWithYaxis}
         options={chartOptions}
-        height={80}
+        height={180}
       />
     </Box>
   );
@@ -1205,19 +1311,40 @@ function NivelHistoricoChart({ nivelName, chart }: { nivelName: string; chart: a
   const valorActual = chart?.estadisticas?.valorActual;
 
   return (
-    <Card variant="outlined" sx={{ mb: 3, p: 2 }}>
+    <Card 
+      variant="outlined" 
+      sx={{ 
+        mb: 3, 
+        p: 3,
+        borderRadius: 2,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        transition: 'box-shadow 0.3s ease',
+        background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(250,250,250,0.95) 100%)',
+        '&:hover': {
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        }
+      }}
+    >
       <CardHeader
-        title={`Histórico de ${nivelName}`}
-        subheader={valorActual !== null && valorActual !== undefined 
-          ? `Valor actual: ${valorActual.toFixed(1)}%`
-          : 'Valor actual: N/A'}
+        title={
+          <Typography variant="h6" fontWeight="600" sx={{ color: 'primary.main' }}>
+            Histórico de {nivelName}
+          </Typography>
+        }
+        subheader={
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            {valorActual !== null && valorActual !== undefined 
+              ? `Valor actual: ${valorActual.toFixed(1)}%`
+              : 'Valor actual: N/A'}
+          </Typography>
+        }
       />
-      <Divider sx={{ mb: 2 }} />
+      <Divider sx={{ mb: 3, borderWidth: 1 }} />
       <Chart
         type="line"
         series={seriesWithYaxis}
         options={chartOptions}
-        height={350}
+        height={450}
         sx={{ py: 2 }}
       />
     </Card>
@@ -1312,47 +1439,99 @@ function EstadoTiendaCard({ punto, latestSensorTimestamp }: any) {
   const estado = hasCityData ? punto.city.state : defaultState;
   
   return (
-    <Card variant="outlined" sx={{ p: 2, height: '100%', border: '2px solid', borderColor: 'primary.main' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        <Box
-          sx={{
-            width: 12,
-            height: 12,
-            borderRadius: '50%',
-            bgcolor: isOnline ? 'success.main' : 'error.main',
-          }}
-        />
-        <Typography variant="body1" fontWeight="medium">
-          ESTATUS: {isOnline ? 'ONLINE' : 'OFFLINE'}
-        </Typography>
-      </Box>
+    <Card 
+      variant="outlined" 
+      sx={{ 
+        p: 3, 
+        height: '100%', 
+        border: '2px solid', 
+        borderColor: 'primary.main',
+        borderRadius: 2,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        transition: 'box-shadow 0.3s ease',
+        background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(250,250,250,0.95) 100%)',
+        '&:hover': {
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        }
+      }}
+    >
+      <Typography variant="h6" sx={{ mb: 2.5, fontWeight: 600, color: 'primary.main' }}>
+        Estado de la Tienda
+      </Typography>
 
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="body1" fontWeight="medium">
-          UBICACIÓN: {ciudad}, {estado}
-        </Typography>
-      </Box>
-
-      {punto.cliente?.name && (
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="body1" fontWeight="medium">
-            CLIENTE: {punto.cliente.name}
+      {/* Información de estado */}
+      <Box sx={{ mb: 2.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5, p: 1.5, borderRadius: 1, bgcolor: isOnline ? 'success.lighter' : 'error.lighter' }}>
+          <Box
+            sx={{
+              width: 14,
+              height: 14,
+              borderRadius: '50%',
+              bgcolor: isOnline ? 'success.main' : 'error.main',
+              boxShadow: `0 0 8px ${isOnline ? 'rgba(76, 175, 80, 0.5)' : 'rgba(244, 67, 54, 0.5)'}`,
+              animation: isOnline ? 'pulse 2s infinite' : 'none',
+              '@keyframes pulse': {
+                '0%, 100%': { opacity: 1 },
+                '50%': { opacity: 0.7 },
+              }
+            }}
+          />
+          <Typography variant="body1" fontWeight="600" sx={{ color: isOnline ? 'success.dark' : 'error.dark' }}>
+            {isOnline ? 'ONLINE' : 'OFFLINE'}
           </Typography>
         </Box>
-      )}
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Typography variant="body1" fontWeight="medium">
-          FUNCIONAMIENTO:
+        <Box sx={{ mb: 1.5, p: 1.5, borderRadius: 1, bgcolor: 'grey.50' }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+            Ubicación
+          </Typography>
+          <Typography variant="body1" fontWeight="medium">
+            {ciudad}, {estado}
+          </Typography>
+        </Box>
+
+        {punto.cliente?.name && (
+          <Box sx={{ mb: 1.5, p: 1.5, borderRadius: 1, bgcolor: 'grey.50' }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+              Cliente
+            </Typography>
+            <Typography variant="body1" fontWeight="medium">
+              {punto.cliente.name}
+            </Typography>
+          </Box>
+        )}
+
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 1.5, borderRadius: 1, bgcolor: 'grey.50' }}>
+          <Typography variant="caption" color="text.secondary">
+            Funcionamiento:
+          </Typography>
+          <Box
+            sx={{
+              width: 12,
+              height: 12,
+              borderRadius: '50%',
+              bgcolor: isOnline ? 'success.main' : 'error.main',
+            }}
+          />
+          <Typography variant="body2" fontWeight="medium" sx={{ color: isOnline ? 'success.dark' : 'error.dark' }}>
+            {isOnline ? 'Operativo' : 'Inactivo'}
+          </Typography>
+        </Box>
+      </Box>
+
+      <Divider sx={{ my: 2.5, borderWidth: 1 }} />
+
+      {/* Mapa integrado - más compacto */}
+      <Box>
+        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: 'text.secondary' }}>
+          Ubicación en el mapa
         </Typography>
-        <Box
-          sx={{
-            width: 12,
-            height: 12,
-            borderRadius: '50%',
-            bgcolor: isOnline ? 'success.main' : 'error.main',
-          }}
-        />
+        <Box sx={{ borderRadius: 1, overflow: 'hidden', border: '1px solid', borderColor: 'divider', height: 250 }}>
+          <MapComponent 
+            lat={punto.lat || punto.city?.lat || 29.149162901939928}
+            long={punto.long || punto.city?.lon || -110.96483231003234}
+          />
+        </Box>
       </Box>
     </Card>
   );
