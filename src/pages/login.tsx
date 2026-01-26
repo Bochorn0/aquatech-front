@@ -2,13 +2,18 @@ import { Helmet } from 'react-helmet-async';
 import { useState, useEffect, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
-import Link from '@mui/material/Link';
+import Button from '@mui/material/Button';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
-import TextField from '@mui/material/TextField';
 import IconButton from '@mui/material/IconButton';
+import InputAdornment from '@mui/material/InputAdornment';
+import Link from '@mui/material/Link';
+import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import LoadingButton from '@mui/lab/LoadingButton';
-import InputAdornment from '@mui/material/InputAdornment';
 
 import { useRouter } from 'src/routes/hooks';
 
@@ -27,6 +32,12 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false); // To manage loading state
   const [errorMessage, setErrorMessage] = useState(null); // To manage error state
+  
+  // Forgot password modal state
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+  const [forgotPasswordMessage, setForgotPasswordMessage] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -67,6 +78,36 @@ export function LoginPage() {
     }
   };
 
+  const handleForgotPassword = useCallback(async () => {
+    if (!forgotPasswordEmail || !forgotPasswordEmail.includes('@')) {
+      setForgotPasswordMessage('Por favor ingresa un correo electrónico válido');
+      return;
+    }
+
+    setForgotPasswordLoading(true);
+    setForgotPasswordMessage(null);
+
+    try {
+      const response = await post<{ message?: string; success?: boolean }>(`/auth/forgot-password`, { email: forgotPasswordEmail });
+      setForgotPasswordMessage(response.message || 'Si el correo existe, se enviará un enlace de recuperación');
+      setTimeout(() => {
+        setForgotPasswordOpen(false);
+        setForgotPasswordEmail('');
+        setForgotPasswordMessage(null);
+      }, 3000);
+    } catch (error: any) {
+      setForgotPasswordMessage(error.response?.data?.message || 'Error al solicitar recuperación de contraseña');
+    } finally {
+      setForgotPasswordLoading(false);
+    }
+  }, [forgotPasswordEmail]);
+
+  const handleOpenForgotPassword = () => {
+    setForgotPasswordOpen(true);
+    setForgotPasswordEmail(email); // Pre-fill with current email if available
+    setForgotPasswordMessage(null);
+  };
+
   const renderForm = (
     <Box display="flex" flexDirection="column" alignItems="flex-end">
       <TextField
@@ -79,7 +120,12 @@ export function LoginPage() {
         InputLabelProps={{ shrink: true }}
         sx={{ mb: 3 }}
       />
-      <Link variant="body2" color="inherit" sx={{ mb: 1.5 }}>
+      <Link 
+        variant="body2" 
+        color="inherit" 
+        sx={{ mb: 1.5, cursor: 'pointer' }}
+        onClick={handleOpenForgotPassword}
+      >
         Olvidaste tu contraseña?
       </Link>
       <TextField
@@ -158,6 +204,52 @@ export function LoginPage() {
           <Iconify icon="ri:twitter-x-fill" />
         </IconButton>
       </Box> */}
+
+      {/* Forgot Password Dialog */}
+      <Dialog open={forgotPasswordOpen} onClose={() => setForgotPasswordOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Recuperar Contraseña</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.
+          </Typography>
+          <TextField
+            fullWidth
+            label="Correo Electrónico"
+            type="email"
+            value={forgotPasswordEmail}
+            onChange={(e) => setForgotPasswordEmail(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleForgotPassword();
+              }
+            }}
+            sx={{ mb: 2 }}
+            autoFocus
+          />
+          {forgotPasswordMessage && (
+            <Typography 
+              variant="body2" 
+              color={forgotPasswordMessage.includes('Error') ? 'error' : 'success.main'}
+              sx={{ mt: 1 }}
+            >
+              {forgotPasswordMessage}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setForgotPasswordOpen(false)} color="secondary">
+            Cancelar
+          </Button>
+          <LoadingButton
+            onClick={handleForgotPassword}
+            loading={forgotPasswordLoading}
+            variant="contained"
+            disabled={!forgotPasswordEmail || !forgotPasswordEmail.includes('@')}
+          >
+            Enviar
+          </LoadingButton>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }

@@ -23,6 +23,7 @@ export const PuntoVentaDetalleV2 = lazy(() => import('src/pages/punto-venta/punt
 export const ProfilePage = lazy(() => import('src/pages/users/user-profile'));
 export const LoginPage = lazy(() => import('src/pages/login'));
 export const RegisterPage = lazy(() => import('src/pages/register'));
+export const ResetPasswordPage = lazy(() => import('src/pages/reset-password'));
 export const ProductsPage = lazy(() => import('src/pages/products'));
 export const CustomizationPage = lazy(() => import('src/pages/personalizacion'));
 export const CustomizationPageV2 = lazy(() => import('src/pages/personalizacion-v2'));
@@ -313,6 +314,14 @@ export function Router() {
       element: (
         <AuthLayout>
           <RegisterPage />
+        </AuthLayout>
+      ),
+    },
+    {
+      path: 'reset-password',
+      element: (
+        <AuthLayout>
+          <ResetPasswordPage />
         </AuthLayout>
       ),
     },
