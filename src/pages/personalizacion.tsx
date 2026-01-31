@@ -1,6 +1,8 @@
+import type { SelectChangeEvent } from "@mui/material/Select";
+
 import Swal from "sweetalert2";
-import { Helmet } from "react-helmet-async";
 import { useState, useEffect } from "react";
+import { Helmet } from "react-helmet-async";
 
 import {
   Box,
@@ -84,21 +86,7 @@ const defaultCity: City = {
 const defaultclient = { _id: '', name: '' , email:'', address: {city: '', state: '', country: '', street: '', zip: '', lat: '', lon: ''}}
 const defaultMetric = { _id: '', cliente: '', client_name: '', product_type: '', tds_range: 0, production_volume_range: 0, temperature_range: 0, rejected_volume_range: 0, flow_rate_speed_range: 0, active_time: 0, metrics_description: '', filter_only_online: true }
 
-const defaultProduct: Product = {
-    id: "",
-    name: "",
-    city: "",
-    state: "",
-    product_type: "",
-    cliente: defaultclient,
-    drive: "",
-    online: false,
-    icon: "",
-    status: [],
-    lat: 0,
-    lon: 0  
-}
-const defaultPv = { _id: '', name: '' , client_name:'', cliente: defaultclient, city: defaultCity, city_name: '', productos: [defaultProduct]}
+const defaultPv = { _id: '', name: '' , client_name:'', cliente: defaultclient, city: defaultCity, city_name: '', productos: []}
 export function CustomizationPage() {
   const [metrics, setMetrics] = useState<Metric[]>([]);
   const [puntosVenta, setPuntosVenta] = useState<PuntosVenta[]>([]);
@@ -120,6 +108,22 @@ export function CustomizationPage() {
   const [clients, setClients] = useState<Cliente[]>([]);
   const [tabIndex, setTabIndex] = useState(0);
   const [products, setProducts] = useState<Product[]>([]);
+  const [productFormData, setProductFormData] = useState<{ _id?: string; name?: string; cliente: string; city: string; state: string; product_type: string }>({
+    cliente: '',
+    city: '',
+    state: '',
+    product_type: 'Osmosis',
+  });
+  const [productModalOpen, setProductModalOpen] = useState(false);
+  const [productSearchText, setProductSearchText] = useState('');
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+  const [bulkProductFormData, setBulkProductFormData] = useState<{ cliente: string; city: string; state: string; product_type: string }>({
+    cliente: '',
+    city: '',
+    state: '',
+    product_type: '',
+  });
+  const [bulkProductModalOpen, setBulkProductModalOpen] = useState(false);
 
   useEffect(() => {
     fetchMetrics();
@@ -245,7 +249,24 @@ const fetchPuntosVenta = async () => {
   };
 
   const handlePvEdit = (pv: PuntosVenta) => {
-    setPvFormData(pv);
+    // Ensure productos is an array of IDs (strings)
+    const normalizedPv: PuntosVenta = {
+      ...pv,
+      productos: Array.isArray(pv.productos) 
+        ? (pv.productos.map((p: any) => 
+            typeof p === 'object' && p !== null && p._id 
+              ? p._id 
+              : p
+          ).filter((id: any) => id && id !== '') as string[])
+        : [],
+      cliente: typeof pv.cliente === 'object' && pv.cliente !== null && pv.cliente._id
+        ? pv.cliente._id 
+        : (typeof pv.cliente === 'string' ? pv.cliente : ''),
+      city: typeof pv.city === 'object' && pv.city !== null && pv.city._id
+        ? pv.city._id 
+        : (typeof pv.city === 'string' ? pv.city : ''),
+    };
+    setPvFormData(normalizedPv);
     setPvModalOpen(true);
   };
 
@@ -352,7 +373,9 @@ const handlePvChange = (e: any) => {
   const { name, value } = e.target;
   setPvFormData((prevData) => ({
     ...prevData,
-    [name]: name === "productos" ? (typeof value === "string" ? value.split(",") : value) : value
+    [name]: name === "productos" 
+      ? (Array.isArray(value) ? value : (typeof value === "string" ? value.split(",") : []))
+      : value
   }));
 };
 
@@ -395,10 +418,28 @@ const handlePvChange = (e: any) => {
   const handlePvSubmit = async () => {
     setLoading(true);
     try {
+      // Normalize data before sending: extract IDs from objects
+      const normalizedData = {
+        name: pvFormData.name,
+        cliente: typeof pvFormData.cliente === 'object' && pvFormData.cliente !== null 
+          ? pvFormData.cliente._id 
+          : pvFormData.cliente,
+        city: typeof pvFormData.city === 'object' && pvFormData.city !== null 
+          ? pvFormData.city._id 
+          : pvFormData.city,
+        productos: Array.isArray(pvFormData.productos) 
+          ? pvFormData.productos.map((p: any) => 
+              typeof p === 'object' && p !== null && p._id 
+                ? p._id 
+                : p
+            ).filter((id: any) => id && id !== '') // Filter out empty strings
+          : [],
+      };
+
       if (pvFormData._id) {
-        await patch<City>(`/puntoVentas/${pvFormData._id}`, pvFormData);
+        await patch<City>(`/puntoVentas/${pvFormData._id}`, normalizedData);
       } else {
-        await post<City>(`/puntoVentas`, pvFormData);
+        await post<City>(`/puntoVentas`, normalizedData);
       }
       handleClosePvModal();
       fetchPuntosVenta();
@@ -435,7 +476,141 @@ const handlePvChange = (e: any) => {
   const handleClosePvModal = () => {
     setPvModalOpen(false);
   };
-  
+
+  const handleProductEdit = (product: Product) => {
+    const prod = product as Product & { _id?: string };
+    setProductFormData({
+      _id: prod._id ?? prod.id,
+      name: prod.name,
+      cliente: typeof prod.cliente === 'object' && prod.cliente !== null && prod.cliente._id
+        ? prod.cliente._id
+        : (typeof prod.cliente === 'string' ? prod.cliente : ''),
+      city: prod.city ?? '',
+      state: prod.state ?? '',
+      product_type: prod.product_type ?? 'Osmosis',
+    });
+    setProductModalOpen(true);
+  };
+
+  const handleProductChange = (e: any) => {
+    const { name, value } = e.target;
+    if (name === 'city' && value) {
+      const c = cities.find((city) => city._id === value);
+      if (c) {
+        setProductFormData((prev) => ({ ...prev, city: c.city ?? '', state: c.state ?? '' }));
+        return;
+      }
+    }
+    setProductFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const productFormCityId = cities.find((c) => c.city === productFormData.city && c.state === productFormData.state)?._id ?? '';
+
+  const handleProductSubmit = async () => {
+    if (!productFormData._id) return;
+    setLoading(true);
+    try {
+      await patch<Product>(`/products/${productFormData._id}`, {
+        cliente: productFormData.cliente,
+        city: productFormData.city,
+        state: productFormData.state,
+        product_type: productFormData.product_type,
+      });
+      handleCloseProductModal();
+      fetchProducts();
+    } catch (error) {
+      console.error('Error updating product:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCloseProductModal = () => {
+    setProductModalOpen(false);
+    setProductFormData({ cliente: '', city: '', state: '', product_type: 'Osmosis' });
+  };
+
+  const productSearchLower = productSearchText.trim().toLowerCase();
+  const filteredProducts = productSearchLower
+    ? products.filter((p) => {
+        const prod = p as Product & { _id?: string };
+        const name = (prod.name ?? '').toLowerCase();
+        const clientName = (typeof prod.cliente === 'object' && prod.cliente !== null ? prod.cliente.name : '').toLowerCase();
+        const city = (prod.city ?? '').toLowerCase();
+        const productType = (prod.product_type ?? '').toLowerCase();
+        return [name, clientName, city, productType].some((s) => s.includes(productSearchLower));
+      })
+    : products;
+
+  const handleSelectAllProducts = (checked: boolean) => {
+    if (checked) {
+      const ids = new Set(filteredProducts.map((p) => (p as Product & { _id?: string })._id ?? (p as Product).id));
+      setSelectedProductIds(ids);
+    } else {
+      setSelectedProductIds(new Set());
+    }
+  };
+
+  const handleSelectProduct = (productId: string, checked: boolean) => {
+    setSelectedProductIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(productId);
+      else next.delete(productId);
+      return next;
+    });
+  };
+
+  const handleOpenBulkProductModal = () => {
+    setBulkProductFormData({ cliente: '', city: '', state: '', product_type: '' });
+    setBulkProductModalOpen(true);
+  };
+
+  const handleCloseBulkProductModal = () => {
+    setBulkProductModalOpen(false);
+    setBulkProductFormData({ cliente: '', city: '', state: '', product_type: '' });
+  };
+
+  const handleBulkProductChange = (e: SelectChangeEvent<string>) => {
+    const { name, value } = e.target;
+    if (name === 'city') {
+      if (value) {
+        const c = cities.find((city) => city._id === value);
+        if (c) {
+          setBulkProductFormData((prev) => ({ ...prev, city: c.city ?? '', state: c.state ?? '' }));
+          return;
+        }
+      } else {
+        setBulkProductFormData((prev) => ({ ...prev, city: '', state: '' }));
+        return;
+      }
+    }
+    setBulkProductFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const bulkProductCityId = cities.find((c) => c.city === bulkProductFormData.city && c.state === bulkProductFormData.state)?._id ?? '';
+
+  const handleBulkProductSubmit = async () => {
+    const payload: { cliente?: string; city?: string; state?: string; product_type?: string } = {};
+    if (bulkProductFormData.cliente) payload.cliente = bulkProductFormData.cliente;
+    if (bulkProductFormData.city) payload.city = bulkProductFormData.city;
+    if (bulkProductFormData.state) payload.state = bulkProductFormData.state;
+    if (bulkProductFormData.product_type) payload.product_type = bulkProductFormData.product_type;
+    if (Object.keys(payload).length === 0) return;
+    setLoading(true);
+    try {
+      await Promise.all(
+        Array.from(selectedProductIds).map((id) => patch<Product>(`/products/${id}`, payload))
+      );
+      handleCloseBulkProductModal();
+      setSelectedProductIds(new Set());
+      fetchProducts();
+    } catch (error) {
+      console.error('Error bulk updating products:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <>
       <Helmet>
@@ -452,6 +627,7 @@ const handlePvChange = (e: any) => {
           <CustomTab label="PuntosVenta" />
           <CustomTab label="Clientes" />
           <CustomTab label="Ciudades" />
+          <CustomTab label="Equipos" />
       </CustomTabs>
         {tabIndex === 0 && (
           <Grid container spacing={2}>
@@ -683,6 +859,93 @@ const handlePvChange = (e: any) => {
             </Grid>
           </Grid>
         )}
+
+        {tabIndex === 4 && (
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <Box sx={{ overflowX: 'auto' }}>
+                <Grid container alignItems="center" spacing={2} sx={{ p: 2 }}>
+                  <Grid item xs={12} sm={5}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      placeholder="Buscar por nombre, cliente, ciudad o tipo..."
+                      value={productSearchText}
+                      onChange={(e) => setProductSearchText(e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Typography variant="body2" color="text.secondary">
+                      {filteredProducts.length} equipo(s)
+                      {selectedProductIds.size > 0 && ` · ${selectedProductIds.size} seleccionado(s)`}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={3} textAlign="right">
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      onClick={handleOpenBulkProductModal}
+                      disabled={selectedProductIds.size === 0}
+                    >
+                      Actualizar seleccionados
+                    </Button>
+                  </Grid>
+                </Grid>
+              </Box>
+              <StyledTableContainer>
+                <Paper elevation={3}>
+                  <Box sx={{ overflowX: 'auto' }}>
+                    <Table>
+                      <TableHead>
+                        <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
+                          <StyledTableCellHeader padding="checkbox">
+                            <Checkbox
+                              indeterminate={selectedProductIds.size > 0 && selectedProductIds.size < filteredProducts.length}
+                              checked={filteredProducts.length > 0 && selectedProductIds.size === filteredProducts.length}
+                              onChange={(e) => handleSelectAllProducts(e.target.checked)}
+                            />
+                          </StyledTableCellHeader>
+                          <StyledTableCellHeader>Nombre</StyledTableCellHeader>
+                          <StyledTableCellHeader>Cliente</StyledTableCellHeader>
+                          <StyledTableCellHeader>Ciudad</StyledTableCellHeader>
+                          <StyledTableCellHeader>Tipo de producto</StyledTableCellHeader>
+                          <StyledTableCellHeader>Acciones</StyledTableCellHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {filteredProducts.map((product) => {
+                          const prod = product as Product & { _id?: string };
+                          const productId = prod._id ?? prod.id;
+                          const clientName = typeof prod.cliente === 'object' && prod.cliente !== null ? prod.cliente.name : '-';
+                          const isSelected = selectedProductIds.has(productId);
+                          return (
+                            <StyledTableRow key={productId}>
+                              <StyledTableCell padding="checkbox">
+                                <Checkbox
+                                  checked={isSelected}
+                                  onChange={(e) => handleSelectProduct(productId, e.target.checked)}
+                                />
+                              </StyledTableCell>
+                              <StyledTableCell>{prod.name}</StyledTableCell>
+                              <StyledTableCell>{clientName}</StyledTableCell>
+                              <StyledTableCell>{prod.city ?? '-'}</StyledTableCell>
+                              <StyledTableCell>{prod.product_type ?? '-'}</StyledTableCell>
+                              <StyledTableCell>
+                                <IconButton onClick={() => handleProductEdit(prod)} sx={{ mr: 1, color: 'primary.main' }}>
+                                  <SvgColor src='./assets/icons/actions/edit.svg' />
+                                </IconButton>
+                              </StyledTableCell>
+                            </StyledTableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </Box>
+                </Paper>
+              </StyledTableContainer>
+            </Grid>
+          </Grid>
+        )}
        {/* Modal for Creating / Editing */}
        <Grid item xs={12}>
         <Dialog open={modalOpen} onClose={handleCloseModal} fullWidth maxWidth="sm">
@@ -872,6 +1135,147 @@ const handlePvChange = (e: any) => {
               disabled={loading}
             >
               {loading ? <CircularProgress size={24} /> : pvFormData._id ? "Actualizar" : "Guardar"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={productModalOpen} onClose={handleCloseProductModal} fullWidth maxWidth="sm">
+          <DialogTitle>Editar equipo (producto)</DialogTitle>
+          <DialogContent>
+            <Box display="flex" flexDirection="column" gap={2} mt={1}>
+              {productFormData.name && (
+                <TextField label="Nombre" value={productFormData.name} fullWidth disabled />
+              )}
+              <FormControl fullWidth>
+                <InputLabel>Cliente</InputLabel>
+                <Select
+                  value={productFormData.cliente || ''}
+                  name="cliente"
+                  onChange={handleProductChange}
+                  fullWidth
+                >
+                  {clients.map((cli) => (
+                    <MenuItem key={cli._id} value={cli._id}>
+                      {cli.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl fullWidth>
+                <InputLabel>Ciudad</InputLabel>
+                <Select
+                  value={productFormCityId}
+                  name="city"
+                  onChange={handleProductChange}
+                  fullWidth
+                >
+                  {cities.map((c) => (
+                    <MenuItem key={c._id} value={c._id}>
+                      {c.city} ({c.state})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl fullWidth>
+                <InputLabel>Tipo de producto</InputLabel>
+                <Select
+                  value={productFormData.product_type || 'Osmosis'}
+                  name="product_type"
+                  onChange={handleProductChange}
+                  fullWidth
+                >
+                  {ProductTypes.map((type) => (
+                    <MenuItem key={type} value={type}>
+                      {type}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseProductModal} color="secondary">
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleProductSubmit}
+              variant="contained"
+              color="primary"
+              disabled={loading}
+            >
+              {loading ? <CircularProgress size={24} /> : 'Actualizar'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={bulkProductModalOpen} onClose={handleCloseBulkProductModal} fullWidth maxWidth="sm">
+          <DialogTitle>Actualizar varios equipos</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Se aplicarán los valores que completes a {selectedProductIds.size} producto(s). Deja en blanco lo que no quieras cambiar.
+            </Typography>
+            <Box display="flex" flexDirection="column" gap={2} mt={1}>
+              <FormControl fullWidth>
+                <InputLabel>Cliente</InputLabel>
+                <Select
+                  value={bulkProductFormData.cliente || ''}
+                  name="cliente"
+                  onChange={handleBulkProductChange}
+                  fullWidth
+                >
+                  <MenuItem value="">(sin cambiar)</MenuItem>
+                  {clients.map((cli) => (
+                    <MenuItem key={cli._id} value={cli._id}>
+                      {cli.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl fullWidth>
+                <InputLabel>Ciudad</InputLabel>
+                <Select
+                  value={bulkProductCityId}
+                  name="city"
+                  onChange={handleBulkProductChange}
+                  fullWidth
+                >
+                  <MenuItem value="">(sin cambiar)</MenuItem>
+                  {cities.map((c) => (
+                    <MenuItem key={c._id} value={c._id}>
+                      {c.city} ({c.state})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl fullWidth>
+                <InputLabel>Tipo de producto</InputLabel>
+                <Select
+                  value={bulkProductFormData.product_type || ''}
+                  name="product_type"
+                  onChange={handleBulkProductChange}
+                  fullWidth
+                >
+                  <MenuItem value="">(sin cambiar)</MenuItem>
+                  {ProductTypes.map((type) => (
+                    <MenuItem key={type} value={type}>
+                      {type}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseBulkProductModal} color="secondary">
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleBulkProductSubmit}
+              variant="contained"
+              color="primary"
+              disabled={loading || (!bulkProductFormData.cliente && !bulkProductFormData.city && !bulkProductFormData.product_type)}
+            >
+              {loading ? <CircularProgress size={24} /> : `Aplicar a ${selectedProductIds.size}`}
             </Button>
           </DialogActions>
         </Dialog>

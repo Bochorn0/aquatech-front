@@ -9,6 +9,7 @@ import { Box, Chip, Card, Grid, Paper, Button, Divider, Typography, CircularProg
 
 import geoData from 'src/utils/states.json';
 import { fNumber } from 'src/utils/format-number';
+import { getDashboardVersion } from 'src/utils/permissions';
 
 import { get } from 'src/api/axiosHelper';
 import { CONFIG } from 'src/config-global';
@@ -186,7 +187,7 @@ export default function PuntoVentaDetalle() {
           variant="outlined"
           color="primary"
           component="a"
-          href="/PuntoVenta"
+          href={getDashboardVersion() === 'v1' ? '/v1/PuntoVenta' : '/PuntoVenta'}
           sx={{
             display: 'inline-flex',
             alignItems: 'center',

@@ -54,6 +54,23 @@ export function getUserPermissions(): string[] | null {
 }
 
 /**
+ * Obtiene la versión del dashboard asignada al rol del usuario (landing/home).
+ * @returns 'v1' | 'v2' | 'both' | null si no hay usuario/rol; null se trata como 'v1' en la UI
+ */
+export function getDashboardVersion(): 'v1' | 'v2' | 'both' | null {
+  try {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return null;
+    const user = JSON.parse(userStr);
+    const version = user?.role?.dashboardVersion;
+    if (version === 'v1' || version === 'v2' || version === 'both') return version;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Normaliza una ruta para comparación (convierte a minúsculas y asegura que empiece con /)
  * @param routePath - Ruta a normalizar
  * @returns Ruta normalizada

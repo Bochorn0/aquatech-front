@@ -21,6 +21,7 @@ import {
 } from '@mui/material';
 
 import { fNumber } from 'src/utils/format-number';
+import { getDashboardVersion } from 'src/utils/permissions';
 
 import { CONFIG } from 'src/config-global';
 
@@ -263,7 +264,7 @@ export default function PuntoVentaDetalleV2() {
             variant="outlined"
             color="primary"
             component="a"
-            href="/PuntoVenta"
+            href={getDashboardVersion() === 'v1' ? '/v1/PuntoVenta' : '/PuntoVenta'}
             sx={{
               display: 'inline-flex',
               alignItems: 'center',

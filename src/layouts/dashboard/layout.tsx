@@ -6,7 +6,7 @@ import Box from '@mui/material/Box';
 import Alert from '@mui/material/Alert';
 import { useTheme } from '@mui/material/styles';
 
-import { filterMenuByPermissions } from 'src/utils/permissions';
+import { getDashboardVersion, filterMenuByPermissions } from 'src/utils/permissions';
 
 import { Iconify } from 'src/components/iconify';
 
@@ -56,14 +56,26 @@ export function DashboardLayout({ sx, children, header }: DashboardLayoutProps) 
     }
   }, []);
 
-  // Filtrar el menú dinámicamente cada vez que se renderiza, basado en los permisos actuales
-  // No necesita dependencias porque filterMenuByPermissions lee directamente de localStorage
+  // Filtrar el menú y ajustar enlace por defecto de Puntos De Venta / Personalizacion según versión del dashboard
   const navData = useMemo(() => {
     const filtered = filterMenuByPermissions(allNavItems);
-    console.log('[Layout] Menu filtered:', filtered.length, 'of', allNavItems.length, 'items');
-    return filtered;
+    const dashboardVersion = getDashboardVersion();
+    const useV1Default = dashboardVersion === 'v1';
+    const resolved = filtered.map((item) => {
+      if (!item.submenu || !item.subItems) return item;
+      if (item.path === '/PuntoVenta') {
+        const path = useV1Default ? '/v1/PuntoVenta' : '/PuntoVenta';
+        return { ...item, path, defaultPath: path };
+      }
+      if (item.path === '/Personalizacion') {
+        const path = useV1Default ? '/v1/Personalizacion' : '/Personalizacion';
+        return { ...item, path, defaultPath: path };
+      }
+      return item;
+    });
+    return resolved;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Se recalcula automáticamente cuando cambia localStorage
+  }, []);
 
   const layoutQuery: Breakpoint = 'lg';
 

@@ -73,7 +73,9 @@ export function DashboardPage() {
 
         const clientId = clientFilters.find((client) => client.name === selectedClient)?._id;
 
-        const productParams = { city: selectedCity, cliente: clientId, startDate: startD, endDate: endD };
+        // Fetch products without date filter so the map shows all products across all cities.
+        // Date range is for metrics/charts; product list for map uses all current products.
+        const productParams: Record<string, unknown> = { city: selectedCity, cliente: clientId };
         const response = await get<Product[]>(`/products/`, productParams);
         const productos = response || [];
         const ciudades = [...new Set(productos.map((product: Product) => product.city))] as string[];

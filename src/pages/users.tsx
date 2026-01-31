@@ -35,9 +35,14 @@ import { get, post, patch, remove } from "src/api/axiosHelper";
 
 import { SvgColor } from 'src/components/svg-color';
 
-import type { User, Role, Cliente } from './types';
+import type { User, Role, Cliente, DashboardVersion } from './types';
 
 const defaultUser = { _id: '', nombre: '', email: '', password:'',  client_name: '', role_name: '', cliente: '', role: { _id: '', name: '' }, verified: false, puesto: '', status: '', mqtt_zip_password: '' };
+const DASHBOARD_VERSION_OPTIONS: { value: DashboardVersion; label: string }[] = [
+  { value: 'v1', label: 'Dashboard v1 (métricas por producto + mapa)' },
+  { value: 'v2', label: 'Dashboard v2 (métricas generales)' },
+  { value: 'both', label: 'Ambos (usuario puede cambiar)' },
+];
 export default function UserRoleManagement() {
   const [loading, setLoading] = useState(false);
   const [tabIndex, setTabIndex] = useState(0);
@@ -45,7 +50,7 @@ export default function UserRoleManagement() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [clients, setClients] = useState<Cliente[]>([]);
   const [userForm, setUserForm] = useState<User>(defaultUser);
-  const [roleForm, setRoleForm] = useState<Role>({ name: '', permissions: [] });
+  const [roleForm, setRoleForm] = useState<Role>({ name: '', permissions: [], dashboardVersion: 'v1' });
   
   // Definir todas las rutas disponibles del menú
   const availableRoutes = [
@@ -108,7 +113,11 @@ export default function UserRoleManagement() {
   };
 
   const handleRoleEdit = (role: Role) => {
-    setRoleForm({ ...role, permissions: role.permissions || [] });
+    setRoleForm({
+      ...role,
+      permissions: role.permissions || [],
+      dashboardVersion: role.dashboardVersion || 'v1',
+    });
     setRoleModalOpen(true);
   };
 
@@ -176,7 +185,7 @@ export default function UserRoleManagement() {
   };
 
   const handleOpenRoleModal = () => {
-    setRoleForm({ name: '', permissions: [] });
+    setRoleForm({ name: '', permissions: [], dashboardVersion: 'v1' });
     setRoleModalOpen(true);
   };
 
@@ -315,6 +324,7 @@ export default function UserRoleManagement() {
                     <TableHead>
                       <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
                         <StyledTableCellHeader>Role Name</StyledTableCellHeader>
+                        <StyledTableCellHeader>Dashboard</StyledTableCellHeader>
                         <StyledTableCellHeader>Actions</StyledTableCellHeader>
                       </TableRow>
                     </TableHead>
@@ -330,6 +340,11 @@ export default function UserRoleManagement() {
                                 </Typography>
                               )}
                             </Box>
+                          </StyledTableCell>
+                          <StyledTableCell>
+                            <Typography variant="body2">
+                              {DASHBOARD_VERSION_OPTIONS.find((o) => o.value === (role.dashboardVersion || 'v1'))?.label ?? 'v1'}
+                            </Typography>
                           </StyledTableCell>
                           <StyledTableCell>
                             <IconButton sx={{ mr: 1, color: 'primary.main' }} onClick={() => handleRoleEdit(role)}>
@@ -409,15 +424,36 @@ export default function UserRoleManagement() {
           <DialogContent>
             <Box display="flex" flexDirection="column" gap={2} mt={1}>
               <TextField label="Nombre" name="name" value={roleForm.name} onChange={handleRoleChange} fullWidth />
-              
+              <FormControl fullWidth>
+                <InputLabel>Versión del Dashboard (landing)</InputLabel>
+                <Select
+                  name="dashboardVersion"
+                  value={roleForm.dashboardVersion || 'v1'}
+                  onChange={handleRoleChange}
+                  label="Versión del Dashboard (landing)"
+                >
+                  {DASHBOARD_VERSION_OPTIONS.map((opt) => (
+                    <MenuItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                  Define qué dashboard verán los usuarios con este rol al entrar a la aplicación.
+                </Typography>
+              </FormControl>
               <Box>
                 <Typography variant="subtitle2" gutterBottom sx={{ mb: 1 }}>
-                  Permisos de Menú (Rutas Permitidas)
+                  Permisos (Menú y API)
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                  Estos permisos definen <strong>qué ver en el menú</strong> y <strong>qué endpoints de la API</strong> puede usar este rol. Al marcar un permiso, los usuarios con este rol verán esa sección y podrán llamar a las APIs asociadas.
+                </Typography>
+                <Typography variant="caption" color="info.main" display="block" sx={{ mb: 2 }}>
+                  API: / = dashboard, clientes, métricas, ciudades, notificaciones, reportes · /equipos = productos · /puntoVenta = puntos de venta · /personalizacion = personalización v2 · /usuarios = usuarios y roles · /controladores = controladores · /tiwater-catalog = catálogo TI Water.
                 </Typography>
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
-                  Selecciona las rutas que los usuarios con este rol podrán ver en el menú.
-                  <br />
-                  <strong>Nota:</strong> Para ver submenus (v1/v2), se requiere el permiso del parent (ej: /puntoVenta) más el permiso específico de la versión (ej: /puntoVenta/v1 o /puntoVenta/v2).
+                  Para submenús (v1/v2): marque el parent (ej. Puntos De Venta) y la versión deseada (ej. Puntos De Venta V1).
                 </Typography>
                 <Paper variant="outlined" sx={{ p: 2, maxHeight: 400, overflow: 'auto' }}>
                   <FormGroup>

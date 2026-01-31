@@ -219,10 +219,13 @@ interface Status {
     mqtt_zip_password?: string; // Contraseña para el ZIP del certificado MQTT
   }
   
+  export type DashboardVersion = 'v1' | 'v2' | 'both';
+
   export type Role = {
     _id?: string;
     name: string;
     permissions?: string[]; // Array de rutas permitidas (ej: ['/', '/equipos', '/usuarios'])
+    dashboardVersion?: DashboardVersion; // Landing dashboard: v1 (metrics by product), v2 (general metrics), both (user can switch)
   }
 
 export interface Controller {
