@@ -37,8 +37,9 @@ export const handleError = (error: any): string => {
   return error.message || 'Error inesperado. Inténtelo de nuevo más tarde.';
 };
 
-// Helper to show toast from any error
+// Helper to show toast from any error (skips 401: handled by axios interceptors → redirect + one toast on login page)
 export const showErrorToast = (error: any): void => {
+  if (error?.response?.status === 401) return;
   const errorMessage = handleError(error);
   toast.error(errorMessage, {
     position: 'top-right',

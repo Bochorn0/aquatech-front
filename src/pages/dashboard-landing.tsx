@@ -1,16 +1,15 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense } from 'react';
+import { Navigate } from 'react-router-dom';
 
 import Box from '@mui/material/Box';
-import Tab from '@mui/material/Tab';
-import Tabs from '@mui/material/Tabs';
 import LinearProgress, { linearProgressClasses } from '@mui/material/LinearProgress';
 
-import { getDashboardVersion } from 'src/utils/permissions';
+import { hasPermission, getDashboardVersion } from 'src/utils/permissions';
 
 import { varAlpha } from 'src/theme/styles';
 
 const HomeV1 = lazy(() => import('./home'));
-const HomeV2 = lazy(() => import('./home_'));
+const HomeV2Dashboard = lazy(() => import('./home-v2'));
 
 const renderFallback = (
   <Box display="flex" alignItems="center" justifyContent="center" minHeight="40vh" width="100%">
@@ -26,40 +25,33 @@ const renderFallback = (
 );
 
 /**
- * Renders the landing dashboard according to the user role's dashboardVersion:
- * - v1: metrics by product + map (home.tsx)
- * - v2: general metrics (home_.tsx)
- * - both: tabs to switch between v1 and v2
- * - null/undefined: default to v1
+ * Renders the landing at / (index).
+ * Redirects to the dashboard page according to user permissions:
+ * - has /dashboard/v2 only -> /dashboard/v2
+ * - has /dashboard/v1 only -> /dashboard/v1
+ * - has both -> /dashboard/v2 (default)
+ * - legacy (/, /dashboard): use getDashboardVersion to decide
  */
 export function DashboardLanding() {
-  const version = getDashboardVersion();
-  const [tab, setTab] = useState(0);
+  const hasV2 = hasPermission('/dashboard/v2');
+  const hasV1 = hasPermission('/dashboard/v1');
 
-  if (version === 'v2') {
+  if (hasV2) {
+    return <Navigate to="/dashboard/v2" replace />;
+  }
+  if (hasV1) {
+    return <Navigate to="/dashboard/v1" replace />;
+  }
+
+  // Legacy: user has / or /dashboard only (no v1/v2) -> show dashboard inline by dashboardVersion (no redirect to v1/v2 routes)
+  const version = getDashboardVersion();
+  if (version === 'v2' || version === 'both') {
     return (
       <Suspense fallback={renderFallback}>
-        <HomeV2 />
+        <HomeV2Dashboard />
       </Suspense>
     );
   }
-
-  if (version === 'both') {
-    return (
-      <Box sx={{ width: '100%' }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
-          <Tab label="Métricas por producto (v1)" />
-          <Tab label="Métricas generales (v2)" />
-        </Tabs>
-        <Suspense fallback={renderFallback}>
-          {tab === 0 && <HomeV1 />}
-          {tab === 1 && <HomeV2 />}
-        </Suspense>
-      </Box>
-    );
-  }
-
-  // v1 or null -> default to v1
   return (
     <Suspense fallback={renderFallback}>
       <HomeV1 />

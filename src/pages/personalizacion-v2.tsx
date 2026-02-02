@@ -1,6 +1,6 @@
 import Swal from "sweetalert2";
 import { Helmet } from "react-helmet-async";
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 import {
   Box,
@@ -39,6 +39,20 @@ import { Iconify } from 'src/components/iconify';
 import { SvgColor } from 'src/components/svg-color';
 
 import type { City, Metric, Cliente, PuntosVenta, MetricAlert } from './types';
+
+// Custom Swal instance with higher z-index to appear above MUI modals (MUI Dialog z-index is 1300)
+const MySwal = Swal.mixin({
+  customClass: {
+    container: 'swal-on-top'
+  },
+  didOpen: () => {
+    // Set z-index higher than MUI Dialog (1300)
+    const container = document.querySelector('.swal2-container') as HTMLElement;
+    if (container) {
+      container.style.zIndex = '9999';
+    }
+  }
+});
 
 const estados = [
   'Aguascalientes',
@@ -115,8 +129,9 @@ const METRIC_TYPES = [
   { value: 'conectados', label: 'CONECTADOS', sensorTypes: ['online'], unit: '' },
   { value: 'tds', label: 'TDS', sensorTypes: ['tds'], unit: 'PPM' },
   { value: 'produccion', label: 'PRODUCCION', sensorTypes: ['flujo_produccion'], unit: 'L/MIN' },
+  { value: 'rechazo', label: 'RECHAZO', sensorTypes: ['flujo_rechazo'], unit: 'L/MIN' },
   { value: 'eficiencia', label: 'EFICIENCIA', sensorTypes: ['eficiencia'], unit: '%' },
-  { value: 'recuperacion', label: 'RECUPERACION', sensorTypes: ['acumulado_cruda', 'flujo_rechazo'], unit: '%' },
+  { value: 'recuperacion', label: 'RECUPERACION', sensorTypes: ['acumulado_cruda', 'flujo_recuperacion'], unit: '%' },
   { value: 'nivel_agua_cruda', label: 'NIVEL AGUA CRUDA', sensorTypes: ['nivel_cruda', 'caudal_cruda'], unit: '%' },
   { value: 'nivel_agua_purificada', label: 'NIVEL AGUA PURIFICADA', sensorTypes: ['nivel_purificada', 'flujo_produccion'], unit: '%' },
   { value: 'co2', label: 'CO2', sensorTypes: ['presion_co2'], unit: 'PSI' },
@@ -147,11 +162,11 @@ const SENSOR_TYPES = [
   { value: 'online', label: 'Online', unit: '' },
 ];
 
-// Color options
+// Color options - Using framework standard colors
 const COLOR_OPTIONS = [
-  { value: '#00B050', label: 'Verde (Normal)' },
-  { value: '#FFFF00', label: 'Amarillo (Preventivo)' },
-  { value: '#EE0000', label: 'Rojo (Correctivo)' },
+  { value: '#00A76F', label: 'Verde (Normal)' },       // success.main
+  { value: '#FFAB00', label: 'Amarillo (Preventivo)' }, // warning.main
+  { value: '#FF5630', label: 'Rojo (Correctivo)' },     // error.main
 ];
 
 interface SensorConfig {
@@ -227,6 +242,13 @@ export function CustomizationPageV2() {
   
   // Sensors state for view modal
   const [viewSensors, setViewSensors] = useState<SensorConfig[]>([]);
+  // Punto de venta selected for configuring its metrics (one row per PV in list)
+  const [configurarPv, setConfigurarPv] = useState<{
+    cliente: string;
+    punto_venta_id: string;
+    client_name: string;
+    punto_venta_name: string;
+  } | null>(null);
   const [viewPvId, setViewPvId] = useState<string | null>(null);
   const [sensorsModalOpen, setSensorsModalOpen] = useState(false);
   const [viewingPvName, setViewingPvName] = useState<string>('');
@@ -431,6 +453,26 @@ export function CustomizationPageV2() {
     }
   };
 
+  /** Group metrics by punto de venta so the list shows one row per PV */
+  const metricsByPuntoVenta = useMemo(() => {
+    const byKey = new Map<string, { client_name: string; punto_venta_name: string; cliente: string; punto_venta_id: string; metrics: Metric[] }>();
+    metrics.forEach((m) => {
+      const pvId = m.punto_venta_id ?? '';
+      const key = `${m.cliente ?? m.clientId ?? ''}|${pvId}`;
+      if (!byKey.has(key)) {
+        byKey.set(key, {
+          client_name: m.client_name ?? '',
+          punto_venta_name: m.punto_venta_name ?? (pvId ? 'Punto de venta' : 'Todos'),
+          cliente: String(m.cliente ?? m.clientId ?? ''),
+          punto_venta_id: pvId,
+          metrics: []
+        });
+      }
+      byKey.get(key)!.metrics.push(m);
+    });
+    return Array.from(byKey.values());
+  }, [metrics]);
+
   const handleChange = (e: any) => {
     const { name, value } = e.target;
     
@@ -460,67 +502,114 @@ export function CustomizationPageV2() {
     }
   };
 
+  /** Build payload for a single metric only (no _id/id on create; never send full metrics list). Always send full content including rules. */
+  const buildMetricPayload = (): Record<string, unknown> => {
+    const cliente = formData.cliente || formData.clientId || undefined;
+    const punto_venta_id = formData.punto_venta_id || undefined;
+    const metric_name = formData.metric_name || undefined;
+    const metric_type = formData.metric_type || undefined;
+    const sensor_type = formData.sensor_type || undefined;
+    const sensor_unit = formData.sensor_unit || undefined;
+    const rules = Array.isArray(formData.rules) ? formData.rules : (formData.rules != null ? [formData.rules] : []);
+    const conditions = formData.conditions ?? null;
+    const enabled = formData.enabled !== false;
+    const read_only = formData.read_only === true;
+    const display_order = Number(formData.display_order) || 0;
+
+    const payload: Record<string, unknown> = {
+      ...(cliente ? { cliente } : {}),
+      ...(punto_venta_id ? { punto_venta_id } : {}),
+      ...(metric_name ? { metric_name } : {}),
+      ...(metric_type ? { metric_type } : {}),
+      ...(sensor_type ? { sensor_type } : {}),
+      ...(sensor_unit ? { sensor_unit } : {}),
+      rules,
+      ...(conditions != null ? { conditions } : {}),
+      enabled,
+      read_only,
+      display_order
+    };
+    return payload;
+  };
+
   const handleSubmit = async () => {
     setLoading(true);
     try {
       let savedMetricId = editingId;
-      
-      // Save or update metric
+      const payload = buildMetricPayload();
+      const wasMetricCreate = !editingId;
+
+      // Save or update metric (only this metric's data; never overwrite other metrics)
       if (editingId) {
-        const updated = await apiV2Call(`/metrics/${editingId}`, 'PATCH', formData);
+        const updated = await apiV2Call(`/metrics/${editingId}`, 'PATCH', payload);
         savedMetricId = updated.id || updated._id || editingId;
       } else {
-        const created = await apiV2Call('/metrics', 'POST', formData);
+        const created = await apiV2Call('/metrics', 'POST', payload);
         savedMetricId = created.id || created._id;
       }
-      
-      // Save alerts if metric was saved successfully
+
+      // Save alerts for this metric (alerts are per-metric / per-sensor customization)
       if (savedMetricId && metricAlerts.length > 0) {
-        // Get existing alerts to compare
-        const existingAlerts = await apiV2Call(`/metrics/${savedMetricId}/alerts`);
-        const existingIds = new Set((Array.isArray(existingAlerts) ? existingAlerts : []).map((a: MetricAlert) => a.id || a._id));
-        
-        // Process alerts in parallel
-        const alertPromises = metricAlerts
-          .filter(alert => alert.usuario && alert.correo)
-          .map(async (alert) => {
-            const alertData = {
-              usuario: alert.usuario,
-              correo: alert.correo,
-              celular: alert.celular,
-              celularAlert: alert.celularAlert || alert.celular_alert,
-              dashboardAlert: alert.dashboardAlert || alert.dashboard_alert,
-              emailAlert: alert.emailAlert || alert.email_alert,
-              preventivo: alert.preventivo,
-              correctivo: alert.correctivo
-            };
-            
-            if (alert.id || alert._id) {
-              // Update existing alert
+        if (wasMetricCreate) {
+          // New metric: only create new alerts. Do not PATCH alerts by id (those ids belong to other metrics).
+          const createPromises = metricAlerts
+            .filter(alert => alert.usuario && alert.correo)
+            .map(async (alert) => {
+              const alertData = {
+                usuario: alert.usuario,
+                correo: alert.correo,
+                celular: alert.celular,
+                celularAlert: alert.celularAlert ?? alert.celular_alert,
+                dashboardAlert: alert.dashboardAlert ?? alert.dashboard_alert,
+                emailAlert: alert.emailAlert ?? alert.email_alert,
+                preventivo: alert.preventivo,
+                correctivo: alert.correctivo
+              };
+              return apiV2Call(`/metrics/${savedMetricId}/alerts`, 'POST', alertData);
+            });
+          await Promise.all(createPromises);
+        } else {
+          // Editing existing metric: sync alerts (PATCH existing, POST new, DELETE removed)
+          const existingAlerts = await apiV2Call(`/metrics/${savedMetricId}/alerts`);
+          const existingIds = new Set((Array.isArray(existingAlerts) ? existingAlerts : []).map((a: MetricAlert) => String(a.id || a._id)));
+
+          const alertPromises = metricAlerts
+            .filter(alert => alert.usuario && alert.correo)
+            .map(async (alert) => {
+              const alertData = {
+                usuario: alert.usuario,
+                correo: alert.correo,
+                celular: alert.celular,
+                celularAlert: alert.celularAlert ?? alert.celular_alert,
+                dashboardAlert: alert.dashboardAlert ?? alert.dashboard_alert,
+                emailAlert: alert.emailAlert ?? alert.email_alert,
+                preventivo: alert.preventivo,
+                correctivo: alert.correctivo
+              };
               const alertId = alert.id || alert._id;
-              await apiV2Call(`/metrics/${savedMetricId}/alerts/${alertId}`, 'PATCH', alertData);
-              existingIds.delete(String(alertId));
-            } else {
-              // Create new alert
-              await apiV2Call(`/metrics/${savedMetricId}/alerts`, 'POST', alertData);
-            }
-          });
-        
-        await Promise.all(alertPromises);
-        
-        // Delete alerts that were removed
-        const deletePromises = Array.from(existingIds).map(existingId =>
-          apiV2Call(`/metrics/${savedMetricId}/alerts/${existingId}`, 'DELETE')
-        );
-        await Promise.all(deletePromises);
+              if (alertId && existingIds.has(String(alertId))) {
+                await apiV2Call(`/metrics/${savedMetricId}/alerts/${alertId}`, 'PATCH', alertData);
+                existingIds.delete(String(alertId));
+              } else {
+                await apiV2Call(`/metrics/${savedMetricId}/alerts`, 'POST', alertData);
+              }
+            });
+
+          await Promise.all(alertPromises);
+
+          const deletePromises = Array.from(existingIds).map(existingId =>
+            apiV2Call(`/metrics/${savedMetricId}/alerts/${existingId}`, 'DELETE')
+          );
+          await Promise.all(deletePromises);
+        }
       }
       
       handleCloseModal();
       fetchMetrics();
-      Swal.fire('Éxito', 'Métrica guardada exitosamente', 'success');
+      MySwal.fire('Éxito', 'Métrica guardada exitosamente', 'success');
     } catch (error) {
       console.error("Error submitting metric:", error);
-      Swal.fire('Error', 'Error al guardar métrica', 'error');
+      MySwal.fire('Error', 'Error al guardar métrica', 'error');
     } finally {
       setLoading(false);
     }
@@ -597,7 +686,7 @@ export function CustomizationPageV2() {
     setPvModalOpen(true);
   };
 
-  const confirmationAlert = () => Swal.fire({
+  const confirmationAlert = () => MySwal.fire({
     icon: 'warning',
     title: 'Advertencia',
     text: '¿Estás seguro de que deseas eliminar este registro?',
@@ -612,11 +701,11 @@ export function CustomizationPageV2() {
       if (result.isConfirmed) {
         await apiV2Call(`/metrics/${id}`, 'DELETE');
         fetchMetrics();
-        Swal.fire('Éxito', 'Métrica eliminada', 'success');
+        MySwal.fire('Éxito', 'Métrica eliminada', 'success');
       }
     } catch (error) {
       console.error("Error deleting metric:", error);
-      Swal.fire('Error', 'Error al eliminar métrica', 'error');
+      MySwal.fire('Error', 'Error al eliminar métrica', 'error');
     }
   };
 
@@ -626,11 +715,11 @@ export function CustomizationPageV2() {
       if (result.isConfirmed) {
         await apiV2Call(`/clients/${id}`, 'DELETE');
         fetchClients();
-        Swal.fire('Éxito', 'Cliente eliminado', 'success');
+        MySwal.fire('Éxito', 'Cliente eliminado', 'success');
       }
     } catch (error) {
       console.error("Error deleting client:", error);
-      Swal.fire('Error', 'Error al eliminar cliente', 'error');
+      MySwal.fire('Error', 'Error al eliminar cliente', 'error');
     }
   };
 
@@ -640,11 +729,11 @@ export function CustomizationPageV2() {
       if (result.isConfirmed) {
         await apiV2Call(`/cities/${id}`, 'DELETE');
         fetchCities();
-        Swal.fire('Éxito', 'Ciudad eliminada', 'success');
+        MySwal.fire('Éxito', 'Ciudad eliminada', 'success');
       }
     } catch (error) {
       console.error("Error deleting city:", error);
-      Swal.fire('Error', 'Error al eliminar ciudad', 'error');
+      MySwal.fire('Error', 'Error al eliminar ciudad', 'error');
     }
   };
 
@@ -654,17 +743,31 @@ export function CustomizationPageV2() {
       if (result.isConfirmed) {
         await apiV2Call(`/puntoVentas/${id}`, 'DELETE');
         fetchPuntosVenta();
-        Swal.fire('Éxito', 'Punto de venta eliminado', 'success');
+        MySwal.fire('Éxito', 'Punto de venta eliminado', 'success');
       }
     } catch (error) {
       console.error("Error deleting PuntoVenta:", error);
-      Swal.fire('Error', 'Error al eliminar punto de venta', 'error');
+      MySwal.fire('Error', 'Error al eliminar punto de venta', 'error');
     }
   };
 
   const handleOpenModal = () => {
     setFormData(defaultMetric);
     setEditingId(null);
+    setModalOpen(true);
+  };
+
+  /** Open metric modal with cliente and punto de venta pre-filled (from "Nueva métrica" inside configurar PV) */
+  const handleOpenModalForPv = (pv: { cliente: string; punto_venta_id: string; client_name: string; punto_venta_name: string }) => {
+    setFormData({
+      ...defaultMetric,
+      cliente: pv.cliente,
+      punto_venta_id: pv.punto_venta_id,
+      client_name: pv.client_name,
+      punto_venta_name: pv.punto_venta_name
+    });
+    setEditingId(null);
+    setMetricAlerts([]);
     setModalOpen(true);
   };
 
@@ -721,10 +824,10 @@ export function CustomizationPageV2() {
       }
       handleCloseClientModal();
       fetchClients();
-      Swal.fire('Éxito', 'Cliente guardado', 'success');
+      MySwal.fire('Éxito', 'Cliente guardado', 'success');
     } catch (error) {
       console.error("Error submitting client:", error);
-      Swal.fire('Error', 'Error al guardar cliente', 'error');
+      MySwal.fire('Error', 'Error al guardar cliente', 'error');
     } finally {
       setLoading(false);
     }
@@ -741,10 +844,10 @@ export function CustomizationPageV2() {
       }
       handleCloseCityModal();
       fetchCities();
-      Swal.fire('Éxito', 'Ciudad guardada', 'success');
+      MySwal.fire('Éxito', 'Ciudad guardada', 'success');
     } catch (error) {
       console.error("Error submitting city:", error);
-      Swal.fire('Error', 'Error al guardar ciudad', 'error');
+      MySwal.fire('Error', 'Error al guardar ciudad', 'error');
     } finally {
       setLoading(false);
     }
@@ -761,10 +864,10 @@ export function CustomizationPageV2() {
       }
       handleClosePvModal();
       fetchPuntosVenta();
-      Swal.fire('Éxito', 'Punto de venta guardado', 'success');
+      MySwal.fire('Éxito', 'Punto de venta guardado', 'success');
     } catch (error) {
       console.error("Error submitting punto de venta:", error);
-      Swal.fire('Error', 'Error al guardar punto de venta', 'error');
+      MySwal.fire('Error', 'Error al guardar punto de venta', 'error');
     } finally {
       setLoading(false);
     }
@@ -776,11 +879,11 @@ export function CustomizationPageV2() {
       if (result.isConfirmed && editPvId) {
         await apiV2Call(`/puntoVentas/${editPvId}/sensors/${sensorId}`, 'DELETE');
         await fetchSensorsForEdit(editPvId);
-        Swal.fire('Éxito', 'Sensor eliminado', 'success');
+        MySwal.fire('Éxito', 'Sensor eliminado', 'success');
       }
     } catch (error) {
       console.error("Error deleting sensor:", error);
-      Swal.fire('Error', 'Error al eliminar sensor', 'error');
+      MySwal.fire('Error', 'Error al eliminar sensor', 'error');
     }
   };
 
@@ -862,33 +965,44 @@ export function CustomizationPageV2() {
                         <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
                           <StyledTableCellHeader>Cliente</StyledTableCellHeader>
                           <StyledTableCellHeader>Punto de Venta</StyledTableCellHeader>
-                          <StyledTableCellHeader>Tipo de Métrica</StyledTableCellHeader>
-                          <StyledTableCellHeader>Sensor</StyledTableCellHeader>
+                          <StyledTableCellHeader>Métricas</StyledTableCellHeader>
                           <StyledTableCellHeader>Estado</StyledTableCellHeader>
                           <StyledTableCellHeader>Acciones</StyledTableCellHeader>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {metrics.map((metric) => (
-                          <StyledTableRow key={metric._id || metric.id}>
-                            <StyledTableCell>{metric.client_name || '-'}</StyledTableCell>
-                            <StyledTableCell>{metric.punto_venta_name || 'Todos'}</StyledTableCell>
-                            <StyledTableCell>{metric.metric_name || metric.metric_type || 'Legacy'}</StyledTableCell>
-                            <StyledTableCell>{metric.sensor_type ? `${metric.sensor_type} (${metric.sensor_unit || ''})` : '-'}</StyledTableCell>
+                        {metricsByPuntoVenta.map((row) => (
+                          <StyledTableRow key={`${row.cliente}|${row.punto_venta_id}`}>
+                            <StyledTableCell>{row.client_name || '-'}</StyledTableCell>
+                            <StyledTableCell>{row.punto_venta_name || 'Todos'}</StyledTableCell>
                             <StyledTableCell>
-                              <Chip 
-                                label={metric.enabled !== false ? 'Activo' : 'Inactivo'} 
-                                color={metric.enabled !== false ? 'success' : 'default'} 
+                              {row.metrics.length === 0
+                                ? '-'
+                                : row.metrics.map((m) => m.metric_name || m.metric_type || 'Legacy').join(', ')}
+                            </StyledTableCell>
+                            <StyledTableCell>
+                              <Chip
+                                label={row.metrics.some((m) => m.enabled !== false) ? 'Activo' : 'Inactivo'}
+                                color={row.metrics.some((m) => m.enabled !== false) ? 'success' : 'default'}
                                 size="small"
                               />
                             </StyledTableCell>
                             <StyledTableCell>
-                              <IconButton onClick={() => handleEdit(metric)} sx={{ mr: 1, color: 'primary.main' }}>
-                                <SvgColor src='./assets/icons/actions/edit.svg' />
-                              </IconButton>
-                              <IconButton onClick={() => handleDelete(metric._id || metric.id || '')} sx={{ mr: 1, color: 'danger.main' }}>
-                                <SvgColor src='./assets/icons/actions/delete.svg' />
-                              </IconButton>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<SvgColor src="./assets/icons/actions/edit.svg" />}
+                                onClick={() =>
+                                  setConfigurarPv({
+                                    cliente: row.cliente,
+                                    punto_venta_id: row.punto_venta_id,
+                                    client_name: row.client_name,
+                                    punto_venta_name: row.punto_venta_name
+                                  })
+                                }
+                              >
+                                Configurar métricas
+                              </Button>
                             </StyledTableCell>
                           </StyledTableRow>
                         ))}
@@ -1090,7 +1204,95 @@ export function CustomizationPageV2() {
             </Grid>
           </Grid>
         )}
-        
+
+        {/* Modal: Métricas del Punto de Venta (one PV → list of metric types, add/edit/delete) */}
+        <Dialog
+          open={configurarPv !== null}
+          onClose={() => setConfigurarPv(null)}
+          fullWidth
+          maxWidth="md"
+        >
+          <DialogTitle>
+            Métricas — {configurarPv?.punto_venta_name ?? 'Punto de venta'}
+          </DialogTitle>
+          <DialogContent>
+            {configurarPv && (
+              <Box sx={{ pt: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {configurarPv.client_name} · {configurarPv.punto_venta_name}
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    size="small"
+                    onClick={() => handleOpenModalForPv(configurarPv)}
+                  >
+                    Nueva métrica
+                  </Button>
+                </Box>
+                {(() => {
+                  const pvMetrics =
+                    metricsByPuntoVenta.find(
+                      (r) =>
+                        String(r.punto_venta_id) === String(configurarPv.punto_venta_id) &&
+                        String(r.cliente) === String(configurarPv.cliente)
+                    )?.metrics ?? [];
+                  if (pvMetrics.length === 0) {
+                    return (
+                      <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
+                        No hay métricas configuradas. Usa &quot;Nueva métrica&quot; para agregar TDS, NIVEL AGUA CRUDA, etc.
+                      </Typography>
+                    );
+                  }
+                  return (
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
+                          <StyledTableCellHeader>Tipo de Métrica</StyledTableCellHeader>
+                          <StyledTableCellHeader>Sensor</StyledTableCellHeader>
+                          <StyledTableCellHeader>Estado</StyledTableCellHeader>
+                          <StyledTableCellHeader>Acciones</StyledTableCellHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {pvMetrics.map((metric) => (
+                          <TableRow key={metric._id || metric.id}>
+                            <StyledTableCell>{metric.metric_name || metric.metric_type || 'Legacy'}</StyledTableCell>
+                            <StyledTableCell>
+                              {metric.sensor_type ? `${metric.sensor_type} (${metric.sensor_unit || ''})` : '-'}
+                            </StyledTableCell>
+                            <StyledTableCell>
+                              <Chip
+                                label={metric.enabled !== false ? 'Activo' : 'Inactivo'}
+                                color={metric.enabled !== false ? 'success' : 'default'}
+                                size="small"
+                              />
+                            </StyledTableCell>
+                            <StyledTableCell>
+                              <IconButton onClick={() => handleEdit(metric)} sx={{ mr: 1, color: 'primary.main' }} size="small">
+                                <SvgColor src="./assets/icons/actions/edit.svg" />
+                              </IconButton>
+                              <IconButton onClick={() => handleDelete(metric._id || metric.id || '')} sx={{ mr: 1, color: 'danger.main' }} size="small">
+                                <SvgColor src="./assets/icons/actions/delete.svg" />
+                              </IconButton>
+                            </StyledTableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  );
+                })()}
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setConfigurarPv(null)} color="secondary">
+              Cerrar
+            </Button>
+          </DialogActions>
+        </Dialog>
+
         {/* Modal for Creating / Editing Metrics - Interactive Configuration */}
         <Grid item xs={12}>
           <Dialog open={modalOpen} onClose={handleCloseModal} fullWidth maxWidth="lg">
@@ -1150,11 +1352,40 @@ export function CustomizationPageV2() {
                             value={formData.metric_type || ''} 
                             name="metric_type" 
                             onChange={(e) => {
-                              const selectedType = METRIC_TYPES.find(t => t.value === e.target.value);
-                              if (selectedType) {
+                              const newType = e.target.value;
+                              const selectedType = METRIC_TYPES.find(t => t.value === newType);
+                              if (!selectedType) return;
+                              const clienteId = String(formData.cliente || formData.clientId || '');
+                              const pvId = String(formData.punto_venta_id || '');
+                              // Prefer editing existing metric of this type for same cliente/PV to avoid duplicates
+                              const existingMetric = metrics.find(
+                                (m) =>
+                                  String(m.metric_type ?? '') === String(newType) &&
+                                  String(m.punto_venta_id ?? '') === pvId &&
+                                  String(m.cliente ?? m.clientId ?? '') === clienteId
+                              );
+                              if (existingMetric) {
+                                const rules = Array.isArray(existingMetric.rules) ? existingMetric.rules : (existingMetric.rules != null ? [existingMetric.rules] : []);
+                                const clienteVal = existingMetric.cliente ?? existingMetric.clientId ?? formData.cliente;
+                                const clientIdVal = existingMetric.clientId ?? existingMetric.cliente;
+                                setFormData({
+                                  ...existingMetric,
+                                  cliente: clienteVal != null ? String(clienteVal) : undefined,
+                                  clientId: clientIdVal != null ? String(clientIdVal) : undefined,
+                                  rules
+                                });
+                                setEditingId(existingMetric._id || existingMetric.id || null);
+                                if (existingMetric._id || existingMetric.id) {
+                                  fetchMetricAlerts(String(existingMetric._id || existingMetric.id));
+                                } else {
+                                  setMetricAlerts([]);
+                                }
+                              } else {
+                                setEditingId(null);
+                                setMetricAlerts([]);
                                 setFormData({
                                   ...formData,
-                                  metric_type: e.target.value,
+                                  metric_type: newType,
                                   metric_name: selectedType.label,
                                   sensor_type: selectedType.sensorTypes[0] || '',
                                   sensor_unit: selectedType.unit,
@@ -1249,7 +1480,7 @@ export function CustomizationPageV2() {
                           size="small"
                           startIcon={<Iconify icon="solar:add-circle-bold-duotone" width={20} />}
                           onClick={() => {
-                            const newRules = [...(formData.rules || []), { min: null, max: null, color: '#00B050', label: '' }];
+                            const newRules = [...(formData.rules || []), { min: null, max: null, color: '#00B050', label: '', message: '' }];
                             setFormData({ ...formData, rules: newRules });
                           }}
                         >
@@ -1331,6 +1562,20 @@ export function CustomizationPageV2() {
                               >
                                 <SvgColor src='./assets/icons/actions/delete.svg' />
                               </IconButton>
+                            </Grid>
+                            <Grid item xs={12}>
+                              <TextField
+                                label="Mensaje de alerta (texto personalizado en dashboard)"
+                                placeholder="Ej: Revisar suministro. Verificar tubería de entrada."
+                                value={rule.message ?? ''}
+                                onChange={(e) => {
+                                  const newRules = [...(formData.rules || [])];
+                                  newRules[index].message = e.target.value;
+                                  setFormData({ ...formData, rules: newRules });
+                                }}
+                                fullWidth
+                                size="small"
+                              />
                             </Grid>
                           </Grid>
                         </Box>

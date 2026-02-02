@@ -14,6 +14,7 @@ import {
   Select,
   Divider,
   MenuItem,
+  TextField,
   InputLabel,
   Typography,
   FormControl,
@@ -37,6 +38,9 @@ export default function PuntoVentaDetalleV2() {
   const [latestSensorTimestamp, setLatestSensorTimestamp] = useState<Date | null>(null);
   const [selectedScenario, setSelectedScenario] = useState<string>('');
   const [generating, setGenerating] = useState<boolean>(false);
+  const [customSensorKey, setCustomSensorKey] = useState<string>('');
+  const [customSensorValue, setCustomSensorValue] = useState<string>('');
+  const [generatingCustom, setGeneratingCustom] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchTiwaterData = async (codigoTienda: string) => {
@@ -110,8 +114,10 @@ export default function PuntoVentaDetalleV2() {
 
         if (response.ok) {
           const result = await response.json();
-          if (Array.isArray(result)) {
-            setMetricsConfig(result);
+          // API may return array directly or wrapped in { data } / { success, data }
+          const list = Array.isArray(result) ? result : (result?.data ?? []);
+          if (Array.isArray(list) && list.length > 0) {
+            setMetricsConfig(list);
           }
         }
       } catch (error) {
@@ -119,10 +125,11 @@ export default function PuntoVentaDetalleV2() {
       }
     };
 
-    const fetchPuntoVentaDetails = async () => {
+    const fetchPuntoVentaDetails = async (bustCache = false) => {
       try {
         // Use v2.0 endpoint for PostgreSQL data (supports both id and codigo_tienda)
-        const response = await fetch(`${CONFIG.API_BASE_URL_V2}/puntoVentas/${id}`, {
+        const url = `${CONFIG.API_BASE_URL_V2}/puntoVentas/${id}${bustCache ? `?_t=${Date.now()}` : ''}`;
+        const response = await fetch(url, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -235,7 +242,6 @@ export default function PuntoVentaDetalleV2() {
         if (result.success) {
           console.log('[Dev] Datos diarios generados:', result);
           alert(`✅ ${result.message}\n\nPublicados: ${result.data.published}/24 mensajes\nTopic: ${result.data.topic}`);
-          // Recargar datos después de generar
           window.location.reload();
         } else {
           console.error('[Dev] Error generando datos:', result);
@@ -247,9 +253,145 @@ export default function PuntoVentaDetalleV2() {
       } finally {
         setGenerating(false);
       }
-    } else {
-      console.log('[Dev] Generating scenario:', selectedScenario);
-      // TODO: Implement other scenario handlers
+      return;
+    }
+
+    if (selectedScenario === 'simulate-low-cruda') {
+      setGenerating(true);
+      try {
+        const response = await fetch(`${CONFIG.API_BASE_URL}/puntoVentas/${id}/simulate-bajo-nivel-cruda`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          console.log('[Dev] Bajo nivel cruda simulado:', result);
+          alert(`✅ ${result.message}\n\nNivel agua cruda: ${result.data?.nivelCrudaPercent ?? 65}%`);
+          try {
+            const res = await fetch(`${CONFIG.API_BASE_URL_V2}/puntoVentas/${id}?_t=${Date.now()}`, {
+              headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (res.ok) {
+              const json = await res.json();
+              const puntoData = json.data || json;
+              setPunto(puntoData);
+              prepareChartDataNiveles(puntoData, setChartDataNiveles);
+            }
+          } catch (_) { /* ignore */ }
+        } else {
+          console.error('[Dev] Error simulando bajo nivel:', result);
+          alert(`❌ Error: ${result.message}`);
+        }
+      } catch (error) {
+        console.error('[Dev] Error en la petición:', error);
+        alert('❌ Error al simular bajo nivel de agua cruda. Verifica la consola.');
+      } finally {
+        setGenerating(false);
+      }
+      return;
+    }
+
+    if (selectedScenario === 'simulate-nivel-cruda-normalizado') {
+      setGenerating(true);
+      try {
+        const response = await fetch(`${CONFIG.API_BASE_URL}/puntoVentas/${id}/simulate-nivel-cruda-normalizado`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          console.log('[Dev] Nivel cruda normalizado simulado:', result);
+          alert(`✅ ${result.message}\n\nNivel agua cruda: ${result.data?.nivelCrudaPercent ?? 85}%`);
+          try {
+            const res = await fetch(`${CONFIG.API_BASE_URL_V2}/puntoVentas/${id}?_t=${Date.now()}`, {
+              headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (res.ok) {
+              const json = await res.json();
+              const puntoData = json.data || json;
+              setPunto(puntoData);
+              prepareChartDataNiveles(puntoData, setChartDataNiveles);
+            }
+          } catch (_) { /* ignore */ }
+        } else {
+          console.error('[Dev] Error simulando nivel cruda normalizado:', result);
+          alert(`❌ Error: ${result.message}`);
+        }
+      } catch (error) {
+        console.error('[Dev] Error en la petición:', error);
+        alert('❌ Error al simular nivel agua cruda normalizado. Verifica la consola.');
+      } finally {
+        setGenerating(false);
+      }
+      return;
+    }
+
+    console.log('[Dev] Generating scenario:', selectedScenario);
+  };
+
+  /** Sensor options for custom simulate (same keys as API / dev scenarios MQTT) */
+  const CUSTOM_SENSOR_OPTIONS: { value: string; label: string }[] = [
+    { value: 'CAUDAL PURIFICADA', label: 'Caudal Purificada' },
+    { value: 'CAUDAL RECUPERACION', label: 'Caudal Recuperación' },
+    { value: 'CAUDAL RECHAZO', label: 'Caudal Rechazo' },
+    { value: 'NIVEL PURIFICADA', label: 'Nivel Purificada' },
+    { value: 'NIVEL CRUDA', label: 'Nivel Cruda' },
+    { value: 'PORCENTAJE NIVEL PURIFICADA', label: 'Porcentaje Nivel Purificada' },
+    { value: 'PORCENTAJE NIVEL CRUDA', label: 'Porcentaje Nivel Cruda' },
+    { value: 'CAUDAL CRUDA', label: 'Caudal Cruda' },
+    { value: 'ACUMULADO CRUDA', label: 'Acumulado Cruda' },
+    { value: 'CAUDAL CRUDA L/min', label: 'Caudal Cruda (L/min)' },
+    { value: 'vida', label: 'Vida' },
+    { value: 'PRESION CO2', label: 'Presión CO2' },
+    { value: 'ch1', label: 'Corriente ch1' },
+    { value: 'ch2', label: 'Corriente ch2' },
+    { value: 'ch3', label: 'Corriente ch3' },
+    { value: 'ch4', label: 'Corriente ch4' },
+    { value: 'EFICIENCIA', label: 'Eficiencia' }
+  ];
+
+  const handleCustomSensorGenerate = async () => {
+    if (!customSensorKey) {
+      console.warn('[Dev] No custom sensor selected');
+      return;
+    }
+    const numValue = Number(customSensorValue);
+    if (customSensorValue === '' || Number.isNaN(numValue)) {
+      alert('Ingresa un valor numérico para el sensor.');
+      return;
+    }
+    setGeneratingCustom(true);
+    try {
+      const response = await fetch(`${CONFIG.API_BASE_URL}/puntoVentas/${id}/simulate-sensor`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ sensorKey: customSensorKey, value: numValue })
+      });
+      const result = await response.json();
+      if (result.success) {
+        alert(`✅ ${result.message}\n\nSensor: ${result.data?.sensorKey}\nValor: ${result.data?.value}`);
+        window.location.reload();
+      } else {
+        alert(`❌ Error: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('[Dev] Error simulating custom sensor:', error);
+      alert('❌ Error al enviar valor. Verifica la consola.');
+    } finally {
+      setGeneratingCustom(false);
     }
   };
 
@@ -283,29 +425,72 @@ export default function PuntoVentaDetalleV2() {
           
           {/* Dev Dropdown - Only visible for admin && showDev */}
           {showDevDropdown && (
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-              <FormControl size="small" sx={{ minWidth: 300 }}>
-                <InputLabel>Dev Scenarios</InputLabel>
-                <Select
-                  value={selectedScenario}
-                  label="Dev Scenarios"
-                  onChange={(e) => {
-                    setSelectedScenario(e.target.value);
-                  }}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start' }}>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                <FormControl size="small" sx={{ minWidth: 300 }}>
+                  <InputLabel>Dev Scenarios</InputLabel>
+                  <Select
+                    value={selectedScenario}
+                    label="Dev Scenarios"
+                    onChange={(e) => {
+                      setSelectedScenario(e.target.value);
+                    }}
+                  >
+                    <MenuItem value="generate-daily-data">
+                      Generar datos diarios (24 horas)
+                    </MenuItem>
+                    <MenuItem value="simulate-low-cruda">
+                      Simular bajo nivel de agua cruda
+                    </MenuItem>
+                    <MenuItem value="simulate-nivel-cruda-normalizado">
+                      Simular nivel agua cruda normalizado
+                    </MenuItem>
+                  </Select>
+                </FormControl>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleGenerateScenario}
+                  disabled={!selectedScenario || generating}
                 >
-                  <MenuItem value="generate-daily-data">
-                    Generar datos diarios (24 horas)
-                  </MenuItem>
-                </Select>
-              </FormControl>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleGenerateScenario}
-                disabled={!selectedScenario || generating}
-              >
-                {generating ? 'Generando...' : 'Generar'}
-              </Button>
+                  {generating ? 'Generando...' : 'Generar'}
+                </Button>
+              </Box>
+              {/* Custom sensor value - same validation as dev scenarios, same MQTT format */}
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+                <FormControl size="small" sx={{ minWidth: 260 }}>
+                  <InputLabel>Sensor</InputLabel>
+                  <Select
+                    value={customSensorKey}
+                    label="Sensor"
+                    onChange={(e) => setCustomSensorKey(e.target.value)}
+                  >
+                    {CUSTOM_SENSOR_OPTIONS.map((opt) => (
+                      <MenuItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <TextField
+                  size="small"
+                  label="Valor"
+                  type="number"
+                  value={customSensorValue}
+                  onChange={(e) => setCustomSensorValue(e.target.value)}
+                  placeholder="Ej. 65"
+                  sx={{ width: 120 }}
+                  inputProps={{ inputMode: 'decimal', step: 'any' }}
+                />
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleCustomSensorGenerate}
+                  disabled={!customSensorKey || customSensorValue === '' || generatingCustom}
+                >
+                  {generatingCustom ? 'Enviando...' : 'Generar'}
+                </Button>
+              </Box>
             </Box>
           )}
         </Box>
@@ -318,19 +503,22 @@ export default function PuntoVentaDetalleV2() {
 
         {/* Grid Principal Reorganizado */}
         <Grid container spacing={3}>
-          {/* Top-Left: Estado de la Tienda (con mapa integrado) */}
-          <Grid item xs={12} md={6}>
-            <EstadoTiendaCard 
-              punto={punto} 
+          {/* Top: Unified Overview Card (Estado + Osmosis + Map) */}
+          <Grid item xs={12}>
+            <UnifiedOverviewCard 
+              punto={punto}
               latestSensorTimestamp={latestSensorTimestamp}
+              osmosis={osmosis}
+              metricas={metricas}
+              tiwaterData={tiwaterData}
+              tiwaterProduct={tiwaterProduct}
+              metricsConfig={metricsConfig}
             />
           </Grid>
 
-          {/* Top-Right: Osmosis Inversa */}
-          <Grid item xs={12} md={6}>
-            <OsmosisInversaCard 
-              osmosis={osmosis}
-              metricas={metricas}
+          {/* Middle: Máquinas */}
+          <Grid item xs={12}>
+            <MaquinasCard 
               tiwaterData={tiwaterData}
               tiwaterProduct={tiwaterProduct}
               metricsConfig={metricsConfig}
@@ -344,6 +532,7 @@ export default function PuntoVentaDetalleV2() {
               chartDataNiveles={chartDataNiveles}
               tiwaterData={tiwaterData}
               tiwaterProduct={tiwaterProduct}
+              metricsConfig={metricsConfig}
             />
           </Grid>
         </Grid>
@@ -373,101 +562,104 @@ function prepareChartDataNiveles(puntoData: any, setChartDataNiveles: any) {
     return;
   }
 
-  // Procesar productos que tengan histórico (purificada o recuperada)
+  // Procesar productos que tengan histórico (purificada, recuperada o cruda)
   const chartDataArray: any[] = [];
   
   allProducts.forEach((product: any) => {
-    // Procesar histórico de purificada si existe
-    const hasHistoricoPurificada = product.historico && 
-                          product.historico.hours_with_data && 
-                          Array.isArray(product.historico.hours_with_data) &&
-                          product.historico.hours_with_data.length > 0;
-    
-    // Procesar histórico de recuperada si existe
-    const hasHistoricoRecuperada = product.historico_recuperada && 
-                          product.historico_recuperada.hours_with_data && 
-                          Array.isArray(product.historico_recuperada.hours_with_data) &&
-                          product.historico_recuperada.hours_with_data.length > 0;
+    const hasHistoricoPurificada = product.historico?.hours_with_data && Array.isArray(product.historico.hours_with_data) && product.historico.hours_with_data.length > 0;
+    const hasHistoricoRecuperada = product.historico_recuperada?.hours_with_data && Array.isArray(product.historico_recuperada.hours_with_data) && product.historico_recuperada.hours_with_data.length > 0;
+    const hasHistoricoCruda = product.historico_cruda?.hours_with_data && Array.isArray(product.historico_cruda.hours_with_data) && product.historico_cruda.hours_with_data.length > 0;
     
     console.log(`[prepareChartDataNiveles] Producto ${product.id} (${product.product_type}):`, {
       hasHistoricoPurificada: !!product.historico,
       hasHistoricoRecuperada: !!product.historico_recuperada,
+      hasHistoricoCruda: !!product.historico_cruda,
       hoursWithDataPurificada: product.historico?.hours_with_data?.length || 0,
-      hoursWithDataRecuperada: product.historico_recuperada?.hours_with_data?.length || 0
+      hoursWithDataRecuperada: product.historico_recuperada?.hours_with_data?.length || 0,
+      hoursWithDataCruda: product.historico_cruda?.hours_with_data?.length || 0
     });
     
-    // Procesar histórico de purificada
     if (hasHistoricoPurificada) {
-      const chartDataPurificada = processHistorico(product, product.historico, true, false);
-      if (chartDataPurificada) {
-        chartDataArray.push(chartDataPurificada);
-      }
+      const chartDataPurificada = processHistorico(product, product.historico, true, false, false);
+      if (chartDataPurificada) chartDataArray.push(chartDataPurificada);
     }
-    
-    // Procesar histórico de recuperada
     if (hasHistoricoRecuperada) {
-      const chartDataRecuperada = processHistorico(product, product.historico_recuperada, false, true);
-      if (chartDataRecuperada) {
-        chartDataArray.push(chartDataRecuperada);
-      }
+      const chartDataRecuperada = processHistorico(product, product.historico_recuperada, false, true, false);
+      if (chartDataRecuperada) chartDataArray.push(chartDataRecuperada);
+    }
+    if (hasHistoricoCruda) {
+      const chartDataCruda = processHistorico(product, product.historico_cruda, false, true, true);
+      if (chartDataCruda) chartDataArray.push(chartDataCruda);
     }
   });
   
-  // Función auxiliar para procesar histórico
-  function processHistorico(product: any, historico: any, isPurificada: boolean, isCruda: boolean) {
+  function processHistorico(product: any, historico: any, isPurificada: boolean, isCruda: boolean, isHistoricoCruda: boolean) {
     try {
-      console.log(`[prepareChartDataNiveles] Procesando histórico para ${product.id} (${product.product_type}):`, {
-        isPurificada,
-        isCruda,
-        historicoType: historico.product || 'unknown'
-      });
-      
       const hoursWithData = historico.hours_with_data || [];
       
-      // Ordenar por hora
+      // Sort hours chronologically (handles both 24h format and 12h AM/PM format)
       const horasOrdenadas = [...hoursWithData].sort((a: any, b: any) => {
-        const horaA = a.hora || '00:00';
-        const horaB = b.hora || '00:00';
-        return horaA.localeCompare(horaB);
+        const timeA = a.hora || '00:00';
+        const timeB = b.hora || '00:00';
+        
+        // Convert to 24-hour format for proper sorting
+        const to24Hour = (time: string): number => {
+          const match = time.match(/(\d{1,2}):(\d{2})(?:\s*)?(a\.?m\.?|p\.?m\.?)?/i);
+          if (!match) return 0;
+          
+          let hours = parseInt(match[1], 10);
+          const minutes = parseInt(match[2], 10);
+          const period = match[3]?.toLowerCase().replace(/\./g, '');
+          
+          if (period) {
+            // 12-hour format with AM/PM
+            if (period.includes('p') && hours !== 12) {
+              hours += 12;
+            } else if (period.includes('a') && hours === 12) {
+              hours = 0;
+            }
+          }
+          
+          return hours * 60 + minutes; // Return total minutes for comparison
+        };
+        
+        return to24Hour(timeA) - to24Hour(timeB);
       });
       
-      // Extraer horas y datos de nivel
       const horas = horasOrdenadas.map((h: any) => h.hora || '');
       const nivelPercentData = horasOrdenadas.map((h: any) => {
         const value = Number(h.estadisticas?.liquid_level_percent_promedio) || 0;
         return Math.max(0, Math.min(100, value));
       });
 
-      // Obtener el valor actual del producto desde el status
-      let valorActual = null;
+      let valorActual: number | null = null;
       if (product.product_type === 'TIWater') {
         if (isPurificada) {
-          const nivelPurificada = product.status?.find((s: any) => s.code === 'level_purificada' || s.code === 'electronivel_purificada');
-          valorActual = nivelPurificada?.value ?? null;
+          const s = product.status?.find((x: any) => x.code === 'level_purificada' || x.code === 'electronivel_purificada');
+          valorActual = s?.value != null ? Number(s.value) : null;
+        } else if (isHistoricoCruda) {
+          const s = product.status?.find((x: any) => x.code === 'level_cruda' || x.code === 'electronivel_cruda');
+          valorActual = s?.value != null ? Number(s.value) : null;
         } else if (isCruda) {
-          const nivelRecuperada = product.status?.find((s: any) => s.code === 'level_recuperada' || s.code === 'electronivel_recuperada');
-          valorActual = nivelRecuperada?.value ?? null;
+          const s = product.status?.find((x: any) => x.code === 'level_recuperada' || x.code === 'electronivel_recuperada');
+          valorActual = s?.value != null ? Number(s.value) : null;
         }
       } else {
-        valorActual = product.status?.find((s: any) => s.code === 'liquid_level_percent')?.value || null;
+        const s = product.status?.find((x: any) => x.code === 'liquid_level_percent');
+        valorActual = s?.value != null ? Number(s.value) : null;
       }
 
+      const nivelName = isPurificada ? 'Nivel Purificada' : (isHistoricoCruda ? 'Nivel Cruda' : (isCruda ? 'Nivel Recuperada' : product.name));
       return {
         nivelId: product._id || product.id,
-        nivelName: isPurificada ? 'Nivel Purificada' : (isCruda ? 'Nivel Recuperada' : product.name),
+        nivelName,
         productType: product.product_type,
         isPurificada,
         isCruda,
+        isHistoricoCruda: !!isHistoricoCruda,
         categories: horas,
-        series: [
-          {
-            name: 'Nivel (%)',
-            data: nivelPercentData,
-          },
-        ],
-        estadisticas: {
-          valorActual: valorActual !== null ? Number(valorActual) : null,
-        },
+        series: [{ name: 'Nivel (%)', data: nivelPercentData }],
+        estadisticas: { valorActual },
       };
     } catch (error) {
       console.error(`[prepareChartDataNiveles] Error procesando histórico para ${product.id}:`, error);
@@ -481,9 +673,9 @@ function prepareChartDataNiveles(puntoData: any, setChartDataNiveles: any) {
     result: result ? result.map((r: any) => ({
       nivelId: r.nivelId,
       nivelName: r.nivelName,
-      productType: r.productType,
       isPurificada: r.isPurificada,
       isCruda: r.isCruda,
+      isHistoricoCruda: r.isHistoricoCruda,
       categoriesCount: r.categories?.length || 0
     })) : null
   });
@@ -494,7 +686,73 @@ function prepareChartDataNiveles(puntoData: any, setChartDataNiveles: any) {
 /* 🧱 Card: Almacenamiento (Bottom-Left) */
 /* -------------------------------------------------------------------------- */
 
-function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterProduct }: any) {
+/** Find metric that applies to nivel agua cruda (dynamic per punto de venta). Uses first enabled match. */
+function findNivelAguaCrudaMetric(metricsConfig: any[]): any {
+  if (!metricsConfig || !Array.isArray(metricsConfig)) return null;
+  const isNivelCruda = (m: any) =>
+    (m.metric_type && String(m.metric_type).toLowerCase() === 'nivel_agua_cruda') ||
+    (m.sensor_type && String(m.sensor_type).toLowerCase() === 'nivel_cruda') ||
+    (m.metric_name && String(m.metric_name).toUpperCase().includes('NIVEL') && String(m.metric_name).toUpperCase().includes('CRUDA'));
+  // Prefer enabled metrics; fallback to any match if none enabled
+  const enabled = metricsConfig.find((m: any) => isNivelCruda(m) && m.enabled !== false);
+  if (enabled) return enabled;
+  return metricsConfig.find((m: any) => isNivelCruda(m)) || null;
+}
+
+function findNivelAguaPurificadaMetric(metricsConfig: any[]): any {
+  if (!metricsConfig || !Array.isArray(metricsConfig)) return null;
+  const isNivelPurificada = (m: any) =>
+    (m.metric_type && String(m.metric_type).toLowerCase() === 'nivel_agua_purificada') ||
+    (m.sensor_type && String(m.sensor_type).toLowerCase() === 'nivel_purificada') ||
+    (m.metric_name && String(m.metric_name).toUpperCase().includes('NIVEL') && String(m.metric_name).toUpperCase().includes('PURIFICADA'));
+  // Prefer enabled metrics; fallback to any match if none enabled
+  const enabled = metricsConfig.find((m: any) => isNivelPurificada(m) && m.enabled !== false);
+  if (enabled) return enabled;
+  return metricsConfig.find((m: any) => isNivelPurificada(m)) || null;
+}
+
+/** Whether a rule label indicates a "normal/good" state (no alert). */
+function isRuleLabelNormal(label: string): boolean {
+  const labelLower = (label || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  return (
+    labelLower.includes('normal') ||
+    labelLower.includes('buen estado') ||
+    labelLower.includes('en buen estado') ||
+    labelLower.includes('bueno') ||
+    labelLower.includes('ok') ||
+    labelLower.includes('correcto') ||
+    labelLower.includes('adecuado') ||
+    labelLower.includes('óptimo') ||
+    labelLower.includes('optimo')
+  );
+}
+
+/** Get the rule that matches the current value (rules have min/max). Prefer normal rule when multiple match; otherwise worst. */
+function getMatchingRule(value: number | null, rules: any[]): { rule: any; isNormal: boolean } | null {
+  if (value == null || Number.isNaN(Number(value)) || !rules || rules.length === 0) return null;
+  const v = Number(value);
+  const order = (label: string) => {
+    const l = (label || '').toLowerCase();
+    if (l.includes('critico') || l.includes('correctivo')) return 3;
+    if (l.includes('preventivo')) return 2;
+    return 1;
+  };
+  const matchingRules = rules.filter((rule) => {
+    const min = rule.min != null ? Number(rule.min) : null;
+    const max = rule.max != null ? Number(rule.max) : null;
+    return (min === null || v >= min) && (max === null || v <= max);
+  });
+  if (matchingRules.length === 0) return null;
+  // Prefer a "normal" rule when value falls in a good-state range so we don't show alert
+  const normalRule = matchingRules.find((r) => isRuleLabelNormal(r.label || ''));
+  const matched = normalRule ?? matchingRules.reduce((best, rule) => (order(rule.label) >= order(best.label) ? rule : best), matchingRules[0]);
+  const labelLower = (matched.label || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  const isNormal = isRuleLabelNormal(matched.label || '');
+  const isAlert = !isNormal && (labelLower.includes('preventivo') || labelLower.includes('critico') || labelLower.includes('correctivo') || labelLower.includes('bajo') || labelLower.includes('alto'));
+  return { rule: matched, isNormal: isNormal || !isAlert };
+}
+
+function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterProduct, metricsConfig }: any) {
   // Procesar datos de TIWater de la misma manera que TiwaterDashboard
   let processedTiwaterData: any = null;
   if (tiwaterData || tiwaterProduct) {
@@ -524,7 +782,7 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
         },
         niveles: {
           purificada_porcentaje: findStatusValue(['Nivel Purificada', 'level_purificada', 'electronivel_purificada'], status),
-          cruda_porcentaje: findStatusValue(['Nivel Recuperada', 'level_recuperada', 'electronivel_recuperada'], status)
+          cruda_porcentaje: findStatusValue(['Nivel Cruda', 'level_cruda', 'electronivel_cruda'], status) ?? findStatusValue(['Nivel Recuperada', 'level_recuperada', 'electronivel_recuperada'], status)
         }
       };
     } else if (hasRawData && tiwaterData.raw) {
@@ -582,9 +840,12 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
       chartDataNiveles
     });
     
-    // Obtener valores de nivel desde el status de TIWater
+    // Obtener valores de nivel desde el status de TIWater (Nivel Cruda % y Nivel Recuperada)
     const nivelPurificada = tiwaterProduct.status?.find((s: any) => 
       s.code === 'level_purificada' || s.code === 'electronivel_purificada'
+    );
+    const nivelCruda = tiwaterProduct.status?.find((s: any) => 
+      s.code === 'level_cruda' || s.label === 'Nivel Cruda'
     );
     const nivelRecuperada = tiwaterProduct.status?.find((s: any) => 
       s.code === 'level_recuperada' || s.code === 'electronivel_recuperada'
@@ -611,46 +872,50 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
       });
 
       if (chartDataPurificada && nivelPurificada) {
+        const statusPurificada = Number(nivelPurificada.value) || null;
         const ultimoValorHistorico = getUltimoValorHistorico(chartDataPurificada);
         aguaPurificadaData = {
-          nivel: ultimoValorHistorico !== null ? ultimoValorHistorico : (Number(nivelPurificada.value) || null),
+          nivel: statusPurificada ?? ultimoValorHistorico,
           chartData: chartDataPurificada,
           name: 'Nivel Purificada'
         };
         console.log('[AlmacenamientoCard] Asignado chartData a aguaPurificadaData (isPurificada=true)', {
+          statusValue: statusPurificada,
           ultimoValorHistorico,
-          statusValue: nivelPurificada.value,
           nivelFinal: aguaPurificadaData.nivel
         });
       }
 
-      // Buscar chartData de recuperada (cruda)
-      const chartDataRecuperada = chartDataNiveles.find((cd: any) => {
-        const matchesId = cd.nivelId === tiwaterProduct._id || cd.nivelId === tiwaterProduct.id;
-        const matchesType = cd.productType === 'TIWater';
-        return (matchesId || matchesType) && cd.isCruda;
-      });
+      // Prefer chart from historico_cruda (Nivel Cruda %); fallback to historico_recuperada
+      const matchesProduct = (cd: any) => (cd.nivelId === tiwaterProduct._id || cd.nivelId === tiwaterProduct.id) || cd.productType === 'TIWater';
+      const chartDataCruda = chartDataNiveles.find((cd: any) => matchesProduct(cd) && cd.isHistoricoCruda);
+      const chartDataRecuperada = chartDataCruda ?? chartDataNiveles.find((cd: any) => matchesProduct(cd) && cd.isCruda);
+      const chartDataForCruda = chartDataCruda ?? chartDataRecuperada;
 
-      if (chartDataRecuperada && nivelRecuperada) {
-        const ultimoValorHistorico = getUltimoValorHistorico(chartDataRecuperada);
+      const nivelCrudaValue = nivelCruda != null ? Number(nivelCruda.value) : null;
+      const nivelRecuperadaValue = nivelRecuperada != null ? Number(nivelRecuperada.value) : null;
+      const statusValueForCruda = nivelCrudaValue ?? nivelRecuperadaValue;
+
+      if (chartDataForCruda && statusValueForCruda != null) {
+        const ultimoValorHistorico = getUltimoValorHistorico(chartDataForCruda);
         aguaCrudaData = {
-          nivel: ultimoValorHistorico !== null ? ultimoValorHistorico : (Number(nivelRecuperada.value) || null),
-          chartData: chartDataRecuperada,
-          name: 'Nivel Recuperada'
+          nivel: statusValueForCruda ?? ultimoValorHistorico,
+          chartData: chartDataForCruda,
+          name: chartDataCruda ? 'Nivel Cruda' : (nivelCruda ? 'Nivel Cruda' : 'Nivel Recuperada')
         };
-        console.log('[AlmacenamientoCard] Asignado chartData a aguaCrudaData (isCruda=true)', {
+        console.log('[AlmacenamientoCard] Asignado chartData a aguaCrudaData', {
+          fromHistoricoCruda: !!chartDataCruda,
+          statusValue: statusValueForCruda,
           ultimoValorHistorico,
-          statusValue: nivelRecuperada.value,
           nivelFinal: aguaCrudaData.nivel
         });
-      } else if (nivelRecuperada && !aguaCrudaData?.chartData) {
-        // Si no hay chartData pero hay nivel recuperada, usar el valor del status
+      } else if (statusValueForCruda != null && !aguaCrudaData?.chartData) {
         aguaCrudaData = {
-          nivel: Number(nivelRecuperada.value) || null,
+          nivel: statusValueForCruda,
           chartData: null,
-          name: 'Nivel Recuperada'
+          name: nivelCruda ? 'Nivel Cruda' : 'Nivel Recuperada'
         };
-        console.log('[AlmacenamientoCard] Asignado nivel recuperada a aguaCrudaData (sin chartData)');
+        console.log('[AlmacenamientoCard] Asignado nivel (cruda o recuperada) a aguaCrudaData (sin chartData)');
       }
     }
   }
@@ -718,11 +983,121 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
       <Grid container spacing={3}>
         {/* AGUA CRUDA - Mitad izquierda */}
         <Grid item xs={12} md={6}>
-          <Box sx={{ p: 2.5, borderRadius: 2, bgcolor: 'primary.lighter', border: '1px solid', borderColor: 'primary.main', height: '100%' }}>
-            <Typography variant="subtitle1" fontWeight="600" gutterBottom sx={{ color: 'primary.dark', mb: 2 }}>
-              Agua Cruda
-            </Typography>
+          <Typography variant="subtitle1" fontWeight="600" gutterBottom sx={{ color: 'primary.dark', mb: 1 }}>
+            Agua Cruda
+          </Typography>
+
+          {(() => {
+            const nivelMetric = findNivelAguaCrudaMetric(metricsConfig || []);
+            const value = aguaCrudaData?.nivel != null ? Number(aguaCrudaData.nivel) : null;
             
+            // Default alert if no metric or value
+            if (!nivelMetric || value == null) {
+              return (
+                <Alert 
+                  severity="success"
+                  icon={false}
+                  sx={{ 
+                    mb: 2,
+                    py: 0.5,
+                    fontSize: '0.875rem',
+                    bgcolor: 'success.lighter',
+                    borderLeft: `4px solid`,
+                    borderColor: 'success.main'
+                  }}
+                >
+                  valores normales (sin metricas definidas)
+                </Alert>
+              );
+            }
+            
+            const match = getMatchingRule(value, nivelMetric.rules || []);
+            
+            console.log('[AlmacenamientoCard] Agua Cruda Alert Check:', {
+              nivelMetric,
+              value,
+              match,
+              aguaCrudaData,
+              metricsConfig
+            });
+            
+            // If no rule matches, show default success alert
+            if (!match) {
+              return (
+                <Alert 
+                  severity="success"
+                  icon={false}
+                  sx={{ 
+                    mb: 2,
+                    py: 0.5,
+                    fontSize: '0.875rem',
+                    bgcolor: 'success.lighter',
+                    borderLeft: `4px solid`,
+                    borderColor: 'success.main'
+                  }}
+                >
+                  valores normales (sin metricas definidas) ({value.toFixed(1)}${nivelMetric.sensor_unit || '%'})
+                </Alert>
+              );
+            }
+            
+            const colorUpper = (match.rule.color || '').toUpperCase().replace(/\s/g, '');
+            
+            // Determine severity based on hex color (most reliable)
+            let severity: 'error' | 'warning' | 'success' = 'success';
+            let bgColor = 'success.lighter';
+            let borderColor = 'success.main';
+            
+            // Parse hex color to determine severity
+            if (colorUpper.startsWith('#') && colorUpper.length >= 7) {
+              const r = parseInt(colorUpper.substring(1, 3), 16);
+              const g = parseInt(colorUpper.substring(3, 5), 16);
+              const b = parseInt(colorUpper.substring(5, 7), 16);
+              
+              // Error: High red, low green/blue (e.g., #FF5630, #EE0000, #FF0000)
+              if (r > 200 && g < 120 && b < 120) {
+                severity = 'error';
+                bgColor = 'error.lighter';
+                borderColor = 'error.main';
+              }
+              // Warning: High red and green, low blue (e.g., #FFAB00, #FFFF00)
+              else if (r > 180 && g > 100 && b < 100) {
+                severity = 'warning';
+                bgColor = 'warning.lighter';
+                borderColor = 'warning.main';
+              }
+              // Success: High green, lower red (e.g., #00A76F, #00B050)
+              else if (g > 100 && r < 150) {
+                severity = 'success';
+                bgColor = 'success.lighter';
+                borderColor = 'success.main';
+              }
+            }
+            
+            const alertMessage = (match.rule.message || '').trim() || null;
+            const messageLine = alertMessage
+              ? `${match.rule.label} (${value.toFixed(1)}${nivelMetric.sensor_unit || '%'}) - ${alertMessage}`
+              : `${match.rule.label} (${value.toFixed(1)}${nivelMetric.sensor_unit || '%'})`;
+            
+            return (
+              <Alert 
+                severity={severity} 
+                icon={false}
+                sx={{ 
+                  mb: 2,
+                  py: 0.5,
+                  fontSize: '0.875rem',
+                  bgcolor: bgColor,
+                  borderLeft: `4px solid`,
+                  borderColor
+                }}
+              >
+                {messageLine}
+              </Alert>
+            );
+          })()}
+
+          <Box sx={{ p: 2.5, borderRadius: 2, bgcolor: 'primary.lighter', border: '1px solid', borderColor: 'primary.main', height: '100%' }}>
             <Grid container spacing={2} sx={{ mb: 2 }}>
               <Grid item xs={6}>
                 <Typography variant="body2" color="text.secondary">
@@ -762,11 +1137,121 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
 
         {/* AGUA PURIFICADA - Mitad derecha */}
         <Grid item xs={12} md={6}>
-          <Box sx={{ p: 2.5, borderRadius: 2, bgcolor: 'info.lighter', border: '1px solid', borderColor: 'info.main', height: '100%' }}>
-            <Typography variant="subtitle1" fontWeight="600" gutterBottom sx={{ color: 'info.dark', mb: 2 }}>
-              Agua Purificada
-            </Typography>
+          <Typography variant="subtitle1" fontWeight="600" gutterBottom sx={{ color: 'info.dark', mb: 1 }}>
+            Agua Purificada
+          </Typography>
+
+          {(() => {
+            const nivelMetric = findNivelAguaPurificadaMetric(metricsConfig || []);
+            const value = aguaPurificadaData?.nivel != null ? Number(aguaPurificadaData.nivel) : null;
             
+            // Default alert if no metric or value
+            if (!nivelMetric || value == null) {
+              return (
+                <Alert 
+                  severity="success"
+                  icon={false}
+                  sx={{ 
+                    mb: 2,
+                    py: 0.5,
+                    fontSize: '0.875rem',
+                    bgcolor: 'success.lighter',
+                    borderLeft: `4px solid`,
+                    borderColor: 'success.main'
+                  }}
+                >
+                  valores normales (sin metricas definidas)
+                </Alert>
+              );
+            }
+            
+            const match = getMatchingRule(value, nivelMetric.rules || []);
+            
+            console.log('[AlmacenamientoCard] Agua Purificada Alert Check:', {
+              nivelMetric,
+              value,
+              match,
+              aguaPurificadaData,
+              metricsConfig
+            });
+            
+            // If no rule matches, show default success alert
+            if (!match) {
+              return (
+                <Alert 
+                  severity="success"
+                  icon={false}
+                  sx={{ 
+                    mb: 2,
+                    py: 0.5,
+                    fontSize: '0.875rem',
+                    bgcolor: 'success.lighter',
+                    borderLeft: `4px solid`,
+                    borderColor: 'success.main'
+                  }}
+                >
+                  valores normales (sin metricas definidas) ({value.toFixed(1)}${nivelMetric.sensor_unit || '%'})
+                </Alert>
+              );
+            }
+            
+            const colorUpper = (match.rule.color || '').toUpperCase().replace(/\s/g, '');
+            
+            // Determine severity based on hex color (most reliable)
+            let severity: 'error' | 'warning' | 'success' = 'success';
+            let bgColor = 'success.lighter';
+            let borderColor = 'success.main';
+            
+            // Parse hex color to determine severity
+            if (colorUpper.startsWith('#') && colorUpper.length >= 7) {
+              const r = parseInt(colorUpper.substring(1, 3), 16);
+              const g = parseInt(colorUpper.substring(3, 5), 16);
+              const b = parseInt(colorUpper.substring(5, 7), 16);
+              
+              // Error: High red, low green/blue (e.g., #FF5630, #EE0000, #FF0000)
+              if (r > 200 && g < 120 && b < 120) {
+                severity = 'error';
+                bgColor = 'error.lighter';
+                borderColor = 'error.main';
+              }
+              // Warning: High red and green, low blue (e.g., #FFAB00, #FFFF00)
+              else if (r > 180 && g > 100 && b < 100) {
+                severity = 'warning';
+                bgColor = 'warning.lighter';
+                borderColor = 'warning.main';
+              }
+              // Success: High green, lower red (e.g., #00A76F, #00B050)
+              else if (g > 100 && r < 150) {
+                severity = 'success';
+                bgColor = 'success.lighter';
+                borderColor = 'success.main';
+              }
+            }
+            
+            const alertMessage = (match.rule.message || '').trim() || null;
+            const messageLine = alertMessage
+              ? `${match.rule.label} (${value.toFixed(1)}${nivelMetric.sensor_unit || '%'}) - ${alertMessage}`
+              : `${match.rule.label} (${value.toFixed(1)}${nivelMetric.sensor_unit || '%'})`;
+            
+            return (
+              <Alert 
+                severity={severity} 
+                icon={false}
+                sx={{ 
+                  mb: 2,
+                  py: 0.5,
+                  fontSize: '0.875rem',
+                  bgcolor: bgColor,
+                  borderLeft: `4px solid`,
+                  borderColor
+                }}
+              >
+                {messageLine}
+              </Alert>
+            );
+          })()}
+
+          <Box sx={{ p: 2.5, borderRadius: 2, bgcolor: 'info.lighter', border: '1px solid', borderColor: 'info.main', height: '100%' }}>
             <Grid container spacing={2} sx={{ mb: 2 }}>
               <Grid item xs={6}>
                 <Typography variant="body2" color="text.secondary">
@@ -804,107 +1289,336 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
 }
 
 /* -------------------------------------------------------------------------- */
-/* 🧱 Card: Osmosis Inversa (Bottom-Right) */
+/* 🧱 Card: Unified Overview (Estado + Osmosis in one card) */
 /* -------------------------------------------------------------------------- */
 
-// Helper function to evaluate metric status based on rules
-const evaluateMetricStatus = (value: number | null | undefined, metricName: string, metricsConfig: any[]): 'success' | 'warning' | 'error' => {
-  if (value === null || value === undefined) {
-    return 'success'; // Default to green if no value
+function UnifiedOverviewCard({ punto, latestSensorTimestamp, osmosis, metricas, tiwaterData, tiwaterProduct, metricsConfig }: any) {
+  // State to force re-render every minute
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Calculate online status
+  const FIVE_MINUTES_MS = 5 * 60 * 1000;
+  let isOnline = false;
+  let timeSinceLastData: string | null = null;
+  
+  if (punto.online !== undefined && punto.online !== null) {
+    isOnline = punto.online;
+  } else if (latestSensorTimestamp || punto.latestSensorTimestamp) {
+    const timestamp = latestSensorTimestamp || punto.latestSensorTimestamp;
+    const timestampMs = new Date(timestamp).getTime();
+    const diffMs = currentTime - timestampMs;
+    isOnline = diffMs <= FIVE_MINUTES_MS;
   }
-
-  // Map metric display names to metric_type values
-  const metricTypeMap: { [key: string]: string } = {
-    'PRODUCCION': 'produccion',
-    'RECHAZO': 'recuperacion', // RECHAZO maps to recuperacion metric type
-    'EFICIENCIA': 'eficiencia'
-  };
-
-  // Find metric configuration for this metric
-  // Try multiple matching strategies
-  const metricConfig = metricsConfig.find((m: any) => {
-    const metricType = metricTypeMap[metricName] || metricName.toLowerCase();
-    return (
-      m.metric_name?.toLowerCase() === metricName.toLowerCase() ||
-      m.sensor_type?.toLowerCase() === metricName.toLowerCase() ||
-      m.metric_type?.toLowerCase() === metricType ||
-      (metricName === 'PRODUCCION' && (m.metric_type === 'produccion' || m.sensor_type === 'flujo_produccion')) ||
-      (metricName === 'RECHAZO' && (m.metric_type === 'recuperacion' || m.sensor_type === 'flujo_rechazo')) ||
-      (metricName === 'EFICIENCIA' && m.metric_type === 'eficiencia')
-    );
-  });
-
-  if (!metricConfig || !metricConfig.rules || !Array.isArray(metricConfig.rules) || metricConfig.rules.length === 0) {
-    return 'success'; // Default to green if no rules configured
-  }
-
-  // Evaluate rules (rules are typically ordered: normal, preventivo, correctivo)
-  const matchingRule = metricConfig.rules.find((rule: any) => {
-    const min = rule.min !== null && rule.min !== undefined ? rule.min : -Infinity;
-    const max = rule.max !== null && rule.max !== undefined ? rule.max : Infinity;
-    return value >= min && value <= max;
-  });
-
-  if (matchingRule) {
-    // Determine color based on rule label or color
-    const color = matchingRule.color?.toLowerCase() || matchingRule.label?.toLowerCase() || '';
-    if (color.includes('rojo') || color.includes('red') || color.includes('correctivo') || color === '#ee0000' || color === '#ee0000') {
-      return 'error'; // Red
+  
+  const displayTimestamp = punto.latestSensorTimestamp || latestSensorTimestamp;
+  if (displayTimestamp) {
+    const timestampMs = new Date(displayTimestamp).getTime();
+    const diffMs = currentTime - timestampMs;
+    const minutes = Math.floor(diffMs / 60000);
+    const hours = Math.floor(minutes / 60);
+    
+    if (hours > 0) {
+      timeSinceLastData = `${hours}h`;
+    } else if (minutes > 0) {
+      timeSinceLastData = `${minutes}min`;
+    } else {
+      timeSinceLastData = 'ahora';
     }
-    if (color.includes('amarillo') || color.includes('yellow') || color.includes('preventivo') || color === '#ffff00' || color === '#ffff00') {
-      return 'warning'; // Yellow
-    }
-    return 'success'; // Green (normal)
   }
-
-  return 'success'; // Default to green if no rule matches
-};
-
-function OsmosisInversaCard({ osmosis, metricas, tiwaterData, tiwaterProduct, metricsConfig }: any) {
-  // Extraer datos de osmosis
+  
+  // Get osmosis data
   let osmosisData: any = null;
   if (osmosis && osmosis.length > 0) {
     const p = osmosis[0];
     const flowRate1 = p.status?.find((s: any) => s.code === 'flowrate_speed_1')?.value;
     const flowRate2 = p.status?.find((s: any) => s.code === 'flowrate_speed_2')?.value;
     const totalFlujo = (flowRate1 || 0) + (flowRate2 || 0);
-    const eficiencia = totalFlujo > 0 
-      ? ((flowRate1 || 0) / totalFlujo * 100).toFixed(1)
-      : null;
-
-    osmosisData = {
-      produccion: flowRate1,
-      rechazo: flowRate2,
-      eficiencia
-    };
+    const eficiencia = totalFlujo > 0 ? ((flowRate1 || 0) / totalFlujo * 100).toFixed(1) : null;
+    osmosisData = { produccion: flowRate1, rechazo: flowRate2, eficiencia };
   }
-
-  // Si hay datos de TIWater, usarlos como fallback
+  
   if (!osmosisData && (tiwaterData || tiwaterProduct)) {
     const findStatusValue = (codes: string[], status: any[]) => {
       const found = status?.find((s: any) => 
-        codes.some(code => 
-          s.code === code || s.label === code ||
-          s.code?.toLowerCase() === code.toLowerCase() || 
-          s.label?.toLowerCase() === code.toLowerCase()
-        )
+        codes.some(code => s.code === code || s.label === code || s.code?.toLowerCase() === code.toLowerCase() || s.label?.toLowerCase() === code.toLowerCase())
       );
       return found?.value !== null && found?.value !== undefined ? Number(found.value) : null;
     };
-
     const status = tiwaterProduct?.status || [];
     const produccion = findStatusValue(['Flujo Producción', 'flowrate_speed_1', 'flujo_produccion'], status) || tiwaterData?.caudales?.purificada;
     const rechazo = findStatusValue(['Flujo Rechazo', 'flowrate_speed_2', 'flujo_rechazo'], status) || tiwaterData?.caudales?.rechazo;
     const total = (produccion || 0) + (rechazo || 0);
     const eficiencia = total > 0 ? ((produccion || 0) / total * 100).toFixed(1) : null;
-
-    osmosisData = {
-      produccion,
-      rechazo,
-      eficiencia
-    };
+    osmosisData = { produccion, rechazo, eficiencia };
   }
+  
+  // Helper to get metric alert info
+  const getMetricAlertInfo = (value: number | null | undefined, metricName: string) => {
+    if (value === null || value === undefined) {
+      return {
+        label: 'valores normales (sin metricas definidas)',
+        message: '',
+        severity: 'success' as const,
+        bgColor: 'success.lighter',
+        borderColor: 'success.main'
+      };
+    }
+    
+    const metricTypeMap: { [key: string]: string } = {
+      'PRODUCCION': 'produccion',
+      'RECHAZO': 'rechazo',
+      'EFICIENCIA': 'eficiencia'
+    };
+    
+    const metricConfig = metricsConfig?.find((m: any) => {
+      const metricType = metricTypeMap[metricName] || metricName.toLowerCase();
+      return (
+        m.metric_name?.toLowerCase() === metricName.toLowerCase() ||
+        m.sensor_type?.toLowerCase() === metricName.toLowerCase() ||
+        m.metric_type?.toLowerCase() === metricType ||
+        (metricName === 'PRODUCCION' && (m.metric_type === 'produccion' || m.sensor_type === 'flujo_produccion')) ||
+        (metricName === 'RECHAZO' && (m.metric_type === 'rechazo' || m.sensor_type === 'flujo_rechazo')) ||
+        (metricName === 'EFICIENCIA' && m.metric_type === 'eficiencia')
+      );
+    });
+    
+    if (!metricConfig || !metricConfig.rules || metricConfig.rules.length === 0) {
+      return {
+        label: 'valores normales (sin metricas definidas)',
+        message: '',
+        severity: 'success' as const,
+        bgColor: 'success.lighter',
+        borderColor: 'success.main'
+      };
+    }
+    
+    const match = metricConfig.rules.find((rule: any) => {
+      const min = rule.min !== null && rule.min !== undefined ? rule.min : -Infinity;
+      const max = rule.max !== null && rule.max !== undefined ? rule.max : Infinity;
+      return value >= min && value <= max;
+    });
+    
+    if (!match) {
+      return {
+        label: 'valores normales (sin metricas definidas)',
+        message: '',
+        severity: 'success' as const,
+        bgColor: 'success.lighter',
+        borderColor: 'success.main'
+      };
+    }
+    
+    const colorUpper = (match.color || '').toUpperCase().replace(/\s/g, '');
+    let severity: 'error' | 'warning' | 'success' = 'success';
+    let bgColor = 'success.lighter';
+    let borderColor = 'success.main';
+    
+    if (colorUpper.startsWith('#')) {
+      const r = parseInt(colorUpper.substring(1, 3), 16);
+      const g = parseInt(colorUpper.substring(3, 5), 16);
+      const b = parseInt(colorUpper.substring(5, 7), 16);
+      
+      if (r > 200 && g < 100 && b < 100) {
+        severity = 'error';
+        bgColor = 'error.lighter';
+        borderColor = 'error.main';
+      } else if (r > 200 && g > 200 && b < 100) {
+        severity = 'warning';
+        bgColor = 'warning.lighter';
+        borderColor = 'warning.main';
+      } else if (g > 100 && r < 100) {
+        severity = 'success';
+        bgColor = 'success.lighter';
+        borderColor = 'success.main';
+      }
+    }
+    
+    return {
+      label: match.label,
+      message: match.message,
+      severity,
+      bgColor,
+      borderColor
+    };
+  };
+  
+  const produccionAlert = getMetricAlertInfo(osmosisData?.produccion, 'PRODUCCION');
+  const rechazoAlert = getMetricAlertInfo(osmosisData?.rechazo, 'RECHAZO');
+  const eficienciaAlert = getMetricAlertInfo(parseFloat(osmosisData?.eficiencia), 'EFICIENCIA');
+  
+  return (
+    <Card variant="outlined" sx={{ p: 3, border: '2px solid', borderColor: 'divider', borderRadius: 2 }}>
+      {/* Header with store name, location, client and status */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+        <Box>
+          <Typography variant="h5" fontWeight="bold" sx={{ mb: 0.5 }}>
+            {punto.name || 'Tienda'}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {punto.city?.city || 'Hermosillo'}, {punto.city?.state || 'Sonora'}
+            {punto.cliente?.name && ` • ${punto.cliente.name}`}
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 1, borderRadius: 1, bgcolor: isOnline ? 'success.lighter' : 'error.lighter' }}>
+          <Box sx={{ 
+            width: 8, 
+            height: 8, 
+            borderRadius: '50%', 
+            bgcolor: isOnline ? 'success.main' : 'error.main',
+            animation: isOnline ? 'pulse 2s infinite' : 'none',
+            '@keyframes pulse': { '0%, 100%': { opacity: 1 }, '50%': { opacity: 0.7 } }
+          }} />
+          <Typography variant="body2" fontWeight="600" color={isOnline ? 'success.dark' : 'error.dark'}>
+            {isOnline ? 'ONLINE' : 'OFFLINE'}
+          </Typography>
+          {timeSinceLastData && (
+            <Typography variant="caption" color="text.secondary">
+              ({timeSinceLastData})
+            </Typography>
+          )}
+        </Box>
+      </Box>
+      
+      <Divider sx={{ mb: 3 }} />
+      
+      <Grid container spacing={3}>
+        {/* Left: Osmosis Metrics with Alerts - EXPANDED */}
+        <Grid item xs={12} md={9}>
+          <Typography variant="subtitle1" fontWeight="600" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+            💧 Osmosis Inversa
+          </Typography>
+          
+          {/* Metrics Summary with Alerts Below Each */}
+          <Grid container spacing={2}>
+            <Grid item xs={4}>
+              <Box sx={{ p: 2, borderRadius: 1, bgcolor: 'grey.100', textAlign: 'center' }}>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  Producción
+                </Typography>
+                <Typography variant="h5" fontWeight="600">
+                  {osmosisData?.produccion !== null && osmosisData?.produccion !== undefined ? osmosisData.produccion.toFixed(1) : '--'}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  L/MIN
+                </Typography>
+              </Box>
+              {produccionAlert && (
+                <Alert 
+                  severity={produccionAlert.severity}
+                  icon={false}
+                  sx={{ 
+                    mt: 1,
+                    py: 0.5,
+                    fontSize: '0.875rem',
+                    bgcolor: produccionAlert.bgColor,
+                    borderLeft: `4px solid`,
+                    borderColor: produccionAlert.borderColor
+                  }}
+                >
+                  <strong>{produccionAlert.label}</strong>
+                  {osmosisData?.produccion !== null && osmosisData?.produccion !== undefined && ` (${osmosisData.produccion.toFixed(1)} L/MIN)`}
+                  {produccionAlert.message && ` - ${produccionAlert.message}`}
+                </Alert>
+              )}
+            </Grid>
+            <Grid item xs={4}>
+              <Box sx={{ p: 2, borderRadius: 1, bgcolor: 'grey.100', textAlign: 'center' }}>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  Rechazo
+                </Typography>
+                <Typography variant="h5" fontWeight="600">
+                  {osmosisData?.rechazo !== null && osmosisData?.rechazo !== undefined ? osmosisData.rechazo.toFixed(1) : '--'}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  L/MIN
+                </Typography>
+              </Box>
+              {rechazoAlert && (
+                <Alert 
+                  severity={rechazoAlert.severity}
+                  icon={false}
+                  sx={{ 
+                    mt: 1,
+                    py: 0.5,
+                    fontSize: '0.875rem',
+                    bgcolor: rechazoAlert.bgColor,
+                    borderLeft: `4px solid`,
+                    borderColor: rechazoAlert.borderColor
+                  }}
+                >
+                  <strong>{rechazoAlert.label}</strong>
+                  {osmosisData?.rechazo !== null && osmosisData?.rechazo !== undefined && ` (${osmosisData.rechazo.toFixed(1)} L/MIN)`}
+                  {rechazoAlert.message && ` - ${rechazoAlert.message}`}
+                </Alert>
+              )}
+            </Grid>
+            <Grid item xs={4}>
+              <Box sx={{ p: 2, borderRadius: 1, bgcolor: 'grey.100', textAlign: 'center' }}>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  Eficiencia
+                </Typography>
+                <Typography variant="h5" fontWeight="600">
+                  {osmosisData?.eficiencia !== null && osmosisData?.eficiencia !== undefined ? osmosisData.eficiencia : '--'}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  %
+                </Typography>
+              </Box>
+              {eficienciaAlert && (
+                <Alert 
+                  severity={eficienciaAlert.severity}
+                  icon={false}
+                  sx={{ 
+                    mt: 1,
+                    py: 0.5,
+                    fontSize: '0.875rem',
+                    bgcolor: eficienciaAlert.bgColor,
+                    borderLeft: `4px solid`,
+                    borderColor: eficienciaAlert.borderColor
+                  }}
+                >
+                  <strong>{eficienciaAlert.label}</strong>
+                  {osmosisData?.eficiencia !== null && osmosisData?.eficiencia !== undefined && ` (${osmosisData.eficiencia}%)`}
+                  {eficienciaAlert.message && ` - ${eficienciaAlert.message}`}
+                </Alert>
+              )}
+            </Grid>
+          </Grid>
+        </Grid>
+        
+        {/* Right: Map - FULL HEIGHT */}
+        <Grid item xs={12} md={3}>
+          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+            Ubicación
+          </Typography>
+          <Box sx={{ width: '100%', height: 'calc(100% - 28px)', minHeight: 200, borderRadius: 1, overflow: 'hidden', border: '1px solid', borderColor: 'divider' }}>
+            <iframe
+              title="Ubicación en Google Maps"
+              width="100%"
+              height="100%"
+              style={{ border: 0 }}
+              loading="lazy"
+              src={`https://www.google.com/maps?q=${punto.city?.lat || 29.0729},${punto.city?.lon || -110.9559}&z=14&output=embed`}
+            />
+          </Box>
+        </Grid>
+      </Grid>
+    </Card>
+  );
+}
 
+/* -------------------------------------------------------------------------- */
+/* 🧱 Card: Máquinas (separate card below Osmosis) */
+/* -------------------------------------------------------------------------- */
+
+function MaquinasCard({ tiwaterData, tiwaterProduct, metricsConfig }: any) {
   // Extraer corrientes para las máquinas
   const getCorriente = (ch: string) => {
     if (tiwaterData?.corrientes) {
@@ -940,185 +1654,287 @@ function OsmosisInversaCard({ osmosis, metricas, tiwaterData, tiwaterProduct, me
   const ch3 = getCorriente('ch3') || 3.32;
   const ch4 = getCorriente('ch4') || 2.32;
   const presionCO2 = getPresionCO2() || 320.79;
+  
+  // Calculate average for each machine
+  const nieveAvg = ((ch1 + ch2) / 2);
+  const frappeAvg = ((ch3 + ch4) / 2);
+
+  // Helper to get metric alert for machines
+  const getMachineAlert = (value: number | null | undefined, metricType: string) => {
+    if (value === null || value === undefined) {
+      return {
+        label: 'valores normales (sin metricas definidas)',
+        message: '',
+        severity: 'success' as const,
+        bgColor: 'success.lighter',
+        borderColor: 'success.main'
+      };
+    }
+    
+    if (!metricsConfig) {
+      return {
+        label: 'valores normales (sin metricas definidas)',
+        message: '',
+        severity: 'success' as const,
+        bgColor: 'success.lighter',
+        borderColor: 'success.main'
+      };
+    }
+    
+    const metricConfig = metricsConfig.find((m: any) => {
+      const metricTypeLower = (m.metric_type || '').toLowerCase();
+      
+      // Match specific machine metric types
+      if (metricType === 'amperaje_nieve') {
+        return metricTypeLower === 'amperaje_nieve' || metricTypeLower === 'amperaje_maquina_nieve';
+      }
+      if (metricType === 'amperaje_frappe') {
+        return metricTypeLower === 'amperaje_frappe' || metricTypeLower === 'amperaje_maquina_frapee';
+      }
+      if (metricType === 'co2') {
+        return metricTypeLower === 'co2' || metricTypeLower === 'presion_co2';
+      }
+      return false;
+    });
+    
+    if (!metricConfig || !metricConfig.rules || metricConfig.rules.length === 0) {
+      return {
+        label: 'valores normales (sin metricas definidas)',
+        message: '',
+        severity: 'success' as const,
+        bgColor: 'success.lighter',
+        borderColor: 'success.main'
+      };
+    }
+    
+    const match = metricConfig.rules.find((rule: any) => {
+      const min = rule.min !== null && rule.min !== undefined ? rule.min : -Infinity;
+      const max = rule.max !== null && rule.max !== undefined ? rule.max : Infinity;
+      return value >= min && value <= max;
+    });
+    
+    if (!match) {
+      return {
+        label: 'valores normales (sin metricas definidas)',
+        message: '',
+        severity: 'success' as const,
+        bgColor: 'success.lighter',
+        borderColor: 'success.main'
+      };
+    }
+    
+    const colorUpper = (match.color || '').toUpperCase().replace(/\s/g, '');
+    let severity: 'error' | 'warning' | 'success' = 'success';
+    let bgColor = 'success.lighter';
+    let borderColor = 'success.main';
+    
+    if (colorUpper.startsWith('#') && colorUpper.length >= 7) {
+      const r = parseInt(colorUpper.substring(1, 3), 16);
+      const g = parseInt(colorUpper.substring(3, 5), 16);
+      const b = parseInt(colorUpper.substring(5, 7), 16);
+      
+      // Error: High red, low green/blue (e.g., #FF5630, #EE0000, #FF0000)
+      if (r > 200 && g < 120 && b < 120) {
+        severity = 'error';
+        bgColor = 'error.lighter';
+        borderColor = 'error.main';
+      }
+      // Warning: High red and green, low blue (e.g., #FFAB00, #FFFF00)
+      else if (r > 180 && g > 100 && b < 100) {
+        severity = 'warning';
+        bgColor = 'warning.lighter';
+        borderColor = 'warning.main';
+      }
+      // Success: High green, lower red (e.g., #00A76F, #00B050)
+      else if (g > 100 && r < 150) {
+        severity = 'success';
+        bgColor = 'success.lighter';
+        borderColor = 'success.main';
+      }
+    }
+    
+    return {
+      label: match.label,
+      message: match.message,
+      severity,
+      bgColor,
+      borderColor
+    };
+  };
+  
+  const nieveAlert = getMachineAlert(nieveAvg, 'amperaje_nieve');
+  const frappeAlert = getMachineAlert(frappeAvg, 'amperaje_frappe');
+  const co2Alert = getMachineAlert(presionCO2, 'co2');
 
   return (
     <Card 
       variant="outlined" 
       sx={{ 
         p: 3, 
-        height: '100%', 
         border: '2px solid', 
-        borderColor: 'primary.main',
-        borderRadius: 2,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-        transition: 'box-shadow 0.3s ease',
-        background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(250,250,250,0.95) 100%)',
-        '&:hover': {
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-        }
+        borderColor: 'divider',
+        borderRadius: 2
       }}
     >
-      <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, color: 'primary.main' }}>
-        💧 Osmosis Inversa
+      <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
+        ⚙️ Máquinas
       </Typography>
-      <Divider sx={{ mb: 3, borderWidth: 1 }} />
 
-      {/* Métricas de Osmosis */}
-      <Box sx={{ mb: 3 }}>
-        <Grid container spacing={2} sx={{ mb: 2 }}>
-          <Grid item xs={12}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Typography variant="body2">
-                PRODUCCION: {osmosisData?.produccion !== null && osmosisData?.produccion !== undefined 
-                  ? `${osmosisData.produccion.toFixed(1)} L/MIN` 
-                  : 'N/A'}
-              </Typography>
-              <Box sx={{ 
-                width: 8, 
-                height: 8, 
-                borderRadius: '50%', 
-                bgcolor: `${evaluateMetricStatus(osmosisData?.produccion, 'PRODUCCION', metricsConfig || [])}.main` 
-              }} />
-            </Box>
-          </Grid>
-          <Grid item xs={12}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Typography variant="body2">
-                RECHAZO: {osmosisData?.rechazo !== null && osmosisData?.rechazo !== undefined 
-                  ? `${osmosisData.rechazo.toFixed(1)} L/MIN` 
-                  : 'N/A'}
-              </Typography>
-              <Box sx={{ 
-                width: 8, 
-                height: 8, 
-                borderRadius: '50%', 
-                bgcolor: `${evaluateMetricStatus(osmosisData?.rechazo, 'RECHAZO', metricsConfig || [])}.main` 
-              }} />
-            </Box>
-          </Grid>
-          <Grid item xs={12}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Typography variant="body2">
-                EFICIENCIA: {osmosisData?.eficiencia !== null && osmosisData?.eficiencia !== undefined 
-                  ? `${osmosisData.eficiencia}%` 
-                  : 'N/A'}
-              </Typography>
-              <Box sx={{ 
-                width: 8, 
-                height: 8, 
-                borderRadius: '50%', 
-                bgcolor: `${evaluateMetricStatus(parseFloat(osmosisData?.eficiencia), 'EFICIENCIA', metricsConfig || [])}.main` 
-              }} />
-            </Box>
-          </Grid>
-        </Grid>
-      </Box>
-
-      {/* Máquinas */}
-      <Grid container spacing={2}>
+      <Grid container spacing={3}>
         {/* Máquina Nieve */}
-        <Grid item xs={12}>
-          <Card 
-            variant="outlined" 
-            sx={{ 
-              p: 2, 
-              bgcolor: 'primary.lighter', 
-              border: '1px solid', 
-              borderColor: 'primary.main',
-              borderRadius: 2,
-              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-              }
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-              <Typography variant="body2" fontWeight="600" sx={{ color: 'primary.dark' }}>
-                🍦 Máquina Nieve
-              </Typography>
+        <Grid item xs={12} md={4}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', p: 2, borderRadius: 2, bgcolor: 'background.neutral' }}>
+            <Box 
+              sx={{ 
+                width: 56, 
+                height: 56, 
+                borderRadius: '50%', 
+                bgcolor: 'warning.main',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                fontSize: '1.5rem'
+              }}
+            >
+              🍦
             </Box>
-            <Grid container spacing={1}>
-              <Grid item xs={6}>
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Máquina Nieve
+              </Typography>
+              <Typography variant="h5" fontWeight="bold">
+                {nieveAvg.toFixed(2)}
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
                 <Typography variant="caption" color="text.secondary">
-                  IZQ.: {ch1.toFixed(2)} A
+                  Izq: {ch1.toFixed(1)}A • Der: {ch2.toFixed(1)}A
                 </Typography>
-              </Grid>
-              <Grid item xs={6}>
-                <Typography variant="caption" color="text.secondary">
-                  DER.: {ch2.toFixed(2)} A
-                </Typography>
-              </Grid>
-            </Grid>
-          </Card>
+              </Box>
+            </Box>
+          </Box>
+          {nieveAlert && (
+            <Alert 
+              severity={nieveAlert.severity}
+              icon={false}
+              sx={{ 
+                mt: 1,
+                py: 0.5,
+                fontSize: '0.875rem',
+                bgcolor: nieveAlert.bgColor,
+                borderLeft: `4px solid`,
+                borderColor: nieveAlert.borderColor
+              }}
+            >
+              <strong>{nieveAlert.label}</strong>
+              {nieveAvg !== null && nieveAvg !== undefined && ` (${nieveAvg.toFixed(2)}A)`}
+              {nieveAlert.message && ` - ${nieveAlert.message}`}
+            </Alert>
+          )}
         </Grid>
 
         {/* Máquina Frappe */}
-        <Grid item xs={12}>
-          <Card 
-            variant="outlined" 
-            sx={{ 
-              p: 2, 
-              bgcolor: 'primary.lighter', 
-              border: '1px solid', 
-              borderColor: 'primary.main',
-              borderRadius: 2,
-              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-              }
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-              <Typography variant="body2" fontWeight="600" sx={{ color: 'primary.dark' }}>
-                🥤 Máquina Frappe
-              </Typography>
+        <Grid item xs={12} md={4}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', p: 2, borderRadius: 2, bgcolor: 'background.neutral' }}>
+            <Box 
+              sx={{ 
+                width: 56, 
+                height: 56, 
+                borderRadius: '50%', 
+                bgcolor: 'info.main',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                fontSize: '1.5rem'
+              }}
+            >
+              🥤
             </Box>
-            <Grid container spacing={1}>
-              <Grid item xs={6}>
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Máquina Frappe
+              </Typography>
+              <Typography variant="h5" fontWeight="bold">
+                {frappeAvg.toFixed(2)}
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
                 <Typography variant="caption" color="text.secondary">
-                  IZQ.: {ch3.toFixed(2)} A
+                  Izq: {ch3.toFixed(1)}A • Der: {ch4.toFixed(1)}A
                 </Typography>
-              </Grid>
-              <Grid item xs={6}>
-                <Typography variant="caption" color="text.secondary">
-                  DER.: {ch4.toFixed(2)} A
-                </Typography>
-              </Grid>
-            </Grid>
-          </Card>
+              </Box>
+            </Box>
+          </Box>
+          {frappeAlert && (
+            <Alert 
+              severity={frappeAlert.severity}
+              icon={false}
+              sx={{ 
+                mt: 1,
+                py: 0.5,
+                fontSize: '0.875rem',
+                bgcolor: frappeAlert.bgColor,
+                borderLeft: `4px solid`,
+                borderColor: frappeAlert.borderColor
+              }}
+            >
+              <strong>{frappeAlert.label}</strong>
+              {frappeAvg !== null && frappeAvg !== undefined && ` (${frappeAvg.toFixed(2)}A)`}
+              {frappeAlert.message && ` - ${frappeAlert.message}`}
+            </Alert>
+          )}
         </Grid>
 
         {/* Máquina Carbonatada */}
-        <Grid item xs={12}>
-          <Card 
-            variant="outlined" 
-            sx={{ 
-              p: 2, 
-              bgcolor: 'primary.lighter', 
-              border: '1px solid', 
-              borderColor: 'primary.main',
-              borderRadius: 2,
-              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-              }
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-              <Typography variant="body2" fontWeight="600" sx={{ color: 'primary.dark' }}>
-                🥤 Máquina Carbonatada
-              </Typography>
+        <Grid item xs={12} md={4}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', p: 2, borderRadius: 2, bgcolor: 'background.neutral' }}>
+            <Box 
+              sx={{ 
+                width: 56, 
+                height: 56, 
+                borderRadius: '50%', 
+                bgcolor: 'success.main',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                fontSize: '1.5rem'
+              }}
+            >
+              💨
             </Box>
-            <Typography variant="caption" color="text.secondary">
-              {presionCO2.toFixed(2)} PSI
-            </Typography>
-          </Card>
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Carbonatada (CO₂)
+              </Typography>
+              <Typography variant="h5" fontWeight="bold">
+                {presionCO2.toFixed(0)}
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                <Typography variant="caption" color="text.secondary">
+                  PSI
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+          {co2Alert && (
+            <Alert 
+              severity={co2Alert.severity}
+              icon={false}
+              sx={{ 
+                mt: 1,
+                py: 0.5,
+                fontSize: '0.875rem',
+                bgcolor: co2Alert.bgColor,
+                borderLeft: `4px solid`,
+                borderColor: co2Alert.borderColor
+              }}
+            >
+              <strong>{co2Alert.label}</strong>
+              {presionCO2 !== null && presionCO2 !== undefined && ` (${presionCO2.toFixed(0)} PSI)`}
+              {co2Alert.message && ` - ${co2Alert.message}`}
+            </Alert>
+          )}
         </Grid>
       </Grid>
     </Card>
@@ -1413,130 +2229,6 @@ function MetricasSection({ metricas }: any) {
 /* -------------------------------------------------------------------------- */
 /* 🧱 Card: Estado de la Tienda (Top-Left) */
 /* -------------------------------------------------------------------------- */
-
-function EstadoTiendaCard({ punto, latestSensorTimestamp }: any) {
-  // Determinar si está online: GREEN si recibimos datos MQTT en los últimos 5 minutos, RED si no
-  const FIVE_MINUTES_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
-  const now = new Date().getTime();
-  
-  let isOnline = false;
-  if (latestSensorTimestamp) {
-    const timestampMs = new Date(latestSensorTimestamp).getTime();
-    isOnline = (now - timestampMs) <= FIVE_MINUTES_MS;
-  } else {
-    // Fallback to punto.online if no timestamp available
-    isOnline = punto.online || false;
-  }
-  
-  // Obtener ubicación por defecto (la misma que se usa en el mapa)
-  const defaultCity = 'Hermosillo';
-  const defaultState = 'Sonora';
-  
-  // Usar ubicación del punto si existe, sino usar la ubicación por defecto del mapa
-  // Verificar si tiene datos de ubicación válidos
-  const hasCityData = punto.city?.city && punto.city?.state;
-  
-  const ciudad = hasCityData ? punto.city.city : defaultCity;
-  const estado = hasCityData ? punto.city.state : defaultState;
-  
-  return (
-    <Card 
-      variant="outlined" 
-      sx={{ 
-        p: 3, 
-        height: '100%', 
-        border: '2px solid', 
-        borderColor: 'primary.main',
-        borderRadius: 2,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-        transition: 'box-shadow 0.3s ease',
-        background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(250,250,250,0.95) 100%)',
-        '&:hover': {
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-        }
-      }}
-    >
-      <Typography variant="h6" sx={{ mb: 2.5, fontWeight: 600, color: 'primary.main' }}>
-        Estado de la Tienda
-      </Typography>
-
-      {/* Información de estado */}
-      <Box sx={{ mb: 2.5 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5, p: 1.5, borderRadius: 1, bgcolor: isOnline ? 'success.lighter' : 'error.lighter' }}>
-          <Box
-            sx={{
-              width: 14,
-              height: 14,
-              borderRadius: '50%',
-              bgcolor: isOnline ? 'success.main' : 'error.main',
-              boxShadow: `0 0 8px ${isOnline ? 'rgba(76, 175, 80, 0.5)' : 'rgba(244, 67, 54, 0.5)'}`,
-              animation: isOnline ? 'pulse 2s infinite' : 'none',
-              '@keyframes pulse': {
-                '0%, 100%': { opacity: 1 },
-                '50%': { opacity: 0.7 },
-              }
-            }}
-          />
-          <Typography variant="body1" fontWeight="600" sx={{ color: isOnline ? 'success.dark' : 'error.dark' }}>
-            {isOnline ? 'ONLINE' : 'OFFLINE'}
-          </Typography>
-        </Box>
-
-        <Box sx={{ mb: 1.5, p: 1.5, borderRadius: 1, bgcolor: 'grey.50' }}>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-            Ubicación
-          </Typography>
-          <Typography variant="body1" fontWeight="medium">
-            {ciudad}, {estado}
-          </Typography>
-        </Box>
-
-        {punto.cliente?.name && (
-          <Box sx={{ mb: 1.5, p: 1.5, borderRadius: 1, bgcolor: 'grey.50' }}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-              Cliente
-            </Typography>
-            <Typography variant="body1" fontWeight="medium">
-              {punto.cliente.name}
-            </Typography>
-          </Box>
-        )}
-
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 1.5, borderRadius: 1, bgcolor: 'grey.50' }}>
-          <Typography variant="caption" color="text.secondary">
-            Funcionamiento:
-          </Typography>
-          <Box
-            sx={{
-              width: 12,
-              height: 12,
-              borderRadius: '50%',
-              bgcolor: isOnline ? 'success.main' : 'error.main',
-            }}
-          />
-          <Typography variant="body2" fontWeight="medium" sx={{ color: isOnline ? 'success.dark' : 'error.dark' }}>
-            {isOnline ? 'Operativo' : 'Inactivo'}
-          </Typography>
-        </Box>
-      </Box>
-
-      <Divider sx={{ my: 2.5, borderWidth: 1 }} />
-
-      {/* Mapa integrado - más compacto */}
-      <Box>
-        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: 'text.secondary' }}>
-          Ubicación en el mapa
-        </Typography>
-        <Box sx={{ borderRadius: 1, overflow: 'hidden', border: '1px solid', borderColor: 'divider', height: 250 }}>
-          <MapComponent 
-            lat={punto.lat || punto.city?.lat || 29.149162901939928}
-            long={punto.long || punto.city?.lon || -110.96483231003234}
-          />
-        </Box>
-      </Box>
-    </Card>
-  );
-}
 
 /* -------------------------------------------------------------------------- */
 /* 🧱 Dashboard TIWater - Datos de Sensores en Tiempo Real */
@@ -2224,38 +2916,6 @@ function WaterTankSVG({
           {liters} LITROS
         </Typography>
       </Box>
-    </Box>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* 🧱 Componente: Mapa */
-/* -------------------------------------------------------------------------- */
-
-function MapComponent({ lat, long }: { lat: number; long: number }) {
-  // Coordenadas por defecto si no se proporcionan (CAFFENIO Nuevo Progreso)
-  // Coordenadas del lugar: 29.1452327, -110.9648541
-  const defaultLat = 29.1452327;
-  const defaultLon = -110.9648541;
-  
-  const mapLat = lat || defaultLat;
-  const mapLon = long || defaultLon;
-  
-  // URL de Google Maps embed con las coordenadas (sin API key)
-  const mapUrl = `https://www.google.com/maps?q=${mapLat},${mapLon}&z=15&output=embed&hl=es`;
-  
-  return (
-    <Box sx={{ width: '100%', height: '400px', position: 'relative', overflow: 'hidden', borderRadius: 1 }}>
-      <iframe
-        width="100%"
-        height="100%"
-        style={{ border: 0 }}
-        src={mapUrl}
-        allowFullScreen
-        loading="lazy"
-        referrerPolicy="no-referrer-when-downgrade"
-        title="Ubicación del Punto de Venta"
-      />
     </Box>
   );
 }

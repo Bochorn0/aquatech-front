@@ -14,6 +14,7 @@ import { DashboardLayout } from 'src/layouts/dashboard';
 // ----------------------------------------------------------------------
 
 export const HomePage = lazy(() => import('src/pages/home'));
+export const HomeV2Dashboard = lazy(() => import('src/pages/home-v2'));
 export const DashboardLanding = lazy(() => import('src/pages/dashboard-landing'));
 export const UserPage = lazy(() => import('src/pages/users'));
 export const Controllers = lazy(() => import('src/pages/controllers'));
@@ -82,33 +83,29 @@ const TokenProtectedRoute = ({ children }: { children: JSX.Element }) => {
   return token ? children : null;
 };
 
-// Permission-based route protection
-const PermissionProtectedRoute = ({ 
-  children, 
-  requiredPath 
-}: { 
+// Permission-based route protection (requiredPath can be single path or array for "any of")
+const PermissionProtectedRoute = ({
+  children,
+  requiredPath,
+}: {
   children: JSX.Element;
-  requiredPath: string;
+  requiredPath: string | string[];
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const paths = Array.isArray(requiredPath) ? requiredPath : [requiredPath];
+  const pathsKey = paths.join(',');
+  const allowed = paths.some((p) => hasPermission(p));
 
   useEffect(() => {
-    // Verificar permisos después de que el componente se monte
-    // Usar el pathname actual normalizado para la verificación
     const currentPath = location.pathname;
-    if (!hasPermission(requiredPath)) {
-      console.log(`[Route Protection] Access denied to: ${requiredPath} (current path: ${currentPath})`);
+    if (!allowed) {
+      console.log(`[Route Protection] Access denied to: ${pathsKey} (current path: ${currentPath})`);
       navigate('/404', { replace: true });
     }
-  }, [requiredPath, navigate, location.pathname]);
+  }, [allowed, navigate, location.pathname, pathsKey]);
 
-  // Si tiene permiso, renderizar el componente
-  if (hasPermission(requiredPath)) {
-    return children;
-  }
-
-  // Si no tiene permiso, no renderizar nada (será redirigido)
+  if (allowed) return children;
   return null;
 };
 
@@ -127,12 +124,32 @@ export function Router() {
         {
           element: (
             <TokenProtectedRoute>
-              <PermissionProtectedRoute requiredPath="/">
+              <PermissionProtectedRoute requiredPath={['/', '/dashboard', '/dashboard/v1', '/dashboard/v2']}>
                 <DashboardLanding />
               </PermissionProtectedRoute>
             </TokenProtectedRoute>
           ),
           index: true,
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <PermissionProtectedRoute requiredPath="/dashboard/v2">
+                <HomeV2Dashboard />
+              </PermissionProtectedRoute>
+            </TokenProtectedRoute>
+          ),
+          path: 'dashboard/v2',
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <PermissionProtectedRoute requiredPath="/dashboard/v1">
+                <HomePage />
+              </PermissionProtectedRoute>
+            </TokenProtectedRoute>
+          ),
+          path: 'dashboard/v1',
         },
         {
           element: (

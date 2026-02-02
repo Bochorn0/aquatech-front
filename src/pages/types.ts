@@ -41,6 +41,8 @@ interface Status {
     max: number | null;
     color: string;
     label: string;
+    /** Custom alert message shown in dashboard when this rule matches (optional). */
+    message?: string;
   };
 
   export type MetricCondition = {
@@ -71,7 +73,7 @@ interface Status {
   export type  Metric = {
     _id?: string;
     id?: string; // For PostgreSQL compatibility
-    cliente: String;
+    cliente?: string;
     clientId?: string; // For PostgreSQL compatibility
     client_name?: string;
     product_type?: string; // For v1 (MongoDB) compatibility

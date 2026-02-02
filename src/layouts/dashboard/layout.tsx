@@ -63,8 +63,11 @@ export function DashboardLayout({ sx, children, header }: DashboardLayoutProps) 
     const useV1Default = dashboardVersion === 'v1';
     const resolved = filtered.map((item) => {
       if (!item.submenu || !item.subItems) return item;
-      if (item.path === '/PuntoVenta') {
-        const path = useV1Default ? '/v1/PuntoVenta' : '/PuntoVenta';
+      if (item.path === '/PuntoVenta' || item.path?.startsWith('/dashboard')) {
+        const isDashboard = item.path?.startsWith('/dashboard');
+        const path = isDashboard
+          ? (useV1Default ? '/dashboard/v1' : '/dashboard/v2')
+          : (useV1Default ? '/v1/PuntoVenta' : '/PuntoVenta');
         return { ...item, path, defaultPath: path };
       }
       if (item.path === '/Personalizacion') {

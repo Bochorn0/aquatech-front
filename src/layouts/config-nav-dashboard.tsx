@@ -11,8 +11,15 @@ const icon = (name: string) => (
 export const allNavItems = [
   {
     title: 'Dashboard',
-    path: '/',
+    path: '/dashboard/v2', // Default to v2 (same as Puntos de venta / Personalizacion)
     icon: icon('ic-analytics'),
+    requiredPath: '/dashboard', // Permission required to see this menu item (parent)
+    submenu: true,
+    defaultPath: '/dashboard/v2',
+    subItems: [
+      { title: 'V2', path: '/dashboard/v2', requiredPath: '/dashboard/v2' },
+      { title: 'V1', path: '/dashboard/v1', requiredPath: '/dashboard/v1' },
+    ],
   },
   {
     title: 'Equipos',

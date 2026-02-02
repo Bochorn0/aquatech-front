@@ -54,7 +54,11 @@ export default function UserRoleManagement() {
   
   // Definir todas las rutas disponibles del menú
   const availableRoutes = [
-    { path: '/', label: 'Dashboard' },
+    { path: '/', label: 'Acceso general (dashboard API, clientes, métricas, etc.)' },
+    // Dashboard - Parent and versions (same as Puntos de venta / Personalizacion)
+    { path: '/dashboard', label: 'Dashboard (Parent - Required for submenu)' },
+    { path: '/dashboard/v1', label: 'Dashboard V1 (métricas + mapa)' },
+    { path: '/dashboard/v2', label: 'Dashboard V2 (sensores)' },
     { path: '/equipos', label: 'Equipos' },
     { path: '/usuarios', label: 'Usuarios' },
     { path: '/controladores', label: 'Controladores' },
@@ -450,7 +454,7 @@ export default function UserRoleManagement() {
                   Estos permisos definen <strong>qué ver en el menú</strong> y <strong>qué endpoints de la API</strong> puede usar este rol. Al marcar un permiso, los usuarios con este rol verán esa sección y podrán llamar a las APIs asociadas.
                 </Typography>
                 <Typography variant="caption" color="info.main" display="block" sx={{ mb: 2 }}>
-                  API: / = dashboard, clientes, métricas, ciudades, notificaciones, reportes · /equipos = productos · /puntoVenta = puntos de venta · /personalizacion = personalización v2 · /usuarios = usuarios y roles · /controladores = controladores · /tiwater-catalog = catálogo TI Water.
+                  API: / = acceso general · /dashboard = dashboard (parent) · /dashboard/v1, /dashboard/v2 = versiones · /equipos = productos · /puntoVenta = puntos de venta · /personalizacion = personalización · /usuarios = usuarios y roles · /controladores = controladores · /tiwater-catalog = catálogo TI Water.
                 </Typography>
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
                   Para submenús (v1/v2): marque el parent (ej. Puntos De Venta) y la versión deseada (ej. Puntos De Venta V1).
@@ -458,7 +462,7 @@ export default function UserRoleManagement() {
                 <Paper variant="outlined" sx={{ p: 2, maxHeight: 400, overflow: 'auto' }}>
                   <FormGroup>
                     {availableRoutes.map((route) => {
-                      const isParentRoute = route.path === '/puntoVenta' || route.path === '/personalizacion';
+                      const isParentRoute = route.path === '/puntoVenta' || route.path === '/personalizacion' || route.path === '/dashboard';
                       return (
                         <FormControlLabel
                           key={route.path}

@@ -1,3 +1,4 @@
+import { toast } from 'react-toastify';
 import { Helmet } from 'react-helmet-async';
 import { useState, useEffect, useCallback } from 'react';
 
@@ -38,6 +39,17 @@ export function LoginPage() {
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
   const [forgotPasswordMessage, setForgotPasswordMessage] = useState<string | null>(null);
+
+  // Single "session expired" message when redirected after token expiry (set by axios interceptors)
+  useEffect(() => {
+    if (sessionStorage.getItem('session_expired') === '1') {
+      sessionStorage.removeItem('session_expired');
+      toast.info('Su sesión ha expirado. Inicie sesión nuevamente.', {
+        position: 'top-right',
+        autoClose: 5000,
+      });
+    }
+  }, []);
 
   useEffect(() => {
     try {
