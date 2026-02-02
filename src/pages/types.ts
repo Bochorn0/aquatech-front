@@ -213,7 +213,8 @@ interface Status {
     client_name: string;
     password: string;
     role_name: string;
-    cliente: string;
+    cliente: string; // MongoDB Client reference
+    postgresClientId?: string; // PostgreSQL Client reference for dashboard v2
     role: Role;
     verified: boolean;
     puesto: string;

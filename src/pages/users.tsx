@@ -31,13 +31,14 @@ import {
 import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
 import { CONFIG } from "src/config-global";
+import { get as getV2 } from "src/api/axiosHelperV2";
 import { get, post, patch, remove } from "src/api/axiosHelper";
 
 import { SvgColor } from 'src/components/svg-color';
 
 import type { User, Role, Cliente, DashboardVersion } from './types';
 
-const defaultUser = { _id: '', nombre: '', email: '', password:'',  client_name: '', role_name: '', cliente: '', role: { _id: '', name: '' }, verified: false, puesto: '', status: '', mqtt_zip_password: '' };
+const defaultUser = { _id: '', nombre: '', email: '', password:'',  client_name: '', role_name: '', cliente: '', postgresClientId: '', role: { _id: '', name: '' }, verified: false, puesto: '', status: '', mqtt_zip_password: '' };
 const DASHBOARD_VERSION_OPTIONS: { value: DashboardVersion; label: string }[] = [
   { value: 'v1', label: 'Dashboard v1 (métricas por producto + mapa)' },
   { value: 'v2', label: 'Dashboard v2 (métricas generales)' },
@@ -49,6 +50,7 @@ export default function UserRoleManagement() {
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [clients, setClients] = useState<Cliente[]>([]);
+  const [postgresClients, setPostgresClients] = useState<Cliente[]>([]);
   const [userForm, setUserForm] = useState<User>(defaultUser);
   const [roleForm, setRoleForm] = useState<Role>({ name: '', permissions: [], dashboardVersion: 'v1' });
   
@@ -78,6 +80,7 @@ export default function UserRoleManagement() {
 
   useEffect(() => {
     fetchClients();
+    fetchPostgresClients();
     fetchUsers();
     fetchRoles();
   }, []);
@@ -88,6 +91,15 @@ export default function UserRoleManagement() {
       setClients(response);
     } catch (error) {
       console.error("Error fetching clients:", error);
+    }
+  };
+
+  const fetchPostgresClients = async () => {
+    try {
+      const response = await getV2<Cliente[]>(`/clients`);
+      setPostgresClients(response);
+    } catch (error) {
+      console.error("Error fetching PostgreSQL clients:", error);
     }
   };
 
@@ -378,10 +390,21 @@ export default function UserRoleManagement() {
             <TextField label="Nombre" name="nombre" value={userForm.nombre} onChange={handleUserChange} fullWidth />
             <TextField label="Email" name="email" value={userForm.email} onChange={handleUserChange} fullWidth />
             <FormControl fullWidth>
-                <InputLabel>Cliente</InputLabel>
+                <InputLabel>Cliente (MongoDB)</InputLabel>
                 <Select value={userForm.cliente} name="cliente" onChange={handleUserChange} fullWidth>
                   {clients.map((cliente) => (
                     <MenuItem key={cliente._id} value={cliente._id}>{cliente.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            <FormControl fullWidth>
+                <InputLabel>Cliente Dashboard V2 (PostgreSQL)</InputLabel>
+                <Select value={userForm.postgresClientId || ''} name="postgresClientId" onChange={handleUserChange} fullWidth>
+                  <MenuItem value="">
+                    <em>Ninguno</em>
+                  </MenuItem>
+                  {postgresClients.map((cliente) => (
+                    <MenuItem key={cliente.id || cliente._id} value={cliente.id || cliente._id}>{cliente.name}</MenuItem>
                   ))}
                 </Select>
               </FormControl>

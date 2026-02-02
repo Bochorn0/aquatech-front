@@ -247,6 +247,10 @@ export function HomeV2Page() {
       const user = localStorage.getItem('user');
       if (!user) return null;
       const parsed = JSON.parse(user);
+      // For dashboard v2, use postgresClientId if available, otherwise fall back to cliente
+      if (parsed.postgresClientId) {
+        return { id: parsed.postgresClientId, _id: parsed.postgresClientId, name: '' } as ClienteV2;
+      }
       return (parsed.cliente as ClienteV2) || null;
     } catch {
       return null;
@@ -334,11 +338,13 @@ export function HomeV2Page() {
         const list = Array.isArray(response) ? response : [];
         const filtered = list.filter((c) => c.name !== 'All');
         let out = filtered;
-        if (userCliente?.name && userCliente.name !== 'All') {
-          out = filtered.filter((c) => c.name === userCliente.name);
+        // Filter by user's assigned PostgreSQL client ID
+        if (userCliente?.id || userCliente?._id) {
+          const userClientId = String(userCliente.id ?? userCliente._id);
+          out = filtered.filter((c) => String(c.id ?? c._id) === userClientId);
         }
         setClients(out);
-        if (out.length > 0 && selectedClientId === 'All' && userCliente?.name) {
+        if (out.length > 0 && selectedClientId === 'All' && (userCliente?.id || userCliente?._id)) {
           const first = out[0];
           setSelectedClientId(String(first.id ?? first._id ?? ''));
         }
@@ -347,7 +353,7 @@ export function HomeV2Page() {
       }
     };
     fetchClients();
-  }, [selectedClientId, userCliente?.name]);
+  }, [selectedClientId, userCliente?.id, userCliente?._id]);
 
   useEffect(() => {
     const fetchPuntos = async () => {
