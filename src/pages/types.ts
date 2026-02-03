@@ -68,6 +68,8 @@ interface Status {
     email_alert?: boolean;
     preventivo?: boolean;
     correctivo?: boolean;
+    emailCooldownMinutes?: number;
+    emailMaxPerDay?: number;
   };
 
   export type  Metric = {

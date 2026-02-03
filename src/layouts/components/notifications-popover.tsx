@@ -35,6 +35,7 @@ type Notification = {
   type: ['info', 'alert', 'warning', 'news', 'updates'],
   createdAt: number;
   postedAt: number;
+  url?: string | null;
 }
 
 export type NotificationsPopoverProps = IconButtonProps & {
@@ -193,12 +194,23 @@ function NotificationItem({ notification }: { notification: Notification }) {
     }
   };
 
+  const handleNotificationClick = () => {
+    markNotificationAsRead(notification._id);
+    
+    // Navigate to URL if present
+    if (notification.url) {
+      window.location.href = notification.url;
+    }
+  };
+
   return (
     <ListItemButton
+      onClick={handleNotificationClick}
       sx={{
         py: 1.5,
         px: 2.5,
         mt: '1px',
+        cursor: notification.url ? 'pointer' : 'default',
         ...(notification.isUnRead && {
           bgcolor: 'action.selected',
         }),
@@ -209,7 +221,6 @@ function NotificationItem({ notification }: { notification: Notification }) {
       </ListItemAvatar>
       <ListItemText
         primary={title}
-        onClick={() => markNotificationAsRead(notification._id)}
         secondary={
           <Typography
             variant="caption"

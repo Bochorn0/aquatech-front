@@ -121,7 +121,9 @@ const defaultAlert: MetricAlert = {
   dashboardAlert: false,
   emailAlert: false,
   preventivo: false,
-  correctivo: false
+  correctivo: false,
+  emailCooldownMinutes: 10,
+  emailMaxPerDay: 5
 }
 
 // Available metric types from specification
@@ -575,7 +577,9 @@ export function CustomizationPageV2() {
                 dashboardAlert: alert.dashboardAlert ?? alert.dashboard_alert,
                 emailAlert: alert.emailAlert ?? alert.email_alert,
                 preventivo: alert.preventivo,
-                correctivo: alert.correctivo
+                correctivo: alert.correctivo,
+                emailCooldownMinutes: alert.emailCooldownMinutes ?? 10,
+                emailMaxPerDay: alert.emailMaxPerDay ?? 5
               };
               return apiV2Call(`/metrics/${savedMetricId}/alerts`, 'POST', alertData);
             });
@@ -596,7 +600,9 @@ export function CustomizationPageV2() {
                 dashboardAlert: alert.dashboardAlert ?? alert.dashboard_alert,
                 emailAlert: alert.emailAlert ?? alert.email_alert,
                 preventivo: alert.preventivo,
-                correctivo: alert.correctivo
+                correctivo: alert.correctivo,
+                emailCooldownMinutes: alert.emailCooldownMinutes ?? 10,
+                emailMaxPerDay: alert.emailMaxPerDay ?? 5
               };
               const alertId = alert.id || alert._id;
               if (alertId && existingIds.has(String(alertId))) {
@@ -1652,6 +1658,8 @@ export function CustomizationPageV2() {
                                   <StyledTableCellHeader>Celular Alert</StyledTableCellHeader>
                                   <StyledTableCellHeader>Dashboard Alert</StyledTableCellHeader>
                                   <StyledTableCellHeader>Email Alert</StyledTableCellHeader>
+                                  <StyledTableCellHeader title="Minutos entre emails">Min entre emails</StyledTableCellHeader>
+                                  <StyledTableCellHeader title="Máximo de emails por día">Max/día</StyledTableCellHeader>
                                   <StyledTableCellHeader>Preventivo</StyledTableCellHeader>
                                   <StyledTableCellHeader>Correctivo</StyledTableCellHeader>
                                   <StyledTableCellHeader>Acciones</StyledTableCellHeader>
@@ -1713,6 +1721,28 @@ export function CustomizationPageV2() {
                                         checked={alert.emailAlert || alert.email_alert || false}
                                         onChange={(e) => handleUpdateAlert(index, 'emailAlert', e.target.checked)}
                                         size="small"
+                                      />
+                                    </StyledTableCell>
+                                    <StyledTableCell>
+                                      <TextField
+                                        size="small"
+                                        type="number"
+                                        value={alert.emailCooldownMinutes ?? 10}
+                                        onChange={(e) => handleUpdateAlert(index, 'emailCooldownMinutes', Math.max(1, parseInt(e.target.value, 10) || 1))}
+                                        inputProps={{ min: 1, max: 1440 }}
+                                        sx={{ width: 70 }}
+                                        disabled={!(alert.emailAlert || alert.email_alert)}
+                                      />
+                                    </StyledTableCell>
+                                    <StyledTableCell>
+                                      <TextField
+                                        size="small"
+                                        type="number"
+                                        value={alert.emailMaxPerDay ?? 5}
+                                        onChange={(e) => handleUpdateAlert(index, 'emailMaxPerDay', Math.max(1, Math.min(24, parseInt(e.target.value, 10) || 1)))}
+                                        inputProps={{ min: 1, max: 24 }}
+                                        sx={{ width: 70 }}
+                                        disabled={!(alert.emailAlert || alert.email_alert)}
                                       />
                                     </StyledTableCell>
                                     <StyledTableCell>
