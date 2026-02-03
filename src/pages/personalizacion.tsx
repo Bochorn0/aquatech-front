@@ -1,8 +1,8 @@
 import type { SelectChangeEvent } from "@mui/material/Select";
 
 import Swal from "sweetalert2";
-import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
+import { useMemo, useState, useEffect } from "react";
 
 import {
   Box,
@@ -38,7 +38,7 @@ import { get, post, patch, remove } from "src/api/axiosHelper";
 
 import { SvgColor } from 'src/components/svg-color';
 
-import type { City, Metric, Cliente, Product, PuntosVenta } from './types';
+import type { City, User, Metric, Product, Cliente, PuntosVenta } from './types';
 
 const estados = [
   'Aguascalientes',
@@ -88,6 +88,18 @@ const defaultMetric = { _id: '', cliente: '', client_name: '', product_type: '',
 
 const defaultPv = { _id: '', name: '' , client_name:'', cliente: defaultclient, city: defaultCity, city_name: '', productos: []}
 export function CustomizationPage() {
+  // Check if user is admin
+  const isAdmin = useMemo(() => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (!userStr) return false;
+      const user: User = JSON.parse(userStr);
+      return user.role?.name?.toLowerCase() === 'admin';
+    } catch {
+      return false;
+    }
+  }, []);
+
   const [metrics, setMetrics] = useState<Metric[]>([]);
   const [puntosVenta, setPuntosVenta] = useState<PuntosVenta[]>([]);
 
@@ -625,8 +637,8 @@ const handlePvChange = (e: any) => {
             variant="fullWidth" centered>
           <CustomTab label="Métricas" />
           <CustomTab label="PuntosVenta" />
-          <CustomTab label="Clientes" />
-          <CustomTab label="Ciudades" />
+          {isAdmin && <CustomTab label="Clientes" />}
+          {isAdmin && <CustomTab label="Ciudades" />}
           <CustomTab label="Equipos" />
       </CustomTabs>
         {tabIndex === 0 && (
@@ -732,9 +744,11 @@ const handlePvChange = (e: any) => {
                               <IconButton onClick={() => handlePvEdit(pv)} sx={{ mr: 1, color: 'primary.main' }}>
                                 <SvgColor src='./assets/icons/actions/edit.svg' />
                               </IconButton>
-                              <IconButton onClick={() => handlePvDelete(pv._id!)} sx={{ mr: 1, color: 'danger.main' }}>
-                                <SvgColor src='./assets/icons/actions/delete.svg' />
-                              </IconButton>
+                              {isAdmin && (
+                                <IconButton onClick={() => handlePvDelete(pv._id!)} sx={{ mr: 1, color: 'danger.main' }}>
+                                  <SvgColor src='./assets/icons/actions/delete.svg' />
+                                </IconButton>
+                              )}
                             </StyledTableCell>
                           </StyledTableRow>
                         ))}
@@ -747,7 +761,7 @@ const handlePvChange = (e: any) => {
           </Grid>
         )}
 
-        {tabIndex === 2 && (
+        {isAdmin && tabIndex === 2 && (
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <Box sx={{ overflowX: 'auto' }}> {/* Ensures table responsiveness */}
@@ -802,7 +816,7 @@ const handlePvChange = (e: any) => {
             </Grid>
           </Grid>
         )}
-        {tabIndex === 3 && (
+        {isAdmin && tabIndex === 3 && (
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <Box sx={{ overflowX: 'auto' }}> {/* Ensures table responsiveness */}

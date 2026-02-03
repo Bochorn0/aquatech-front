@@ -57,6 +57,11 @@ export const allNavItems = [
     icon: icon('ic-controllers'),
   },
   {
+    title: 'Calidad de Agua',
+    path: '/calidad-agua',
+    icon: icon('ic-map'),
+  },
+  {
     title: 'Puntos De Venta',
     path: '/PuntoVenta', // Default to v2
     icon: icon('ic-building'),

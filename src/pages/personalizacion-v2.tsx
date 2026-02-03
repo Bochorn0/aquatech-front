@@ -38,7 +38,7 @@ import { CONFIG } from "src/config-global";
 import { Iconify } from 'src/components/iconify';
 import { SvgColor } from 'src/components/svg-color';
 
-import type { City, Metric, Cliente, PuntosVenta, MetricAlert } from './types';
+import type { City, User, Metric, Cliente, MetricAlert, PuntosVenta } from './types';
 
 // Custom Swal instance with higher z-index to appear above MUI modals (MUI Dialog z-index is 1300)
 const MySwal = Swal.mixin({
@@ -215,6 +215,18 @@ const apiV2Call = async (endpoint: string, method: string = 'GET', data?: any) =
 };
 
 export function CustomizationPageV2() {
+  // Check if user is admin
+  const isAdmin = useMemo(() => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (!userStr) return false;
+      const user: User = JSON.parse(userStr);
+      return user.role?.name?.toLowerCase() === 'admin';
+    } catch {
+      return false;
+    }
+  }, []);
+
   const [metrics, setMetrics] = useState<Metric[]>([]);
   const [puntosVenta, setPuntosVenta] = useState<PuntosVenta[]>([]);
 
@@ -934,8 +946,8 @@ export function CustomizationPageV2() {
         >
           <CustomTab label="Métricas" />
           <CustomTab label="PuntosVenta" />
-          <CustomTab label="Clientes" />
-          <CustomTab label="Ciudades" />
+          {isAdmin && <CustomTab label="Clientes" />}
+          {isAdmin && <CustomTab label="Ciudades" />}
         </CustomTabs>
         
         {tabIndex === 0 && (
@@ -1076,9 +1088,11 @@ export function CustomizationPageV2() {
                               <IconButton onClick={() => handlePvEdit(pv)} sx={{ mr: 1, color: 'primary.main' }}>
                                 <SvgColor src='./assets/icons/actions/edit.svg' />
                               </IconButton>
-                              <IconButton onClick={() => handlePvDelete(pv._id || pv.id || '')} sx={{ mr: 1, color: 'danger.main' }}>
-                                <SvgColor src='./assets/icons/actions/delete.svg' />
-                              </IconButton>
+                              {isAdmin && (
+                                <IconButton onClick={() => handlePvDelete(pv._id || pv.id || '')} sx={{ mr: 1, color: 'danger.main' }}>
+                                  <SvgColor src='./assets/icons/actions/delete.svg' />
+                                </IconButton>
+                              )}
                             </StyledTableCell>
                           </StyledTableRow>
                         ))}
@@ -1091,7 +1105,7 @@ export function CustomizationPageV2() {
           </Grid>
         )}
 
-        {tabIndex === 2 && (
+        {isAdmin && tabIndex === 2 && (
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <Box sx={{ overflowX: 'auto' }}>
@@ -1147,7 +1161,7 @@ export function CustomizationPageV2() {
           </Grid>
         )}
         
-        {tabIndex === 3 && (
+        {isAdmin && tabIndex === 3 && (
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <Box sx={{ overflowX: 'auto' }}>
@@ -1913,13 +1927,15 @@ export function CustomizationPageV2() {
                                   {formatDate(sensor.latestReading?.timestamp, sensor.latestReading?.createdAt)}
                                 </StyledTableCell>
                                 <StyledTableCell>
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleSensorDelete(sensor.id || sensor._id || '')}
-                                    sx={{ color: 'error.main' }}
-                                  >
-                                    <SvgColor src='./assets/icons/actions/delete.svg' />
-                                  </IconButton>
+                                  {isAdmin && (
+                                    <IconButton 
+                                      size="small" 
+                                      onClick={() => handleSensorDelete(sensor.id || sensor._id || '')}
+                                      sx={{ color: 'error.main' }}
+                                    >
+                                      <SvgColor src='./assets/icons/actions/delete.svg' />
+                                    </IconButton>
+                                  )}
                                 </StyledTableCell>
                               </TableRow>
                             ))}
