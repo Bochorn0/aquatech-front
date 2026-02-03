@@ -235,6 +235,8 @@ export function HomeV2Page() {
     label: string;
     color: string;
     sensors: SensorWithLevel[];
+    /** When from a metric chart: use this metric's level in the table instead of worstLevel */
+    metricId?: string;
   } | null>(null);
 
   const [page, setPage] = useState(0);
@@ -309,6 +311,11 @@ export function HomeV2Page() {
     const base = selectedSegment ? selectedSegment.sensors : sensorsWithLevels;
     return base;
   }, [selectedSegment, sensorsWithLevels]);
+
+  // Reset to first page when segment or filters change (prevents empty table when pagination was on page 2+)
+  useEffect(() => {
+    setPage(0);
+  }, [selectedSegment, selectedPuntoVentaId, selectedClientId]);
 
   const tableRowsFilteredByPunto = useMemo(() => {
     let filtered = tableRows;
@@ -608,13 +615,14 @@ export function HomeV2Page() {
     };
   }, [depMetricIds, depPuntoIds, filteredPuntos, metrics, selectedTimeRange]);
 
-  const handleChartSectionClick = (data: { label: string; color?: string; sensors?: SensorWithLevel[] }) => {
+  const handleChartSectionClick = (data: { label: string; color?: string; sensors?: SensorWithLevel[]; metricId?: string }) => {
     if (data.sensors) {
       setSelectedSegment({
         title: data.label,
         label: data.label,
         color: data.color ?? '#666',
         sensors: data.sensors,
+        metricId: data.metricId,
       });
     } else {
       setSelectedSegment(null);
@@ -802,10 +810,11 @@ export function HomeV2Page() {
                     value: s.value,
                     color: s.color,
                     sensors: s.sensors,
+                    metricId: chart.metricId,
                   })),
                   colors: chart.series.map((s) => s.color),
                 }}
-                onSectionClick={(data) => handleChartSectionClick(data as { label: string; color?: string; sensors?: SensorWithLevel[] })}
+                onSectionClick={(data) => handleChartSectionClick(data as { label: string; color?: string; sensors?: SensorWithLevel[]; metricId?: string })}
               />
             </Grid>
           ))}
@@ -814,7 +823,7 @@ export function HomeV2Page() {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
               <Typography variant="h5" sx={{ color: selectedSegment?.color }}>
                 {selectedSegment
-                  ? `Detalle: ${selectedSegment.label} (${selectedSegment.sensors.length})`
+                  ? `Detalle: ${selectedSegment.label} (${tableRowsFilteredByPunto.length}${tableRowsFilteredByPunto.length !== selectedSegment.sensors.length ? ` de ${selectedSegment.sensors.length}` : ''})`
                   : `Todos los sensores (${tableRowsFilteredByPunto.length}${tableRowsFilteredByPunto.length !== sensorsWithLevels.length ? ` de ${sensorsWithLevels.length}` : ''})`}
               </Typography>
               {selectedSegment && (
@@ -844,7 +853,9 @@ export function HomeV2Page() {
                     {paginatedRows.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={7} align="center">
-                          No hay sensores para los filtros seleccionados.
+                          {selectedSegment && selectedSegment.sensors.length > 0 && tableRowsFilteredByPunto.length === 0
+                            ? 'Los sensores seleccionados no coinciden con los filtros de Cliente/Punto de venta. Ajusta los filtros o haz clic en "Mostrar todos".'
+                            : 'No hay sensores para los filtros seleccionados.'}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -852,7 +863,10 @@ export function HomeV2Page() {
                         const rowId = String(row.id);
                         const isExpanded = expandedRows.has(rowId);
                         const rowReadings = (row as any).readings || [];
-                        
+                        const displayLevel =
+                          selectedSegment?.metricId
+                            ? (row.levelByMetric[selectedSegment.metricId] ?? row.worstLevel)
+                            : row.worstLevel;
                         return (
                           <>
                             <TableRow key={row.id} sx={{ '& > *': { borderBottom: isExpanded ? 'none' : undefined } }}>
@@ -889,11 +903,11 @@ export function HomeV2Page() {
                               <TableCell>
                                 <Chip
                                   size="small"
-                                  label={row.worstLevel}
+                                  label={displayLevel}
                                   color={
-                                    row.worstLevel === 'correctivo'
+                                    displayLevel === 'correctivo'
                                       ? 'error'
-                                      : row.worstLevel === 'preventivo'
+                                      : displayLevel === 'preventivo'
                                         ? 'warning'
                                         : 'success'
                                   }

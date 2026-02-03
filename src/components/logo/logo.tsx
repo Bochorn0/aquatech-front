@@ -48,7 +48,15 @@ export const Logo = forwardRef<HTMLDivElement, LogoProps>(
         }}
         {...other}
       >
-        <img src="http://164.92.95.176/logo.png" alt="logo" />
+        <img
+          src={
+            process.env.REACT_APP_LOGO_URL ||
+            (process.env.REACT_APP_PUBLIC_URL
+              ? `${process.env.REACT_APP_PUBLIC_URL.replace(/\/$/, '')}/logo.png`
+              : '/logo.png')
+          }
+          alt="logo"
+        />
       </Box>
     );
   }

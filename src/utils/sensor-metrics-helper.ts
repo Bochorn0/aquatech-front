@@ -55,8 +55,8 @@ const LEVEL_ORDER: Record<MetricLevel, number> = {
 
 function parseLevelFromLabel(label: string): MetricLevel {
   const lower = label.toLowerCase();
-  if (lower.includes('correctivo')) return 'correctivo';
-  if (lower.includes('preventivo')) return 'preventivo';
+  if (lower.includes('correctivo') || lower.includes('critico') || lower.includes('crítico')) return 'correctivo';
+  if (lower.includes('preventivo') || lower.includes('warning') || lower.includes('advertencia')) return 'preventivo';
   return 'normal';
 }
 
@@ -141,6 +141,7 @@ export type DashboardMetricChart = {
 
 /**
  * Build pie chart data per metric: normal, preventivo, correctivo (multiple rules per level are summed).
+ * Each sensor appears in exactly one bucket per metric (no overlap).
  */
 export function buildMetricCharts(
   sensorsWithLevels: SensorWithLevel[],

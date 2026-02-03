@@ -1,8 +1,11 @@
 import packageJson from '../package.json';
 
 // ----------------------------------------------------------------------
-// const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3009/api/v1.0';
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://164.92.95.176:3009/api/v1.0';
+const API_BASE_URL =
+  process.env.REACT_APP_API_BASE_URL ||
+  (process.env.NODE_ENV === 'development'
+    ? 'http://localhost:3009/api/v1.0'
+    : 'https://www.lcc.com.mx/api/v1.0');
 const API_BASE_URL_V2 = process.env.REACT_APP_API_BASE_URL_V2 || API_BASE_URL.replace('/v1.0', '/v2.0');
 const TIWATER_API_KEY = process.env.REACT_APP_TIWATER_API_KEY || '';
 const ICON_URL = process.env.REACT_APP_ICON_URL || 'https://images.tuyacn.com';
