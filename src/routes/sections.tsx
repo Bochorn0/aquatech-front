@@ -15,6 +15,7 @@ import { DashboardLayout } from 'src/layouts/dashboard';
 
 export const HomePage = lazy(() => import('src/pages/home'));
 export const HomeV2Dashboard = lazy(() => import('src/pages/home-v2'));
+export const DashboardGlobal = lazy(() => import('src/pages/dashboard-global'));
 export const DashboardLanding = lazy(() => import('src/pages/dashboard-landing'));
 export const UserPage = lazy(() => import('src/pages/users'));
 export const Controllers = lazy(() => import('src/pages/controllers'));
@@ -136,11 +137,31 @@ export function Router() {
           element: (
             <TokenProtectedRoute>
               <PermissionProtectedRoute requiredPath="/dashboard/v2">
-                <HomeV2Dashboard />
+                <DashboardGlobal />
               </PermissionProtectedRoute>
             </TokenProtectedRoute>
           ),
           path: 'dashboard/v2',
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <PermissionProtectedRoute requiredPath="/dashboard/v2">
+                <HomeV2Dashboard />
+              </PermissionProtectedRoute>
+            </TokenProtectedRoute>
+          ),
+          path: 'dashboard/v2/detalle',
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <PermissionProtectedRoute requiredPath="/dashboard/v2">
+                <HomeV2Dashboard />
+              </PermissionProtectedRoute>
+            </TokenProtectedRoute>
+          ),
+          path: 'dashboard/v2/detalle/:puntoVentaId',
         },
         {
           element: (

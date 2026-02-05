@@ -36,11 +36,16 @@ interface Status {
     filter_only_online: boolean;
   }
 
+  /** Explicit severity for rule evaluation; avoids label parsing. */
+  export type RuleSeverity = 'normal' | 'preventivo' | 'critico';
+
   export type MetricRule = {
     min: number | null;
     max: number | null;
     color: string;
     label: string;
+    /** Explicit severity: normal | preventivo | critico. Use this instead of inferring from label. */
+    severity?: RuleSeverity;
     /** Custom alert message shown in dashboard when this rule matches (optional). */
     message?: string;
   };
@@ -273,6 +278,7 @@ export interface Controller {
 export interface PuntosVenta {
     _id?: string;
     id?: string; // For PostgreSQL compatibility
+    codigo_tienda?: string; // Required for v2.0 PostgreSQL (maps to code)
     cliente: Cliente | string;
     client_name: string;
     city: City | string;

@@ -1,8 +1,9 @@
 import { Helmet } from 'react-helmet-async';
 import { useMemo, useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 
 import Grid from '@mui/material/Unstable_Grid2';
-import { KeyboardArrowUp, KeyboardArrowDown } from '@mui/icons-material';
+import { ArrowBack, KeyboardArrowUp, KeyboardArrowDown } from '@mui/icons-material';
 import {
   Box,
   Chip,
@@ -33,8 +34,6 @@ import {
   type MetricConfig,
   type SensorRecord,
   type SensorWithLevel,
-  type OnlineOfflineChart,
-  buildOnlineOfflineChart,
   type MetricRuleWithLevel,
   classifySensorsWithLevels,
   type DashboardMetricChart,
@@ -214,15 +213,21 @@ function evaluateMetricStatus(
 
 // ----------------------------------------------------------------------
 // Component
+// Only show these pie charts in dashboard detalle: Producción, Rechazo, Eficiencia, CO2
+const PIE_CHARTS_TO_KEEP = ['produccion', 'rechazo', 'eficiencia', 'co2'];
+const isPieChartToKeep = (title: string) =>
+  PIE_CHARTS_TO_KEEP.some((k) => title.toLowerCase().includes(k));
+
 // ----------------------------------------------------------------------
 
 export function HomeV2Page() {
+  const { puntoVentaId: paramPuntoVentaId } = useParams<{ puntoVentaId?: string }>();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [clients, setClients] = useState<ClienteV2[]>([]);
   const [puntosVenta, setPuntosVenta] = useState<PuntoVentaV2[]>([]);
   const [metrics, setMetrics] = useState<MetricV2[]>([]);
   const [sensorsWithLevels, setSensorsWithLevels] = useState<SensorWithLevel[]>([]);
-  const [onlineOfflineChart, setOnlineOfflineChart] = useState<OnlineOfflineChart | null>(null);
   const [metricCharts, setMetricCharts] = useState<DashboardMetricChart[]>([]);
   const [nivelCrudaChart, setNivelCrudaChart] = useState<{ categories: string[]; series: any[]; currentValue: number; metricRules: any[] } | null>(null);
   const [nivelPurificadaChart, setNivelPurificadaChart] = useState<{ categories: string[]; series: any[]; currentValue: number; metricRules: any[] } | null>(null);
@@ -278,12 +283,12 @@ export function HomeV2Page() {
   // Get available charts for the filter
   const availableCharts = useMemo(() => {
     const charts: string[] = [];
-    
-    // Add metric charts
+
+    // Add only allowed metric pie charts (Producción, Rechazo, Eficiencia, CO2)
     metricCharts.forEach((chart) => {
-      charts.push(chart.title);
+      if (isPieChartToKeep(chart.title)) charts.push(chart.title);
     });
-    
+
     // Add nivel charts
     if (nivelCrudaChart) {
       charts.push('Histórico de Nivel Cruda');
@@ -291,14 +296,9 @@ export function HomeV2Page() {
     if (nivelPurificadaChart) {
       charts.push('Histórico de Nivel Purificada');
     }
-    
-    // Add online/offline chart
-    if (onlineOfflineChart) {
-      charts.push(onlineOfflineChart.title);
-    }
-    
+
     return charts;
-  }, [metricCharts, nivelCrudaChart, nivelPurificadaChart, onlineOfflineChart]);
+  }, [metricCharts, nivelCrudaChart, nivelPurificadaChart]);
   
   // Initialize selected charts with all available charts
   useEffect(() => {
@@ -344,16 +344,12 @@ export function HomeV2Page() {
         const response = await getV2<ClienteV2[]>('/clients');
         const list = Array.isArray(response) ? response : [];
         const filtered = list.filter((c) => c.name !== 'All');
-        let out = filtered;
-        // Filter by user's assigned PostgreSQL client ID
-        if (userCliente?.id || userCliente?._id) {
+        setClients(filtered);
+        // Optionally preselect user's client when landing with "All" (only if they have exactly one client in the list)
+        if (filtered.length > 0 && selectedClientId === 'All' && (userCliente?.id || userCliente?._id)) {
           const userClientId = String(userCliente.id ?? userCliente._id);
-          out = filtered.filter((c) => String(c.id ?? c._id) === userClientId);
-        }
-        setClients(out);
-        if (out.length > 0 && selectedClientId === 'All' && (userCliente?.id || userCliente?._id)) {
-          const first = out[0];
-          setSelectedClientId(String(first.id ?? first._id ?? ''));
+          const match = filtered.find((c) => String(c.id ?? c._id) === userClientId);
+          if (match) setSelectedClientId(userClientId);
         }
       } catch (e) {
         setClients([]);
@@ -375,11 +371,26 @@ export function HomeV2Page() {
     fetchPuntos();
   }, []);
 
+  // When opened from global dashboard with /dashboard/v2/detalle/:puntoVentaId, preselect that PV and its client
+  useEffect(() => {
+    if (!paramPuntoVentaId || puntosVenta.length === 0) return;
+    const pv = puntosVenta.find((p) => String(p.id ?? p._id) === paramPuntoVentaId);
+    if (pv) {
+      setSelectedPuntoVentaId(paramPuntoVentaId);
+      const cid = typeof pv.cliente === 'object' && pv.cliente != null
+        ? String((pv.cliente as ClienteV2).id ?? (pv.cliente as ClienteV2)._id)
+        : String(pv.clientId ?? '');
+      if (cid) setSelectedClientId(cid);
+    }
+  }, [paramPuntoVentaId, puntosVenta]);
+
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
         const params: Record<string, string> = {};
         if (selectedClientId && selectedClientId !== 'All') params.clientId = selectedClientId;
+        // When viewing a single PV (detalle), fetch metrics for that PV so historical charts use correct rules
+        if (selectedPuntoVentaId && selectedPuntoVentaId !== 'All') params.punto_venta_id = selectedPuntoVentaId;
         const response = await getV2<MetricV2[]>('/metrics', Object.keys(params).length ? params : undefined);
         const list = Array.isArray(response) ? response : [];
         setMetrics(list);
@@ -388,7 +399,7 @@ export function HomeV2Page() {
       }
     };
     fetchMetrics();
-  }, [selectedClientId]);
+  }, [selectedClientId, selectedPuntoVentaId]);
 
   const depPuntoIds = useMemo(() => filteredPuntos.map((p) => p.id).join(','), [filteredPuntos]);
   const depMetricIds = useMemo(() => JSON.stringify(metrics.map((m) => m.id)), [metrics]);
@@ -396,7 +407,6 @@ export function HomeV2Page() {
   useEffect(() => {
     if (filteredPuntos.length === 0) {
       setSensorsWithLevels([]);
-      setOnlineOfflineChart(null);
       setMetricCharts([]);
       setLoading(false);
       return () => {};
@@ -504,7 +514,6 @@ export function HomeV2Page() {
         sensorType: allSensors[idx].sensorType, // Restore original
         sensorTypeDisplay: (allSensors[idx] as any).sensorTypeDisplay,
       }));
-      const onlineOffline = buildOnlineOfflineChart(withOriginalTypes);
       const metricChartsData = buildMetricCharts(withOriginalTypes, metricConfigs);
 
       // Calculate nivel cruda and purificada chart data
@@ -603,7 +612,6 @@ export function HomeV2Page() {
 
       if (!cancelled) {
         setSensorsWithLevels(withOriginalTypes);
-        setOnlineOfflineChart(onlineOffline);
         setMetricCharts(metricChartsData);
       }
       setLoading(false);
@@ -658,9 +666,19 @@ export function HomeV2Page() {
       </Helmet>
 
       <DashboardContent maxWidth="xl">
-        <Typography variant="h3" sx={{ mb: { xs: 3, md: 5 } }}>
-          Dashboard V2 — Sensores
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: { xs: 3, md: 5 }, flexWrap: 'wrap' }}>
+          <Button
+            startIcon={<ArrowBack />}
+            onClick={() => navigate('/dashboard/v2')}
+            variant="outlined"
+            size="small"
+          >
+            Dashboard global
+          </Button>
+          <Typography variant="h3" sx={{ flex: 1 }}>
+            Dashboard V2 — Sensores
+          </Typography>
+        </Box>
 
         <Grid container spacing={3} sx={{ background: 'white' }}>
           <Grid xs={12} md={6} lg={3}>
@@ -775,31 +793,19 @@ export function HomeV2Page() {
             </Grid>
           )}
 
-          {onlineOfflineChart && selectedCharts.includes(onlineOfflineChart.title) && (
-            <Grid xs={12} sm={6} md={6} lg={4} xl={3}>
-              <PieChart
-                title={`${onlineOfflineChart.title} (${sensorsWithLevels.length})`}
-                chart={{
-                  series: onlineOfflineChart.series.map((s) => ({
-                    label: s.label,
-                    value: s.value,
-                    color: s.color,
-                    sensors: s.sensors,
-                  })),
-                  colors: onlineOfflineChart.series.map((s) => s.color),
-                }}
-                onSectionClick={(data) => handleChartSectionClick(data as { label: string; color?: string; sensors?: SensorWithLevel[] })}
-              />
-            </Grid>
-          )}
-
           {metricCharts.filter((chart) => {
-            // Exclude nivel_cruda and nivel_purificada from pie charts since we show them as line charts
+            // Only show Producción, Rechazo, Eficiencia, CO2 pie charts; exclude nivel cruda/purificada (line charts)
             const metricType = chart.title.toLowerCase();
             const isNivelCruda = metricType.includes('nivel') && metricType.includes('cruda');
             const isNivelPurificada = metricType.includes('nivel') && metricType.includes('purificada');
             const isSelected = selectedCharts.includes(chart.title);
-            return chart.series.length > 0 && !isNivelCruda && !isNivelPurificada && isSelected;
+            return (
+              chart.series.length > 0 &&
+              !isNivelCruda &&
+              !isNivelPurificada &&
+              isPieChartToKeep(chart.title) &&
+              isSelected
+            );
           }).map((chart) => (
             <Grid key={chart.metricId} xs={12} sm={6} md={6} lg={4} xl={3}>
               <PieChart

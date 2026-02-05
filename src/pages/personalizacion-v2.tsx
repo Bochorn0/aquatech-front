@@ -164,12 +164,28 @@ const SENSOR_TYPES = [
   { value: 'online', label: 'Online', unit: '' },
 ];
 
-// Color options - Using framework standard colors
-const COLOR_OPTIONS = [
-  { value: '#00A76F', label: 'Verde (Normal)' },       // success.main
-  { value: '#FFAB00', label: 'Amarillo (Preventivo)' }, // warning.main
-  { value: '#FF5630', label: 'Rojo (Correctivo)' },     // error.main
+// Severidad = tipo de nivel (normal/preventivo/crítico). El color se deriva de la severidad.
+const SEVERITY_TO_COLOR: Record<'normal' | 'preventivo' | 'critico', string> = {
+  normal: '#00A76F',
+  preventivo: '#FFAB00',
+  critico: '#FF5630',
+};
+
+const SEVERITY_OPTIONS: { value: 'normal' | 'preventivo' | 'critico'; label: string }[] = [
+  { value: 'normal', label: 'Normal' },
+  { value: 'preventivo', label: 'Preventivo' },
+  { value: 'critico', label: 'Crítico' },
 ];
+
+/** Infer severity from color for rules saved without severity (legacy). */
+function inferSeverityFromColor(color: string | undefined): 'normal' | 'preventivo' | 'critico' | null {
+  if (!color) return null;
+  const c = color.toLowerCase().replace(/\s/g, '');
+  if (c.includes('00a76f') || c.includes('00b050')) return 'normal';
+  if (c.includes('ff5630') || c.includes('ee0000') || c.includes('ff0000')) return 'critico';
+  if (c.includes('ffab00') || c.includes('ffff00')) return 'preventivo';
+  return null;
+}
 
 interface SensorConfig {
   id?: string;
@@ -191,7 +207,7 @@ interface SensorConfig {
   };
 }
 
-const defaultPv = { _id: '', name: '' , client_name:'', cliente: defaultclient, city: defaultCity, city_name: '', productos: []}
+const defaultPv = { _id: '', name: '' , codigo_tienda: '', client_name:'', cliente: defaultclient, city: defaultCity, city_name: '', productos: []}
 
 // Helper function to make v2.0 API calls
 const apiV2Call = async (endpoint: string, method: string = 'GET', data?: any) => {
@@ -454,6 +470,7 @@ export function CustomizationPageV2() {
       // Normalize puntos de venta for display
       const formatted = data.map((pv: any) => ({
         ...pv,
+        codigo_tienda: pv.codigo_tienda || pv.code || '',
         cliente: pv.cliente?._id || pv.cliente || pv.clientId || '',
         client_name: pv.cliente?.name || '',
         city: pv.city?._id || pv.city || '',
@@ -524,7 +541,12 @@ export function CustomizationPageV2() {
     const metric_type = formData.metric_type || undefined;
     const sensor_type = formData.sensor_type || undefined;
     const sensor_unit = formData.sensor_unit || undefined;
-    const rules = Array.isArray(formData.rules) ? formData.rules : (formData.rules != null ? [formData.rules] : []);
+    const rawRules = Array.isArray(formData.rules) ? formData.rules : (formData.rules != null ? [formData.rules] : []);
+    const rules = rawRules.map((r: any) => ({
+      ...r,
+      severity: r.severity ?? inferSeverityFromColor(r.color) ?? 'normal',
+      color: r.color ?? SEVERITY_TO_COLOR[(r.severity ?? inferSeverityFromColor(r.color) ?? 'normal') as keyof typeof SEVERITY_TO_COLOR]
+    }));
     const conditions = formData.conditions ?? null;
     const enabled = formData.enabled !== false;
     const read_only = formData.read_only === true;
@@ -1500,7 +1522,7 @@ export function CustomizationPageV2() {
                           size="small"
                           startIcon={<Iconify icon="solar:add-circle-bold-duotone" width={20} />}
                           onClick={() => {
-                            const newRules = [...(formData.rules || []), { min: null, max: null, color: '#00B050', label: '', message: '' }];
+                            const newRules = [...(formData.rules || []), { min: null, max: null, color: SEVERITY_TO_COLOR.normal, label: '', message: '', severity: 'normal' as const }];
                             setFormData({ ...formData, rules: newRules });
                           }}
                         >
@@ -1540,20 +1562,22 @@ export function CustomizationPageV2() {
                             </Grid>
                             <Grid item xs={12} sm={3}>
                               <FormControl fullWidth>
-                                <InputLabel>Color</InputLabel>
+                                <InputLabel>Severidad</InputLabel>
                                 <Select
-                                  value={rule.color || '#00B050'}
+                                  value={rule.severity ?? (inferSeverityFromColor(rule.color) ?? 'normal')}
                                   onChange={(e) => {
                                     const newRules = [...(formData.rules || [])];
-                                    newRules[index].color = e.target.value;
+                                    const severity = e.target.value as 'normal' | 'preventivo' | 'critico';
+                                    newRules[index].severity = severity;
+                                    newRules[index].color = SEVERITY_TO_COLOR[severity];
                                     setFormData({ ...formData, rules: newRules });
                                   }}
                                 >
-                                  {COLOR_OPTIONS.map((color) => (
-                                    <MenuItem key={color.value} value={color.value}>
+                                  {SEVERITY_OPTIONS.map((opt) => (
+                                    <MenuItem key={opt.value} value={opt.value}>
                                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <Box sx={{ width: 20, height: 20, backgroundColor: color.value, border: '1px solid #ccc', borderRadius: 1 }} />
-                                        {color.label}
+                                        <Box sx={{ width: 20, height: 20, backgroundColor: SEVERITY_TO_COLOR[opt.value], border: '1px solid #ccc', borderRadius: 1 }} />
+                                        {opt.label}
                                       </Box>
                                     </MenuItem>
                                   ))}
@@ -1602,7 +1626,7 @@ export function CustomizationPageV2() {
                       ))}
                       {(!formData.rules || formData.rules.length === 0) && (
                         <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
-                          No hay reglas configuradas. Agrega una regla para definir los rangos y colores.
+                          No hay reglas configuradas. Agrega una regla para definir los rangos y severidad.
                         </Typography>
                       )}
                     </Box>
@@ -1854,6 +1878,15 @@ export function CustomizationPageV2() {
             </DialogTitle>
             <DialogContent>
               <Box display="flex" flexDirection="column" gap={2} mt={1}>
+                <TextField
+                  label="Código tienda"
+                  name="codigo_tienda"
+                  placeholder="Ej: TIENDA_001, CODIGO_TIENDA_TEST"
+                  value={pvFormData.codigo_tienda || ""}
+                  onChange={handlePvChange}
+                  fullWidth
+                  helperText="Identificador único del punto de venta (requerido para v2.0)"
+                />
                 <TextField
                   label="Nombre"
                   name="name"

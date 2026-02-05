@@ -711,32 +711,41 @@ function findNivelAguaPurificadaMetric(metricsConfig: any[]): any {
   return metricsConfig.find((m: any) => isNivelPurificada(m)) || null;
 }
 
-/** Whether a rule label indicates a "normal/good" state (no alert). */
-function isRuleLabelNormal(label: string): boolean {
-  const labelLower = (label || '').trim().replace(/\s+/g, ' ').toLowerCase();
+/** Whether a rule indicates a "normal/good" state (no alert). Uses severity when present, else label. */
+function isRuleNormal(rule: any): boolean {
+  const s = (rule.severity || '').toLowerCase();
+  if (s === 'normal') return true;
+  if (s === 'preventivo' || s === 'critico') return false;
+  const label = (rule.label || '').trim().replace(/\s+/g, ' ').toLowerCase();
   return (
-    labelLower.includes('normal') ||
-    labelLower.includes('buen estado') ||
-    labelLower.includes('en buen estado') ||
-    labelLower.includes('bueno') ||
-    labelLower.includes('ok') ||
-    labelLower.includes('correcto') ||
-    labelLower.includes('adecuado') ||
-    labelLower.includes('óptimo') ||
-    labelLower.includes('optimo')
+    label.includes('normal') ||
+    label.includes('buen estado') ||
+    label.includes('en buen estado') ||
+    label.includes('bueno') ||
+    label.includes('ok') ||
+    label.includes('correcto') ||
+    label.includes('adecuado') ||
+    label.includes('óptimo') ||
+    label.includes('optimo')
   );
+}
+
+/** Order for picking worst matching rule when multiple match. */
+function ruleSeverityOrder(rule: any): number {
+  const s = (rule.severity || '').toLowerCase();
+  if (s === 'critico') return 3;
+  if (s === 'preventivo') return 2;
+  if (s === 'normal') return 1;
+  const l = (rule.label || '').toLowerCase();
+  if (l.includes('critico') || l.includes('correctivo')) return 3;
+  if (l.includes('preventivo')) return 2;
+  return 1;
 }
 
 /** Get the rule that matches the current value (rules have min/max). Prefer normal rule when multiple match; otherwise worst. */
 function getMatchingRule(value: number | null, rules: any[]): { rule: any; isNormal: boolean } | null {
   if (value == null || Number.isNaN(Number(value)) || !rules || rules.length === 0) return null;
   const v = Number(value);
-  const order = (label: string) => {
-    const l = (label || '').toLowerCase();
-    if (l.includes('critico') || l.includes('correctivo')) return 3;
-    if (l.includes('preventivo')) return 2;
-    return 1;
-  };
   const matchingRules = rules.filter((rule) => {
     const min = rule.min != null ? Number(rule.min) : null;
     const max = rule.max != null ? Number(rule.max) : null;
@@ -744,12 +753,10 @@ function getMatchingRule(value: number | null, rules: any[]): { rule: any; isNor
   });
   if (matchingRules.length === 0) return null;
   // Prefer a "normal" rule when value falls in a good-state range so we don't show alert
-  const normalRule = matchingRules.find((r) => isRuleLabelNormal(r.label || ''));
-  const matched = normalRule ?? matchingRules.reduce((best, rule) => (order(rule.label) >= order(best.label) ? rule : best), matchingRules[0]);
-  const labelLower = (matched.label || '').trim().replace(/\s+/g, ' ').toLowerCase();
-  const isNormal = isRuleLabelNormal(matched.label || '');
-  const isAlert = !isNormal && (labelLower.includes('preventivo') || labelLower.includes('critico') || labelLower.includes('correctivo') || labelLower.includes('bajo') || labelLower.includes('alto'));
-  return { rule: matched, isNormal: isNormal || !isAlert };
+  const normalRule = matchingRules.find((r) => isRuleNormal(r));
+  const matched = normalRule ?? matchingRules.reduce((best, rule) => (ruleSeverityOrder(rule) >= ruleSeverityOrder(best) ? rule : best), matchingRules[0]);
+  const isNormal = isRuleNormal(matched);
+  return { rule: matched, isNormal };
 }
 
 function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterProduct, metricsConfig }: any) {
@@ -991,8 +998,8 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
             const nivelMetric = findNivelAguaCrudaMetric(metricsConfig || []);
             const value = aguaCrudaData?.nivel != null ? Number(aguaCrudaData.nivel) : null;
             
-            // Default alert if no metric or value
-            if (!nivelMetric || value == null) {
+            // No metric defined → sin metricas definidas
+            if (!nivelMetric) {
               return (
                 <Alert 
                   severity="success"
@@ -1010,6 +1017,25 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
                 </Alert>
               );
             }
+            // Metric defined but no value
+            if (value == null) {
+              return (
+                <Alert 
+                  severity="info"
+                  icon={false}
+                  sx={{ 
+                    mb: 2,
+                    py: 0.5,
+                    fontSize: '0.875rem',
+                    bgcolor: 'grey.100',
+                    borderLeft: `4px solid`,
+                    borderColor: 'grey.400'
+                  }}
+                >
+                  Valor no disponible
+                </Alert>
+              );
+            }
             
             const match = getMatchingRule(value, nivelMetric.rules || []);
             
@@ -1021,7 +1047,7 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
               metricsConfig
             });
             
-            // If no rule matches, show default success alert
+            // Metric defined but value doesn't match any rule → valores normales (metric IS defined)
             if (!match) {
               return (
                 <Alert 
@@ -1036,7 +1062,7 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
                     borderColor: 'success.main'
                   }}
                 >
-                  valores normales (sin metricas definidas) ({value.toFixed(1)}${nivelMetric.sensor_unit || '%'})
+                  valores normales ({value.toFixed(1)}${nivelMetric.sensor_unit || '%'})
                 </Alert>
               );
             }
@@ -1123,7 +1149,11 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
             {/* Gráfica histórica - siempre visible */}
             <Box sx={{ mt: 2, height: 200 }}>
               {aguaCrudaData?.chartData ? (
-                <NivelMiniChart chart={aguaCrudaData.chartData} title="Histórico de Nivel del tanque Agua cruda" />
+                <NivelMiniChart
+                  chart={aguaCrudaData.chartData}
+                  title="Histórico de Nivel del tanque Agua cruda"
+                  metricRules={findNivelAguaCrudaMetric(metricsConfig || [])?.rules}
+                />
               ) : (
                 <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }}>
                   <Typography variant="caption" color="text.secondary" align="center">
@@ -1145,8 +1175,8 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
             const nivelMetric = findNivelAguaPurificadaMetric(metricsConfig || []);
             const value = aguaPurificadaData?.nivel != null ? Number(aguaPurificadaData.nivel) : null;
             
-            // Default alert if no metric or value
-            if (!nivelMetric || value == null) {
+            // No metric defined → sin metricas definidas
+            if (!nivelMetric) {
               return (
                 <Alert 
                   severity="success"
@@ -1164,6 +1194,25 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
                 </Alert>
               );
             }
+            // Metric defined but no value
+            if (value == null) {
+              return (
+                <Alert 
+                  severity="info"
+                  icon={false}
+                  sx={{ 
+                    mb: 2,
+                    py: 0.5,
+                    fontSize: '0.875rem',
+                    bgcolor: 'grey.100',
+                    borderLeft: `4px solid`,
+                    borderColor: 'grey.400'
+                  }}
+                >
+                  Valor no disponible
+                </Alert>
+              );
+            }
             
             const match = getMatchingRule(value, nivelMetric.rules || []);
             
@@ -1175,7 +1224,7 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
               metricsConfig
             });
             
-            // If no rule matches, show default success alert
+            // Metric defined but value doesn't match any rule → valores normales (metric IS defined)
             if (!match) {
               return (
                 <Alert 
@@ -1190,7 +1239,7 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
                     borderColor: 'success.main'
                   }}
                 >
-                  valores normales (sin metricas definidas) ({value.toFixed(1)}${nivelMetric.sensor_unit || '%'})
+                  valores normales ({value.toFixed(1)}${nivelMetric.sensor_unit || '%'})
                 </Alert>
               );
             }
@@ -1272,7 +1321,11 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
             {/* Gráfica histórica - siempre visible */}
             <Box sx={{ mt: 2, height: 200 }}>
               {aguaPurificadaData?.chartData ? (
-                <NivelMiniChart chart={aguaPurificadaData.chartData} title="Histórico de Nivel del tanque Agua purificada" />
+                <NivelMiniChart
+                  chart={aguaPurificadaData.chartData}
+                  title="Histórico de Nivel del tanque Agua purificada"
+                  metricRules={findNivelAguaPurificadaMetric(metricsConfig || [])?.rules}
+                />
               ) : (
                 <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }}>
                   <Typography variant="caption" color="text.secondary" align="center">
@@ -1361,16 +1414,6 @@ function UnifiedOverviewCard({ punto, latestSensorTimestamp, osmosis, metricas, 
   
   // Helper to get metric alert info
   const getMetricAlertInfo = (value: number | null | undefined, metricName: string) => {
-    if (value === null || value === undefined) {
-      return {
-        label: 'valores normales (sin metricas definidas)',
-        message: '',
-        severity: 'success' as const,
-        bgColor: 'success.lighter',
-        borderColor: 'success.main'
-      };
-    }
-    
     const metricTypeMap: { [key: string]: string } = {
       'PRODUCCION': 'produccion',
       'RECHAZO': 'rechazo',
@@ -1389,6 +1432,7 @@ function UnifiedOverviewCard({ punto, latestSensorTimestamp, osmosis, metricas, 
       );
     });
     
+    // No metric defined
     if (!metricConfig || !metricConfig.rules || metricConfig.rules.length === 0) {
       return {
         label: 'valores normales (sin metricas definidas)',
@@ -1399,15 +1443,27 @@ function UnifiedOverviewCard({ punto, latestSensorTimestamp, osmosis, metricas, 
       };
     }
     
+    // Metric defined but no value
+    if (value === null || value === undefined) {
+      return {
+        label: 'Valor no disponible',
+        message: '',
+        severity: 'info' as const,
+        bgColor: 'grey.100',
+        borderColor: 'grey.400'
+      };
+    }
+    
     const match = metricConfig.rules.find((rule: any) => {
       const min = rule.min !== null && rule.min !== undefined ? rule.min : -Infinity;
       const max = rule.max !== null && rule.max !== undefined ? rule.max : Infinity;
       return value >= min && value <= max;
     });
     
+    // Metric defined but value doesn't match any rule → valores normales (metric IS defined)
     if (!match) {
       return {
-        label: 'valores normales (sin metricas definidas)',
+        label: 'valores normales',
         message: '',
         severity: 'success' as const,
         bgColor: 'success.lighter',
@@ -1661,16 +1717,6 @@ function MaquinasCard({ tiwaterData, tiwaterProduct, metricsConfig }: any) {
 
   // Helper to get metric alert for machines
   const getMachineAlert = (value: number | null | undefined, metricType: string) => {
-    if (value === null || value === undefined) {
-      return {
-        label: 'valores normales (sin metricas definidas)',
-        message: '',
-        severity: 'success' as const,
-        bgColor: 'success.lighter',
-        borderColor: 'success.main'
-      };
-    }
-    
     if (!metricsConfig) {
       return {
         label: 'valores normales (sin metricas definidas)',
@@ -1697,6 +1743,7 @@ function MaquinasCard({ tiwaterData, tiwaterProduct, metricsConfig }: any) {
       return false;
     });
     
+    // No metric defined
     if (!metricConfig || !metricConfig.rules || metricConfig.rules.length === 0) {
       return {
         label: 'valores normales (sin metricas definidas)',
@@ -1707,15 +1754,27 @@ function MaquinasCard({ tiwaterData, tiwaterProduct, metricsConfig }: any) {
       };
     }
     
+    // Metric defined but no value
+    if (value === null || value === undefined) {
+      return {
+        label: 'Valor no disponible',
+        message: '',
+        severity: 'info' as const,
+        bgColor: 'grey.100',
+        borderColor: 'grey.400'
+      };
+    }
+    
     const match = metricConfig.rules.find((rule: any) => {
       const min = rule.min !== null && rule.min !== undefined ? rule.min : -Infinity;
       const max = rule.max !== null && rule.max !== undefined ? rule.max : Infinity;
       return value >= min && value <= max;
     });
     
+    // Metric defined but value doesn't match any rule → valores normales (metric IS defined)
     if (!match) {
       return {
-        label: 'valores normales (sin metricas definidas)',
+        label: 'valores normales',
         message: '',
         severity: 'success' as const,
         bgColor: 'success.lighter',
@@ -1945,11 +2004,44 @@ function MaquinasCard({ tiwaterData, tiwaterProduct, metricsConfig }: any) {
 /* 🧱 Componente: Gráfica Mini de Niveles (para card de almacenamiento) */
 /* -------------------------------------------------------------------------- */
 
-function NivelMiniChart({ chart, title }: { chart: any; title: string }) {
+function getThemeColorFromRule(theme: any, ruleColor: string): string {
+  const colorUpper = (ruleColor || '').toUpperCase().replace(/\s/g, '');
+  if (colorUpper.includes('#EE0000') || colorUpper.includes('#FF0000') || colorUpper.includes('#FF5630') || colorUpper.includes('#F00')) {
+    return theme.palette.error.main;
+  }
+  if (colorUpper.includes('#FFFF00') || colorUpper.includes('#FFAB00') || colorUpper.includes('#FF0')) {
+    return theme.palette.warning.main;
+  }
+  if (colorUpper.includes('#00B050') || colorUpper.includes('#00A76F') || colorUpper.includes('#0F0')) {
+    return theme.palette.success.main;
+  }
+  return theme.palette.primary.main;
+}
+
+function getColorForValueFromRules(theme: any, value: number, metricRules: Array<{ min?: number | null; max?: number | null; color?: string; severity?: string }>): string {
+  if (!metricRules || metricRules.length === 0) return theme.palette.success.main;
+  const matchingRule = metricRules.find((rule) => {
+    const min = rule.min != null ? Number(rule.min) : null;
+    const max = rule.max != null ? Number(rule.max) : null;
+    return (min === null || value >= min) && (max === null || value <= max);
+  });
+  if (matchingRule) {
+    if (matchingRule.severity === 'critico') return theme.palette.error.main;
+    if (matchingRule.severity === 'preventivo') return theme.palette.warning.main;
+    if (matchingRule.severity === 'normal') return theme.palette.success.main;
+    if (matchingRule.color) return getThemeColorFromRule(theme, matchingRule.color);
+    return theme.palette.success.main;
+  }
+  return theme.palette.success.main;
+}
+
+function NivelMiniChart({ chart, title, metricRules }: { chart: any; title: string; metricRules?: Array<{ min?: number | null; max?: number | null; color?: string; label?: string; severity?: string }> }) {
   const theme = useTheme();
 
   const hasData = chart && chart.categories && chart.categories.length > 0 && chart.series && chart.series.length > 0;
-  
+  const dataValues = hasData && chart.series[0]?.data ? chart.series[0].data : [];
+  const hasRules = Array.isArray(metricRules) && metricRules.length > 0;
+
   const chartOptions = useChart({
     chart: {
       type: 'line',
@@ -1968,6 +2060,17 @@ function NivelMiniChart({ chart, title }: { chart: any; title: string }) {
       hover: {
         size: 6,
       },
+      ...(hasRules && dataValues.length > 0
+        ? {
+            discrete: dataValues.map((value: number, index: number) => ({
+              seriesIndex: 0,
+              dataPointIndex: index,
+              fillColor: getColorForValueFromRules(theme, value, metricRules!),
+              strokeColor: getColorForValueFromRules(theme, value, metricRules!),
+              size: 4,
+            })),
+          }
+        : {}),
     },
     xaxis: {
       categories: chart?.categories || [],
@@ -2000,7 +2103,15 @@ function NivelMiniChart({ chart, title }: { chart: any; title: string }) {
       shared: true,
       intersect: false,
       y: {
-        formatter: (value: number) => `${value.toFixed(1)}%`,
+        formatter: (value: number) => {
+          if (!hasRules) return `${value.toFixed(1)}%`;
+          const rule = metricRules!.find((r) => {
+            const min = r.min != null ? Number(r.min) : null;
+            const max = r.max != null ? Number(r.max) : null;
+            return (min === null || value >= min) && (max === null || value <= max);
+          });
+          return rule?.label ? `${value.toFixed(1)}% — ${rule.label}` : `${value.toFixed(1)}%`;
+        },
       },
     },
     legend: {

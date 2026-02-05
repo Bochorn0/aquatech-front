@@ -5,6 +5,17 @@ import { fNumber } from 'src/utils/format-number';
 
 import { Chart, useChart } from 'src/components/chart';
 
+import type { RuleSeverity } from '../types';
+
+type NivelHistoricoChartRule = {
+  min: number | null;
+  max: number | null;
+  color: string;
+  label: string;
+  level?: string;
+  severity?: RuleSeverity;
+};
+
 type NivelHistoricoChartProps = {
   title: string;
   subtitle?: string;
@@ -14,13 +25,7 @@ type NivelHistoricoChartProps = {
     data: number[];
   }>;
   currentValue?: number;
-  metricRules?: Array<{
-    min: number;
-    max: number;
-    color: string;
-    label: string;
-    level?: string;
-  }>;
+  metricRules?: NivelHistoricoChartRule[];
 };
 
 export function NivelHistoricoChart({
@@ -35,66 +40,148 @@ export function NivelHistoricoChart({
 
   const hasData = categories.length > 0 && series.length > 0 && series[0]?.data?.length > 0;
 
-  // Map rule colors to theme colors
+  // Extract numeric y-value from a data point (supports number[] or { x, y }[] from ApexCharts)
+  const getNumericValue = (point: number | [number, number] | { x: number; y: number }): number => {
+    if (typeof point === 'number' && !Number.isNaN(point)) return point;
+    if (Array.isArray(point) && point.length > 1) return Number(point[1]);
+    if (point && typeof point === 'object' && 'y' in point) return Number((point as { y: number }).y);
+    return Number.NaN;
+  };
+
+  const inRange = (value: number, min: number | null, max: number | null) =>
+    (min == null || value >= min) && (max == null || value <= max);
+
+  // Explicit hex for discrete markers so ApexCharts applies per-point (avoids single-color bug)
+  const SEMANTIC_HEX = {
+    error: '#d32f2f',
+    warning: '#ed6c02',
+    success: '#2e7d32',
+    primary: '#1976d2',
+    grey: '#9e9e9e',
+  } as const;
+
+  const severityToThemeColor = (severity: RuleSeverity) => {
+    switch (severity) {
+      case 'critico':
+        return theme.palette.error.main;
+      case 'preventivo':
+        return theme.palette.warning.main;
+      case 'normal':
+      default:
+        return theme.palette.success.main;
+    }
+  };
+
+  // Map rule colors to theme colors (hex or name)
   const getThemeColor = (ruleColor: string) => {
-    const colorUpper = ruleColor.toUpperCase();
-    // Red colors -> error
-    if (colorUpper.includes('#EE0000') || colorUpper.includes('#FF0000') || colorUpper.includes('#F00')) {
+    const colorUpper = (ruleColor || '').toUpperCase();
+    // Red colors -> error (MUI error #d32f2f, common #FF5630, #EE0000, #FF0000)
+    if (
+      /#(FF5630|D32F2F|EE0000|FF0000|F44336|E53935)/i.test(colorUpper) ||
+      colorUpper.includes('#F00') ||
+      colorUpper.includes('ERROR') ||
+      colorUpper.includes('CRITICO')
+    ) {
       return theme.palette.error.main;
     }
-    // Yellow colors -> warning
-    if (colorUpper.includes('#FFFF00') || colorUpper.includes('#FFF000') || colorUpper.includes('#FF0')) {
+    // Amber/Orange/Yellow -> warning
+    if (
+      /#(FFAB00|FF9800|FFA726|FFB74D|FFC107|FFEB3B|FFF000|FFFF00)/i.test(colorUpper) ||
+      colorUpper.includes('#FF0') ||
+      colorUpper.includes('WARNING') ||
+      colorUpper.includes('PREVENTIVO')
+    ) {
       return theme.palette.warning.main;
     }
-    // Green colors -> success
-    if (colorUpper.includes('#00B050') || colorUpper.includes('#0F0') || colorUpper.includes('#00FF00')) {
+    // Green -> success
+    if (
+      /#(36B37E|00B050|4CAF50|66BB6A|81C784|00FF00)/i.test(colorUpper) ||
+      colorUpper.includes('#0F0') ||
+      colorUpper.includes('SUCCESS') ||
+      colorUpper.includes('NORMAL')
+    ) {
       return theme.palette.success.main;
     }
     return theme.palette.primary.main;
   };
 
-  // Get color for a specific value based on metric rules
-  const getColorForValue = (value: number) => {
-    if (metricRules.length === 0) return theme.palette.success.main;
-    
-    const matchingRule = metricRules.find(rule => value >= rule.min && value <= rule.max);
-    
-    if (matchingRule) {
-      return getThemeColor(matchingRule.color);
+  const getThemeColorHex = (ruleColor: string): string => {
+    const colorUpper = (ruleColor || '').toUpperCase();
+    if (
+      /#(FF5630|D32F2F|EE0000|FF0000|F44336|E53935)/i.test(colorUpper) ||
+      colorUpper.includes('#F00') ||
+      colorUpper.includes('ERROR') ||
+      colorUpper.includes('CRITICO')
+    ) return SEMANTIC_HEX.error;
+    if (
+      /#(FFAB00|FF9800|FFA726|FFB74D|FFC107|FFEB3B|FFF000|FFFF00)/i.test(colorUpper) ||
+      colorUpper.includes('#FF0') ||
+      colorUpper.includes('WARNING') ||
+      colorUpper.includes('PREVENTIVO')
+    ) return SEMANTIC_HEX.warning;
+    if (
+      /#(36B37E|00B050|4CAF50|66BB6A|81C784|00FF00)/i.test(colorUpper) ||
+      colorUpper.includes('#0F0') ||
+      colorUpper.includes('SUCCESS') ||
+      colorUpper.includes('NORMAL')
+    ) return SEMANTIC_HEX.success;
+    return SEMANTIC_HEX.primary;
+  };
+
+  // Severity order for when multiple rules match: prefer most severe
+  const severityOrder = (s: RuleSeverity | undefined): number => {
+    if (s === 'critico') return 0;
+    if (s === 'preventivo') return 1;
+    return 2; // normal or undefined
+  };
+
+  const getColorHexForValue = (value: number): string => {
+    if (metricRules.length === 0) return SEMANTIC_HEX.success;
+    const matchingRules = metricRules.filter((rule) => inRange(value, rule.min, rule.max));
+    if (matchingRules.length > 0) {
+      // Pick most severe rule when multiple match (e.g. overlapping ranges)
+      const matchingRule = matchingRules.sort(
+        (a, b) => severityOrder(a.severity) - severityOrder(b.severity)
+      )[0];
+      if (matchingRule.severity) {
+        switch (matchingRule.severity) {
+          case 'critico': return SEMANTIC_HEX.error;
+          case 'preventivo': return SEMANTIC_HEX.warning;
+          case 'normal':
+          default: return SEMANTIC_HEX.success;
+        }
+      }
+      return getThemeColorHex(matchingRule.color);
     }
-    
-    // If no exact match, determine color based on value position
-    // Sort rules by min value to find closest range
-    const sortedRules = [...metricRules].sort((a, b) => a.min - b.min);
-    
-    // If value is below all ranges, use the lowest range color
+    const withNumericBounds = metricRules.filter(
+      (r) => r.min != null && r.max != null
+    ) as Array<{ min: number; max: number; color: string; label: string; severity?: RuleSeverity }>;
+    if (withNumericBounds.length === 0) return SEMANTIC_HEX.success;
+    const sortedRules = [...withNumericBounds].sort((a, b) => a.min - b.min);
     if (value < sortedRules[0].min) {
-      return getThemeColor(sortedRules[0].color);
+      const r = sortedRules[0];
+      return r.severity
+        ? (r.severity === 'critico' ? SEMANTIC_HEX.error : r.severity === 'preventivo' ? SEMANTIC_HEX.warning : SEMANTIC_HEX.success)
+        : getThemeColorHex(r.color);
     }
-    
-    // If value is above all ranges, use the highest range color
     if (value > sortedRules[sortedRules.length - 1].max) {
-      return getThemeColor(sortedRules[sortedRules.length - 1].color);
+      const r = sortedRules[sortedRules.length - 1];
+      return r.severity
+        ? (r.severity === 'critico' ? SEMANTIC_HEX.error : r.severity === 'preventivo' ? SEMANTIC_HEX.warning : SEMANTIC_HEX.success)
+        : getThemeColorHex(r.color);
     }
-    
-    // Find the closest range
     for (let i = 0; i < sortedRules.length - 1; i += 1) {
       if (value > sortedRules[i].max && value < sortedRules[i + 1].min) {
-        // Value is between two ranges, use the more severe color
-        const color1 = getThemeColor(sortedRules[i].color);
-        const color2 = getThemeColor(sortedRules[i + 1].color);
-        // Prefer error over warning over success
-        if (color1 === theme.palette.error.main || color2 === theme.palette.error.main) {
-          return theme.palette.error.main;
-        }
-        if (color1 === theme.palette.warning.main || color2 === theme.palette.warning.main) {
-          return theme.palette.warning.main;
-        }
-        return theme.palette.success.main;
+        const s1 = sortedRules[i].severity;
+        const s2 = sortedRules[i + 1].severity;
+        const hex1 = s1 ? (s1 === 'critico' ? SEMANTIC_HEX.error : s1 === 'preventivo' ? SEMANTIC_HEX.warning : SEMANTIC_HEX.success) : getThemeColorHex(sortedRules[i].color);
+        const hex2 = s2 ? (s2 === 'critico' ? SEMANTIC_HEX.error : s2 === 'preventivo' ? SEMANTIC_HEX.warning : SEMANTIC_HEX.success) : getThemeColorHex(sortedRules[i + 1].color);
+        if (hex1 === SEMANTIC_HEX.error || hex2 === SEMANTIC_HEX.error) return SEMANTIC_HEX.error;
+        if (hex1 === SEMANTIC_HEX.warning || hex2 === SEMANTIC_HEX.warning) return SEMANTIC_HEX.warning;
+        return SEMANTIC_HEX.success;
       }
     }
-    
-    return theme.palette.success.main;
+    return SEMANTIC_HEX.success;
   };
 
   // Create annotations for threshold lines
@@ -102,12 +189,10 @@ export function NivelHistoricoChart({
     if (metricRules.length === 0) return {};
 
     const yaxis: any[] = [];
-    
-    // Add horizontal lines at rule boundaries
     const boundaries = new Set<number>();
-    metricRules.forEach(rule => {
-      boundaries.add(rule.min);
-      boundaries.add(rule.max);
+    metricRules.forEach((rule) => {
+      if (rule.min != null) boundaries.add(rule.min);
+      if (rule.max != null) boundaries.add(rule.max);
     });
 
     Array.from(boundaries).forEach(value => {
@@ -144,15 +229,21 @@ export function NivelHistoricoChart({
       hover: {
         size: 7,
       },
-      discrete: series.length > 0 && series[0]?.data?.length > 0 
-        ? series[0].data.map((value: number, index: number) => ({
+      discrete: (() => {
+        const data = series[0]?.data ?? [];
+        if (data.length === 0) return [];
+        return data.map((point: number | [number, number] | { x: number; y: number }, index: number) => {
+          const value = getNumericValue(point);
+          const color = Number.isNaN(value) ? SEMANTIC_HEX.grey : getColorHexForValue(value);
+          return {
             seriesIndex: 0,
             dataPointIndex: index,
-            fillColor: getColorForValue(value),
-            strokeColor: getColorForValue(value),
+            fillColor: color,
+            strokeColor: color,
             size: 5,
-          }))
-        : [],
+          };
+        });
+      })(),
     },
     colors: [theme.palette.primary.main],
     xaxis: {
@@ -182,12 +273,13 @@ export function NivelHistoricoChart({
       y: {
         formatter: (value: number) => {
           let status = 'Normal';
-          
-          const matchingRule = metricRules.find(rule => value >= rule.min && value <= rule.max);
-          if (matchingRule) {
-            status = matchingRule.label;
+          const matchingRules = metricRules.filter((rule) => inRange(value, rule.min, rule.max));
+          if (matchingRules.length > 0) {
+            const rule = matchingRules.sort(
+              (a, b) => severityOrder(a.severity) - severityOrder(b.severity)
+            )[0];
+            status = rule.label;
           }
-          
           return `${fNumber(value)}% - ${status}`;
         },
         title: {
@@ -246,11 +338,21 @@ export function NivelHistoricoChart({
       {metricRules.length > 0 && (
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', px: 2, pb: 2 }}>
           {metricRules.map((rule, idx) => {
-            const themeColor = getThemeColor(rule.color);
+            const themeColor = rule.severity
+              ? severityToThemeColor(rule.severity)
+              : getThemeColor(rule.color);
+            const rangeLabel =
+              rule.min != null && rule.max != null
+                ? `${rule.min}-${rule.max}%`
+                : rule.min != null
+                  ? `≥ ${rule.min}%`
+                  : rule.max != null
+                    ? `≤ ${rule.max}%`
+                    : '—';
             return (
               <Chip
                 key={idx}
-                label={`${rule.label} (${rule.min}-${rule.max}%)`}
+                label={rangeLabel !== '—' ? `${rule.label} (${rangeLabel})` : rule.label}
                 size="small"
                 sx={{
                   bgcolor: themeColor,
@@ -267,7 +369,14 @@ export function NivelHistoricoChart({
       )}
       
       <Divider sx={{ mb: 3, borderWidth: 1 }} />
-      <Chart type="line" series={series} options={chartOptions} height={450} sx={{ py: 2 }} />
+      <Chart
+        key={`${title}-${(series[0]?.data ?? []).length}-${(series[0]?.data ?? [])[0] ?? ''}-${(series[0]?.data ?? [])[(series[0]?.data ?? []).length - 1] ?? ''}`}
+        type="line"
+        series={series}
+        options={chartOptions}
+        height={450}
+        sx={{ py: 2 }}
+      />
     </Card>
   );
 }
