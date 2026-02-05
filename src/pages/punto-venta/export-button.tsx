@@ -36,6 +36,18 @@ interface ReportResponse {
   };
 }
 
+/** Per-hour block inside reporte mensual (hourly summary) */
+interface MonthlyReportHourBlock {
+  hora: string;
+  production_volume_total?: number;
+  rejected_volume_total?: number;
+  tds_inicio?: number | null;
+  tds_fin?: number | null;
+  flujo_produccion_promedio?: number | null;
+  flujo_rechazo_promedio?: number | null;
+  total_logs?: number;
+}
+
 /** Per-product block inside reporte mensual (one per product per day) */
 interface MonthlyReportProductBlock {
   productId: string;
@@ -61,6 +73,7 @@ interface MonthlyReportProductBlock {
     flowrate_speed_1?: { value: number; inicio: number; fin: number } | null;
     flowrate_speed_2?: { value: number; inicio: number; fin: number } | null;
   };
+  hours_with_data?: MonthlyReportHourBlock[];
 }
 
 interface MonthlyReportResponse {
@@ -408,11 +421,47 @@ function ExportReportButton({ product, puntoVentaId, puntoVentaName }: ExportRep
       const wsEstadisticas = XLSX.utils.json_to_sheet(estadisticas);
 
       // ==========================
+      // 4️⃣ Hoja: Resumen por hora (agrupado por día y producto)
+      // ==========================
+      const hourlyRows: Array<{
+        Fecha: string;
+        Producto: string;
+        Hora: string;
+        'Producción (L)': number | '';
+        'Rechazo (L)': number | '';
+        'TDS Inicial': number | '';
+        'TDS Final': number | '';
+        'Vel. Prod. Prom (L/s)': number | '';
+        'Vel. Rech. Prom (L/s)': number | '';
+        'Logs': number | '';
+      }> = [];
+      data.forEach((d) => {
+        (d.productos || []).forEach((p) => {
+          (p.hours_with_data || []).forEach((h) => {
+            hourlyRows.push({
+              Fecha: d.dia,
+              Producto: p.productName,
+              Hora: h.hora,
+              'Producción (L)': h.production_volume_total ?? '',
+              'Rechazo (L)': h.rejected_volume_total ?? '',
+              'TDS Inicial': h.tds_inicio ?? '',
+              'TDS Final': h.tds_fin ?? '',
+              'Vel. Prod. Prom (L/s)': h.flujo_produccion_promedio ?? '',
+              'Vel. Rech. Prom (L/s)': h.flujo_rechazo_promedio ?? '',
+              'Logs': h.total_logs ?? '',
+            });
+          });
+        });
+      });
+      const wsPorHora = hourlyRows.length > 0 ? XLSX.utils.json_to_sheet(hourlyRows) : null;
+
+      // ==========================
       // 🧾 Crear libro y guardar
       // ==========================
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, wsResumen, 'Producción_Diaria');
       XLSX.utils.book_append_sheet(wb, wsInicioFin, 'Valores_Inicio_Fin');
+      if (wsPorHora) XLSX.utils.book_append_sheet(wb, wsPorHora, 'Por_Hora');
       XLSX.utils.book_append_sheet(wb, wsEstadisticas, 'Estadísticas');
 
       const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
