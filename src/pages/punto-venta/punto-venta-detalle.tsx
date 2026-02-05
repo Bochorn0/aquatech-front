@@ -219,21 +219,30 @@ export default function PuntoVentaDetalle() {
           {/* Sección Derecha: Exportar Reportes + Niveles con Gráficas */}
           <Grid item xs={12} md={12} lg={7}>
             {/* Sección de Exportar Reportes */}
-            {osmosis.length > 0 && (
-              <Box sx={{ mb: 3 }}>
-                <Card variant="outlined" sx={{ p: 2 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Exportar Reportes
-                  </Typography>
-                  <Divider sx={{ mb: 2 }} />
-                  {osmosis.map((producto: any) => (
-                    <Box key={producto._id} sx={{ mb: 2 }}>
-                      <ExportReportButton product={producto} />
-                    </Box>
-                  ))}
-                </Card>
-              </Box>
-            )}
+            <Box sx={{ mb: 3 }}>
+              <Card variant="outlined" sx={{ p: 2 }}>
+                <Typography variant="h6" gutterBottom>
+                  Exportar Reportes
+                </Typography>
+                <Divider sx={{ mb: 2 }} />
+                {/* Reporte Mensual: todo el punto de venta (todos los productos) */}
+                <ExportReportButton
+                  puntoVentaId={typeof punto._id === 'string' ? punto._id : (punto._id?.toString?.() ?? id)}
+                  puntoVentaName={punto.name}
+                />
+                {/* Reporte Completo: por cada producto osmosis */}
+                {osmosis.length > 0 && (
+                  <>
+                    <Divider sx={{ my: 2 }} />
+                    {osmosis.map((producto: any) => (
+                      <Box key={producto._id} sx={{ mb: 2 }}>
+                        <ExportReportButton product={producto} />
+                      </Box>
+                    ))}
+                  </>
+                )}
+              </Card>
+            </Box>
             <NivelSection niveles={niveles} chartDataNiveles={chartDataNiveles} osmosis={osmosis} metrics={metrics} />
           </Grid>
         </Grid>

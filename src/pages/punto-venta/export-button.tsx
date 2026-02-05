@@ -36,42 +36,57 @@ interface ReportResponse {
   };
 }
 
+/** Per-product block inside reporte mensual (one per product per day) */
+interface MonthlyReportProductBlock {
+  productId: string;
+  productName: string;
+  inicio: {
+    flowrate_total_1?: { hora: string; value: number } | null;
+    flowrate_total_2?: { hora: string; value: number } | null;
+    tds_out?: { hora: string; value: number } | null;
+    flowrate_speed_1?: { hora: string; value: number } | null;
+    flowrate_speed_2?: { hora: string; value: number } | null;
+  };
+  fin: {
+    flowrate_total_1?: { hora: string; value: number } | null;
+    flowrate_total_2?: { hora: string; value: number } | null;
+    tds_out?: { hora: string; value: number } | null;
+    flowrate_speed_1?: { hora: string; value: number } | null;
+    flowrate_speed_2?: { hora: string; value: number } | null;
+  };
+  produccion: {
+    flowrate_total_1?: { value: number; inicio: number; fin: number } | null;
+    flowrate_total_2?: { value: number; inicio: number; fin: number } | null;
+    tds_out?: { value: number; inicio: number; fin: number } | null;
+    flowrate_speed_1?: { value: number; inicio: number; fin: number } | null;
+    flowrate_speed_2?: { value: number; inicio: number; fin: number } | null;
+  };
+}
+
 interface MonthlyReportResponse {
   success: boolean;
   data?: Array<{
     dia: string;
-    inicio: {
-      flowrate_total_1?: { hora: string; value: number } | null;
-      flowrate_total_2?: { hora: string; value: number } | null;
-      tds_out?: { hora: string; value: number } | null;
-      flowrate_speed_1?: { hora: string; value: number } | null;
-      flowrate_speed_2?: { hora: string; value: number } | null;
-    };
-    fin: {
-      flowrate_total_1?: { hora: string; value: number } | null;
-      flowrate_total_2?: { hora: string; value: number } | null;
-      tds_out?: { hora: string; value: number } | null;
-      flowrate_speed_1?: { hora: string; value: number } | null;
-      flowrate_speed_2?: { hora: string; value: number } | null;
-    };
-    produccion: {
-      flowrate_total_1?: { value: number; inicio: number; fin: number } | null;
-      flowrate_total_2?: { value: number; inicio: number; fin: number } | null;
-      tds_out?: { value: number; inicio: number; fin: number } | null;
-      flowrate_speed_1?: { value: number; inicio: number; fin: number } | null;
-      flowrate_speed_2?: { value: number; inicio: number; fin: number } | null;
-    };
+    productos: MonthlyReportProductBlock[];
   }>;
   summary?: {
-    producto: string;
+    puntoVentaId: string;
+    puntoVentaName: string;
     fechaInicio: string;
     fechaFin: string;
     totalDias: number;
     totalLogs: number;
+    productIds: string[];
   };
 }
 
-function ExportReportButton({ product }: { product: any }) {
+type ExportReportButtonProps = {
+  product?: any;
+  puntoVentaId?: string;
+  puntoVentaName?: string;
+};
+
+function ExportReportButton({ product, puntoVentaId, puntoVentaName }: ExportReportButtonProps) {
   const [selectedDate, setSelectedDate] = useState<Dayjs | null>(dayjs());
   const [startDate, setStartDate] = useState<Dayjs | null>(dayjs().subtract(1, 'month'));
   const [endDate, setEndDate] = useState<Dayjs | null>(dayjs());
@@ -264,14 +279,15 @@ function ExportReportButton({ product }: { product: any }) {
   };
 
   const fetchMonthlyReportData = async () => {
-    if (!startDate || !endDate || !product?.id) return null;
+    const pvId = typeof puntoVentaId === 'string' ? puntoVentaId.trim() : '';
+    if (!startDate || !endDate || !pvId) return null;
 
     const startDateStr = startDate.format('YYYY-MM-DD');
     const endDateStr = endDate.format('YYYY-MM-DD');
-    console.log('📡 Solicitando reporte mensual:', { product_id: product.id, startDate: startDateStr, endDate: endDateStr });
+    console.log('📡 Solicitando reporte mensual:', { puntoVentaId: pvId, startDate: startDateStr, endDate: endDateStr });
 
-    // Enviar fechas como query params
     const response = (await get(`/reportes/mensual`, {
+      puntoVentaId: pvId,
       dateStart: startDateStr,
       dateEnd: endDateStr,
     })) as MonthlyReportResponse;
@@ -281,6 +297,11 @@ function ExportReportButton({ product }: { product: any }) {
   };
 
   const handleExportMonthlyExcel = async () => {
+    const pvId = typeof puntoVentaId === 'string' ? puntoVentaId.trim() : '';
+    if (!pvId) {
+      alert('No se puede generar el reporte: falta el ID del punto de venta. Abra esta página desde el detalle de un punto de venta.');
+      return;
+    }
     setLoadingMonthly(true);
     try {
       const data = await fetchMonthlyReportData();
@@ -289,22 +310,36 @@ function ExportReportButton({ product }: { product: any }) {
         return;
       }
 
+      // Flatten: one row per (day, product) — new API returns data: [{ dia, productos: [...] }]
+      const flatRows: Array<{ dia: string; productName: string; productId: string; inicio: MonthlyReportProductBlock['inicio']; fin: MonthlyReportProductBlock['fin']; produccion: MonthlyReportProductBlock['produccion'] }> = [];
+      data.forEach((d) => {
+        (d.productos || []).forEach((p) => {
+          flatRows.push({ dia: d.dia, productName: p.productName, productId: p.productId, inicio: p.inicio, fin: p.fin, produccion: p.produccion });
+        });
+      });
+
+      if (flatRows.length === 0) {
+        alert('No se encontraron registros para el rango de fechas seleccionado.');
+        return;
+      }
+
       // ==========================
-      // 1️⃣ Hoja: Resumen de Producción Diaria
+      // 1️⃣ Hoja: Resumen de Producción Diaria (por día y producto)
       // ==========================
-      const resumenProduccion = data.map((dia) => ({
-        Fecha: dia.dia,
-        'Producción Total (L)': dia.produccion.flowrate_total_1?.value ?? '',
-        'Inicio Producción': dia.produccion.flowrate_total_1?.inicio ?? '',
-        'Fin Producción': dia.produccion.flowrate_total_1?.fin ?? '',
-        'Rechazo Total (L)': dia.produccion.flowrate_total_2?.value ?? '',
-        'Inicio Rechazo': dia.produccion.flowrate_total_2?.inicio ?? '',
-        'Fin Rechazo': dia.produccion.flowrate_total_2?.fin ?? '',
-        'Cambio TDS': dia.produccion.tds_out?.value ?? '',
-        'TDS Inicial': dia.produccion.tds_out?.inicio ?? '',
-        'TDS Final': dia.produccion.tds_out?.fin ?? '',
-        'Velocidad Promedio Producción (L/s)': dia.produccion.flowrate_speed_1?.value ?? '',
-        'Velocidad Promedio Rechazo (L/s)': dia.produccion.flowrate_speed_2?.value ?? '',
+      const resumenProduccion = flatRows.map((row) => ({
+        Fecha: row.dia,
+        Producto: row.productName,
+        'Producción Total (L)': row.produccion.flowrate_total_1?.value ?? '',
+        'Inicio Producción': row.produccion.flowrate_total_1?.inicio ?? '',
+        'Fin Producción': row.produccion.flowrate_total_1?.fin ?? '',
+        'Rechazo Total (L)': row.produccion.flowrate_total_2?.value ?? '',
+        'Inicio Rechazo': row.produccion.flowrate_total_2?.inicio ?? '',
+        'Fin Rechazo': row.produccion.flowrate_total_2?.fin ?? '',
+        'Cambio TDS': row.produccion.tds_out?.value ?? '',
+        'TDS Inicial': row.produccion.tds_out?.inicio ?? '',
+        'TDS Final': row.produccion.tds_out?.fin ?? '',
+        'Velocidad Promedio Producción (L/s)': row.produccion.flowrate_speed_1?.value ?? '',
+        'Velocidad Promedio Rechazo (L/s)': row.produccion.flowrate_speed_2?.value ?? '',
       }));
 
       const wsResumen = XLSX.utils.json_to_sheet(resumenProduccion);
@@ -312,24 +347,25 @@ function ExportReportButton({ product }: { product: any }) {
       // ==========================
       // 2️⃣ Hoja: Valores Iniciales y Finales
       // ==========================
-      const valoresInicioFin = data.map((dia) => ({
-        Fecha: dia.dia,
-        'Inicio - Producción Total': dia.inicio.flowrate_total_1?.value ?? '',
-        'Inicio - Hora Producción': dia.inicio.flowrate_total_1?.hora ?? '',
-        'Inicio - Rechazo Total': dia.inicio.flowrate_total_2?.value ?? '',
-        'Inicio - Hora Rechazo': dia.inicio.flowrate_total_2?.hora ?? '',
-        'Inicio - TDS': dia.inicio.tds_out?.value ?? '',
-        'Inicio - Hora TDS': dia.inicio.tds_out?.hora ?? '',
-        'Inicio - Velocidad Producción': dia.inicio.flowrate_speed_1?.value ?? '',
-        'Inicio - Velocidad Rechazo': dia.inicio.flowrate_speed_2?.value ?? '',
-        'Fin - Producción Total': dia.fin.flowrate_total_1?.value ?? '',
-        'Fin - Hora Producción': dia.fin.flowrate_total_1?.hora ?? '',
-        'Fin - Rechazo Total': dia.fin.flowrate_total_2?.value ?? '',
-        'Fin - Hora Rechazo': dia.fin.flowrate_total_2?.hora ?? '',
-        'Fin - TDS': dia.fin.tds_out?.value ?? '',
-        'Fin - Hora TDS': dia.fin.tds_out?.hora ?? '',
-        'Fin - Velocidad Producción': dia.fin.flowrate_speed_1?.value ?? '',
-        'Fin - Velocidad Rechazo': dia.fin.flowrate_speed_2?.value ?? '',
+      const valoresInicioFin = flatRows.map((row) => ({
+        Fecha: row.dia,
+        Producto: row.productName,
+        'Inicio - Producción Total': row.inicio.flowrate_total_1?.value ?? '',
+        'Inicio - Hora Producción': row.inicio.flowrate_total_1?.hora ?? '',
+        'Inicio - Rechazo Total': row.inicio.flowrate_total_2?.value ?? '',
+        'Inicio - Hora Rechazo': row.inicio.flowrate_total_2?.hora ?? '',
+        'Inicio - TDS': row.inicio.tds_out?.value ?? '',
+        'Inicio - Hora TDS': row.inicio.tds_out?.hora ?? '',
+        'Inicio - Velocidad Producción': row.inicio.flowrate_speed_1?.value ?? '',
+        'Inicio - Velocidad Rechazo': row.inicio.flowrate_speed_2?.value ?? '',
+        'Fin - Producción Total': row.fin.flowrate_total_1?.value ?? '',
+        'Fin - Hora Producción': row.fin.flowrate_total_1?.hora ?? '',
+        'Fin - Rechazo Total': row.fin.flowrate_total_2?.value ?? '',
+        'Fin - Hora Rechazo': row.fin.flowrate_total_2?.hora ?? '',
+        'Fin - TDS': row.fin.tds_out?.value ?? '',
+        'Fin - Hora TDS': row.fin.tds_out?.hora ?? '',
+        'Fin - Velocidad Producción': row.fin.flowrate_speed_1?.value ?? '',
+        'Fin - Velocidad Rechazo': row.fin.flowrate_speed_2?.value ?? '',
       }));
 
       const wsInicioFin = XLSX.utils.json_to_sheet(valoresInicioFin);
@@ -337,28 +373,30 @@ function ExportReportButton({ product }: { product: any }) {
       // ==========================
       // 3️⃣ Hoja: Estadísticas Resumen
       // ==========================
-      const totalProduccion = data.reduce((sum, dia) => {
-        const prod = dia.produccion.flowrate_total_1?.value ?? 0;
+      const totalProduccion = flatRows.reduce((sum, row) => {
+        const prod = row.produccion.flowrate_total_1?.value ?? 0;
         return sum + (typeof prod === 'number' ? prod : 0);
       }, 0);
 
-      const totalRechazo = data.reduce((sum, dia) => {
-        const rech = dia.produccion.flowrate_total_2?.value ?? 0;
+      const totalRechazo = flatRows.reduce((sum, row) => {
+        const rech = row.produccion.flowrate_total_2?.value ?? 0;
         return sum + (typeof rech === 'number' ? rech : 0);
       }, 0);
 
-      const promedioVelocidadProd = data.reduce((sum, dia) => {
-        const vel = dia.produccion.flowrate_speed_1?.value ?? 0;
+      const countRows = flatRows.length || 1;
+      const promedioVelocidadProd = flatRows.reduce((sum, row) => {
+        const vel = row.produccion.flowrate_speed_1?.value ?? 0;
         return sum + (typeof vel === 'number' ? vel : 0);
-      }, 0) / data.length;
+      }, 0) / countRows;
 
-      const promedioVelocidadRech = data.reduce((sum, dia) => {
-        const vel = dia.produccion.flowrate_speed_2?.value ?? 0;
+      const promedioVelocidadRech = flatRows.reduce((sum, row) => {
+        const vel = row.produccion.flowrate_speed_2?.value ?? 0;
         return sum + (typeof vel === 'number' ? vel : 0);
-      }, 0) / data.length;
+      }, 0) / countRows;
 
       const estadisticas = [
-        { Métrica: 'Total Días', Valor: data.length },
+        { Métrica: 'Total Días (con datos)', Valor: data.length },
+        { Métrica: 'Total Filas (día × producto)', Valor: flatRows.length },
         { Métrica: 'Producción Total Acumulada (L)', Valor: totalProduccion.toFixed(2) },
         { Métrica: 'Rechazo Total Acumulado (L)', Valor: totalRechazo.toFixed(2) },
         { Métrica: 'Promedio Velocidad Producción (L/s)', Valor: promedioVelocidadProd.toFixed(2) },
@@ -379,7 +417,8 @@ function ExportReportButton({ product }: { product: any }) {
 
       const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([buffer], { type: 'application/octet-stream' });
-      const fileName = `Reporte_Mensual_${product.name}_${startDate?.format('DD-MM-YYYY')}_${endDate?.format('DD-MM-YYYY')}.xlsx`;
+      const displayName = puntoVentaName || 'PuntoVenta';
+      const fileName = `Reporte_Mensual_${displayName}_${startDate?.format('DD-MM-YYYY')}_${endDate?.format('DD-MM-YYYY')}.xlsx`;
 
       saveAs(blob, fileName);
     } catch (error) {
@@ -390,136 +429,132 @@ function ExportReportButton({ product }: { product: any }) {
     }
   };
 
+  const showReporteCompleto = Boolean(product);
+  const showReporteMensual = Boolean(puntoVentaId);
+
   return (
     <Box sx={{ mt: 2 }}>
       <LocalizationProvider dateAdapter={AdapterDayjs}>
-        {/* Reporte Completo (con opción de fecha única o rango) */}
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
-            Reporte Completo (por Fecha)
-          </Typography>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={useDateRange}
-                    onChange={(e) => setUseDateRange(e.target.checked)}
-                    size="small"
-                  />
-                }
-                label="Usar rango de fechas"
-              />
+        {/* Reporte Completo (por producto, fecha única o rango) — solo cuando hay product */}
+        {showReporteCompleto && (
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+              Reporte Completo (por Fecha) — {product?.name ?? 'Producto'}
+            </Typography>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={useDateRange}
+                      onChange={(e) => setUseDateRange(e.target.checked)}
+                      size="small"
+                    />
+                  }
+                  label="Usar rango de fechas"
+                />
+              </Grid>
+              {useDateRange ? (
+                <>
+                  <Grid item xs={12} sm={6}>
+                    <DatePicker
+                      label="Fecha de Inicio"
+                      value={startDate}
+                      format="DD-MM-YYYY"
+                      onChange={(newValue) => setStartDate(newValue)}
+                      slotProps={{ textField: { fullWidth: true, size: 'small' } }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <DatePicker
+                      label="Fecha de Fin"
+                      value={endDate}
+                      format="DD-MM-YYYY"
+                      onChange={(newValue) => setEndDate(newValue)}
+                      slotProps={{ textField: { fullWidth: true, size: 'small' } }}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      fullWidth
+                      onClick={handleExportExcel}
+                      disabled={loading || !startDate || !endDate}
+                    >
+                      {loading ? 'Generando...' : 'Exportar Reporte Completo'}
+                    </Button>
+                  </Grid>
+                </>
+              ) : (
+                <>
+                  <Grid item xs={12} sm={6}>
+                    <DatePicker
+                      label="Fecha del Reporte"
+                      value={selectedDate}
+                      format="DD-MM-YYYY"
+                      onChange={(newValue) => setSelectedDate(newValue)}
+                      slotProps={{ textField: { fullWidth: true, size: 'small' } }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      fullWidth
+                      onClick={handleExportExcel}
+                      disabled={loading || !selectedDate}
+                    >
+                      {loading ? 'Generando...' : 'Exportar Reporte Completo'}
+                    </Button>
+                  </Grid>
+                </>
+              )}
             </Grid>
-            
-            {useDateRange ? (
-              <>
-                <Grid item xs={12} sm={6}>
-                  <DatePicker
-                    label="Fecha de Inicio"
-                    value={startDate}
-                    format="DD-MM-YYYY"
-                    onChange={(newValue) => setStartDate(newValue)}
-                    slotProps={{
-                      textField: { fullWidth: true, size: 'small' },
-                    }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <DatePicker
-                    label="Fecha de Fin"
-                    value={endDate}
-                    format="DD-MM-YYYY"
-                    onChange={(newValue) => setEndDate(newValue)}
-                    slotProps={{
-                      textField: { fullWidth: true, size: 'small' },
-                    }}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    fullWidth
-                    onClick={handleExportExcel}
-                    disabled={loading || !startDate || !endDate}
-                  >
-                    {loading ? 'Generando...' : 'Exportar Reporte Completo'}
-                  </Button>
-                </Grid>
-              </>
-            ) : (
-              <>
-                <Grid item xs={12} sm={6}>
-                  <DatePicker
-                    label="Fecha del Reporte"
-                    value={selectedDate}
-                    format="DD-MM-YYYY"
-                    onChange={(newValue) => setSelectedDate(newValue)}
-                    slotProps={{
-                      textField: { fullWidth: true, size: 'small' },
-                    }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    fullWidth
-                    onClick={handleExportExcel}
-                    disabled={loading || !selectedDate}
-                  >
-                    {loading ? 'Generando...' : 'Exportar Reporte Completo'}
-                  </Button>
-                </Grid>
-              </>
-            )}
-          </Grid>
-        </Box>
+          </Box>
+        )}
 
-        <Divider sx={{ my: 2 }} />
+        {showReporteCompleto && showReporteMensual && <Divider sx={{ my: 2 }} />}
 
-        {/* Reporte Mensual (siempre por rango de fechas) */}
-        <Box>
-          <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
-            Reporte Mensual (por Rango de Fechas)
-          </Typography>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} sm={6}>
-              <DatePicker
-                label="Fecha Inicio"
-                value={startDate}
-                format="DD-MM-YYYY"
-                onChange={(newValue) => setStartDate(newValue)}
-                slotProps={{
-                  textField: { fullWidth: true, size: 'small' },
-                }}
-              />
+        {/* Reporte Mensual (punto de venta, todos los productos) — solo cuando hay puntoVentaId */}
+        {showReporteMensual && (
+          <Box>
+            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+              Reporte Mensual (Punto de Venta)
+            </Typography>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} sm={6}>
+                <DatePicker
+                  label="Fecha Inicio"
+                  value={startDate}
+                  format="DD-MM-YYYY"
+                  onChange={(newValue) => setStartDate(newValue)}
+                  slotProps={{ textField: { fullWidth: true, size: 'small' } }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <DatePicker
+                  label="Fecha Fin"
+                  value={endDate}
+                  format="DD-MM-YYYY"
+                  onChange={(newValue) => setEndDate(newValue)}
+                  slotProps={{ textField: { fullWidth: true, size: 'small' } }}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  fullWidth
+                  onClick={handleExportMonthlyExcel}
+                  disabled={loadingMonthly || !startDate || !endDate || !(typeof puntoVentaId === 'string' && puntoVentaId.trim())}
+                >
+                  {loadingMonthly ? 'Generando...' : 'Generar Reporte Mensual'}
+                </Button>
+              </Grid>
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <DatePicker
-                label="Fecha Fin"
-                value={endDate}
-                format="DD-MM-YYYY"
-                onChange={(newValue) => setEndDate(newValue)}
-                slotProps={{
-                  textField: { fullWidth: true, size: 'small' },
-                }}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <Button
-                variant="contained"
-                color="secondary"
-                fullWidth
-                onClick={handleExportMonthlyExcel}
-                disabled={loadingMonthly || !startDate || !endDate}
-              >
-                {loadingMonthly ? 'Generando...' : 'Generar Reporte Mensual'}
-              </Button>
-            </Grid>
-          </Grid>
-        </Box>
+          </Box>
+        )}
       </LocalizationProvider>
     </Box>
   );
