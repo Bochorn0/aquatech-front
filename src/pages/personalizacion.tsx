@@ -623,6 +623,28 @@ const handlePvChange = (e: any) => {
     }
   };
 
+  /** Toggle Tuya logs routine for a product (admin only). Used in Productos rutina logs tab. */
+  const handleTuyaLogsRoutineToggle = async (product: Product & { _id?: string }, enabled: boolean) => {
+    const productId = product._id ?? product.id;
+    if (!productId) return;
+    setLoading(true);
+    try {
+      await patch<Product>(`/products/${productId}`, { tuya_logs_routine_enabled: enabled });
+      setProducts((prev) =>
+        prev.map((p) => {
+          const pid = (p as Product & { _id?: string })._id ?? p.id;
+          if (pid === productId) return { ...p, tuya_logs_routine_enabled: enabled };
+          return p;
+        })
+      );
+    } catch (error) {
+      console.error('Error updating Tuya logs routine:', error);
+      Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo actualizar la configuración.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <>
       <Helmet>
@@ -640,6 +662,7 @@ const handlePvChange = (e: any) => {
           {isAdmin && <CustomTab label="Clientes" />}
           {isAdmin && <CustomTab label="Ciudades" />}
           <CustomTab label="Equipos" />
+          {isAdmin && <CustomTab label="Productos rutina logs" />}
       </CustomTabs>
         {tabIndex === 0 && (
           <Grid container spacing={2}>
@@ -952,6 +975,75 @@ const handlePvChange = (e: any) => {
                             </StyledTableRow>
                           );
                         })}
+                        </TableBody>
+                    </Table>
+                  </Box>
+                </Paper>
+              </StyledTableContainer>
+            </Grid>
+          </Grid>
+        )}
+
+        {isAdmin && tabIndex === 5 && (
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
+                Productos incluidos en la rutina que obtiene logs de Tuya en lotes (cron). Solo los equipos activados aquí se procesan.
+              </Typography>
+              <Box sx={{ overflowX: 'auto' }}>
+                <Grid container alignItems="center" spacing={2} sx={{ p: 2 }}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      placeholder="Buscar por nombre, cliente, ciudad o tipo..."
+                      value={productSearchText}
+                      onChange={(e) => setProductSearchText(e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      {filteredProducts.length} equipo(s) · {filteredProducts.filter((p) => (p as Product & { tuya_logs_routine_enabled?: boolean }).tuya_logs_routine_enabled).length} con rutina de logs activa
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Box>
+              <StyledTableContainer>
+                <Paper elevation={3}>
+                  <Box sx={{ overflowX: 'auto' }}>
+                    <Table>
+                      <TableHead>
+                        <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
+                          <StyledTableCellHeader>Nombre</StyledTableCellHeader>
+                          <StyledTableCellHeader>Cliente</StyledTableCellHeader>
+                          <StyledTableCellHeader>Ciudad</StyledTableCellHeader>
+                          <StyledTableCellHeader>Tipo</StyledTableCellHeader>
+                          <StyledTableCellHeader>Rutina logs Tuya</StyledTableCellHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {filteredProducts.map((product) => {
+                          const prod = product as Product & { _id?: string; tuya_logs_routine_enabled?: boolean };
+                          const productId = prod._id ?? prod.id;
+                          const clientName = typeof prod.cliente === 'object' && prod.cliente !== null ? prod.cliente.name : '-';
+                          const enabled = Boolean(prod.tuya_logs_routine_enabled);
+                          return (
+                            <StyledTableRow key={productId}>
+                              <StyledTableCell>{prod.name}</StyledTableCell>
+                              <StyledTableCell>{clientName}</StyledTableCell>
+                              <StyledTableCell>{prod.city ?? '-'}</StyledTableCell>
+                              <StyledTableCell>{prod.product_type ?? '-'}</StyledTableCell>
+                              <StyledTableCell>
+                                <Switch
+                                  checked={enabled}
+                                  onChange={(e) => handleTuyaLogsRoutineToggle(prod, e.target.checked)}
+                                  disabled={loading}
+                                  color="primary"
+                                />
+                              </StyledTableCell>
+                            </StyledTableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </Box>
@@ -960,6 +1052,7 @@ const handlePvChange = (e: any) => {
             </Grid>
           </Grid>
         )}
+
        {/* Modal for Creating / Editing */}
        <Grid item xs={12}>
         <Dialog open={modalOpen} onClose={handleCloseModal} fullWidth maxWidth="sm">

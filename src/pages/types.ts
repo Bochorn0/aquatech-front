@@ -14,11 +14,13 @@ interface Status {
     online: boolean;
     icon: string;
     status: Status[];
-    lat: number;
-    lon: number;
-    // Allow dynamic properties (strings) to be added to a product object
-    [key: string]: any;  // This allows any string as a key on the product object
-  }
+  lat: number;
+  lon: number;
+  /** When true, product is included in the Tuya logs routine (cron). Admin-configurable in Personalización > Productos rutina logs. */
+  tuya_logs_routine_enabled?: boolean;
+  // Allow dynamic properties (strings) to be added to a product object
+  [key: string]: any;  // This allows any string as a key on the product object
+}
 
   export type Sing = {
     _id?: string;
