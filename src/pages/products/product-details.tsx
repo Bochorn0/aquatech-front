@@ -290,8 +290,8 @@ const ProductDetail: React.FC = () => {
           </Grid>
         </Paper>
         )}
-        { product.product_type === 'Osmosis' && (
-        <ProductLogs  />
+        {(product.product_type === 'Osmosis' || product.product_type === 'Nivel') && (
+          <ProductLogs productType={product.product_type} />
         )}
       </Box>
     </>

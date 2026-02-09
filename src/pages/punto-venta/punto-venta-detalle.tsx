@@ -5,7 +5,7 @@ import { Marker, Geography, Geographies, ComposableMap } from 'react-simple-maps
 
 import { useTheme } from '@mui/material/styles';
 import CardHeader from '@mui/material/CardHeader';
-import { Box, Chip, Card, Grid, Paper, Button, Divider, Typography, CircularProgress } from '@mui/material';
+import { Box, Card, Chip, Grid, Paper, Button, Select, Divider, MenuItem, InputLabel, Typography, FormControl, CircularProgress } from '@mui/material';
 
 import geoData from 'src/utils/states.json';
 import { fNumber } from 'src/utils/format-number';
@@ -52,60 +52,37 @@ function prepareChartData(puntoData: any, setChartDataNiveles: any) {
   // setChartDataNiveles(chartData);
 
 
-  // Preparar datos históricos para gráfica de línea/puntos
-  console.log('Niveles encontrados:', niveles);
-  console.log('Primer nivel histórico:', niveles[0]?.historico);
-  
+  // Preparar datos históricos: un punto por hora (último valor de cada hora)
   const chartDataArray = niveles
     .filter((nivel: any) => {
-      const hasHistorico = nivel.historico && 
-                          nivel.historico.hours_with_data && 
+      const hasHistorico = nivel.historico &&
+                          nivel.historico.hours_with_data &&
                           Array.isArray(nivel.historico.hours_with_data) &&
                           nivel.historico.hours_with_data.length > 0;
-      if (!hasHistorico) {
-        console.log(`Nivel ${nivel.name} no tiene histórico o está vacío`);
-      }
       return hasHistorico;
     })
     .map((nivel: any) => {
       const historico = nivel.historico || {};
       const hoursWithData = historico.hours_with_data || [];
-      console.log(`Procesando histórico de ${nivel.name}:`, hoursWithData.slice(0, 2));
-      
-      // Ordenar por hora
+
+      // Un valor por hora: último valor de cada hora (estadisticas.liquid_level_percent_promedio)
       const horasOrdenadas = [...hoursWithData].sort((a: any, b: any) => {
         const horaA = a.hora || '00:00';
         const horaB = b.hora || '00:00';
         return horaA.localeCompare(horaB);
       });
-      
-      // Extraer horas y datos de nivel
-      // Nota: Los valores vienen como el último valor registrado de cada hora
-      // El valor viene en porcentaje
-      const horas = horasOrdenadas.map((h: any) => h.hora || '');
+      const categories = horasOrdenadas.map((h: any) => h.hora || '');
       const nivelPercentData = horasOrdenadas.map((h: any) => {
-        // Usar el último valor de la hora (aunque el campo se llame "promedio" por compatibilidad)
-        const value = Number(h.estadisticas?.liquid_level_percent_promedio) || 0;
-        // Asegurar que el valor esté en el rango 0-100
+        const value = Number(h.estadisticas?.liquid_level_percent_promedio) ?? 0;
         return Math.max(0, Math.min(100, value));
       });
 
-      // Obtener el valor actual del producto desde el status
-      const valorActual = nivel.status?.find((s: any) => s.code === 'liquid_level_percent')?.value || null;
-      
-      // Debug: Log para verificar los datos
-      console.log(`[${nivel.name}] Preparando datos:`, {
-        valorActual,
-        totalHoras: nivelPercentData.length,
-        primerValor: nivelPercentData[0],
-        ultimoValor: nivelPercentData[nivelPercentData.length - 1],
-        valores: nivelPercentData,
-      });
+      const valorActual = nivel.status?.find((s: any) => s.code === 'liquid_level_percent')?.value ?? null;
 
       return {
         nivelId: nivel._id,
         nivelName: nivel.name,
-        categories: horas,
+        categories,
         series: [
           {
             name: 'Nivel (%)',
@@ -113,13 +90,12 @@ function prepareChartData(puntoData: any, setChartDataNiveles: any) {
           },
         ],
         estadisticas: {
-          valorActual: valorActual !== null ? Number(valorActual) : null,
+          valorActual: valorActual !== null && valorActual !== undefined ? Number(valorActual) : null,
         },
       };
     });
 
   const result = chartDataArray.length > 0 ? chartDataArray : null;
-  console.log('Chart data prepared:', result);
   setChartDataNiveles(result);
 }
 
@@ -138,11 +114,12 @@ export default function PuntoVentaDetalle() {
   const [loading, setLoading] = useState<boolean>(true);
   const [chartDataNiveles, setChartDataNiveles] = useState<any>(null);
   const [metrics, setMetrics] = useState<MetricsData | null>(null);
+  const [historicoRange, setHistoricoRange] = useState<'24h' | '7d' | '30d'>('24h');
 
   useEffect(() => {
     const fetchPuntoVentaDetails = async () => {
       try {
-        const response = await get<any>(`/puntoVentas/${id}`);
+        const response = await get<any>(`/puntoVentas/${id}?historicoRange=${historicoRange}`);
         setPunto(response);
         prepareChartData(response, setChartDataNiveles);
         setLoading(false);
@@ -156,7 +133,7 @@ export default function PuntoVentaDetalle() {
       fetchPuntoVentaDetails();
     }, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
-  }, [id]);
+  }, [id, historicoRange]);
 
   useEffect(() => {
     const clienteId = punto?.cliente?._id;
@@ -243,7 +220,14 @@ export default function PuntoVentaDetalle() {
                 )}
               </Card>
             </Box>
-            <NivelSection niveles={niveles} chartDataNiveles={chartDataNiveles} osmosis={osmosis} metrics={metrics} />
+            <NivelSection
+              niveles={niveles}
+              chartDataNiveles={chartDataNiveles}
+              osmosis={osmosis}
+              metrics={metrics}
+              historicoRange={historicoRange}
+              onHistoricoRangeChange={setHistoricoRange}
+            />
           </Grid>
         </Grid>
       </Box>
@@ -816,7 +800,7 @@ function NivelHistoricoChart({ nivelName, chart }: { nivelName: string; chart: a
 /* 🧱 Sección 3: Niveles */
 /* -------------------------------------------------------------------------- */
 
-function NivelSection({ niveles, chartDataNiveles, osmosis = [], metrics = null }: any) {
+function NivelSection({ niveles, chartDataNiveles, osmosis = [], metrics = null, historicoRange = '24h', onHistoricoRangeChange }: any) {
   if (niveles.length === 0) {
     return (
       <Card variant="outlined" sx={{ p: 2 }}>
@@ -833,6 +817,20 @@ function NivelSection({ niveles, chartDataNiveles, osmosis = [], metrics = null 
 
   return (
     <Box>
+      {/* Rango del histórico: 24h / semana / mes */}
+      <FormControl size="small" sx={{ minWidth: 180, mb: 2 }}>
+        <InputLabel id="historico-range-label">Período histórico</InputLabel>
+        <Select
+          labelId="historico-range-label"
+          value={historicoRange}
+          label="Período histórico"
+          onChange={(e) => onHistoricoRangeChange?.(e.target.value as '24h' | '7d' | '30d')}
+        >
+          <MenuItem value="24h">Últimas 24 horas</MenuItem>
+          <MenuItem value="7d">Última semana</MenuItem>
+          <MenuItem value="30d">Último mes</MenuItem>
+        </Select>
+      </FormControl>
       {/* Card con información de todos los niveles - COMENTADO */}
       {/* <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Typography variant="h6" gutterBottom>

@@ -1,21 +1,26 @@
 import type { Dayjs } from 'dayjs'; // Only import Dayjs as a type
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
+import PropTypes from 'prop-types';
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DateTimePicker, LocalizationProvider } from '@mui/x-date-pickers';
-import { Box, Chip, Grid, Table, Paper, TableRow, TextField, TableCell, TableBody, TableHead, Typography, TableContainer, TablePagination, CircularProgress } from '@mui/material';
+import { Box, Chip, Grid, Table, Paper, Button, TableRow, TextField, TableCell, TableBody, TableHead, Typography, TableContainer, TablePagination, CircularProgress } from '@mui/material';
 
 import { get } from 'src/api/axiosHelper';
 
 import type { Log } from '../types';
 
+type ProductLogsProps = {
+  productType?: string;
+};
 
-const ProductDetail: React.FC = () => {
+const ProductLogs: React.FC<ProductLogsProps> = ({ productType = 'Osmosis' }) => {
   const { id } = useParams<{ id: string }>();
   const [logs, setLogs] = useState<Log[]>([]);
+  const isNivel = productType === 'Nivel' || productType === 'nivel';
   const [loading, setLoading] = useState(true);
   const [startDate, setStartDate] = useState<Dayjs | null>(dayjs().startOf('day'));
   const [endDate, setEndDate] = useState<Dayjs | null>(dayjs());
@@ -28,38 +33,35 @@ const ProductDetail: React.FC = () => {
   const safeStart = startDate?.isAfter(now) ? now : startDate;
   const safeEnd   = endDate?.isAfter(now) ? now : endDate;
 
-  useEffect(() => {
-    const fetchLogs = async () => {
-      try {
-
-
-        const params = {
-          id,
-          start_date: safeStart?.utc().valueOf(),
-          end_date: safeEnd?.utc().valueOf(),
-          limit: 100,
-        };
-
-        const response = await get<{ success: boolean; data: Log[] }>(`/products/${id}/logs`, { params });
-
-        if (response.success) {
-          setLogs(response.data);
-        } else {
-          console.warn('API responded with success = false');
-          setLogs([]);
-        }
-      } catch (error) {
-        console.error('Error fetching logs:', error);
+  const fetchLogs = async () => {
+    if (!id) return;
+    setLoading(true);
+    try {
+      const params = {
+        id,
+        start_date: safeStart?.utc().valueOf(),
+        end_date: safeEnd?.utc().valueOf(),
+        limit: 100,
+      };
+      const response = await get<{ success: boolean; data: Log[] }>(`/products/${id}/logs`, { params });
+      if (response.success) {
+        setLogs(response.data);
+      } else {
         setLogs([]);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (error) {
+      console.error('Error fetching logs:', error);
+      setLogs([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchLogs();
-    const interval = setInterval(fetchLogs, 30000);
-    return () => clearInterval(interval);
-  }, [id, startDate, endDate, safeStart, safeEnd]);
+  // Initial fetch only when product id is available (no refetch on date picker change; refetch via button)
+  useEffect(() => {
+    if (id) fetchLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch only on id, not on date change
+  }, [id]);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
@@ -89,8 +91,8 @@ const ProductDetail: React.FC = () => {
       <Paper sx={{ p: 3, mb: 4 }}>
         <Typography variant="h6" gutterBottom>Filtrar Logs</Typography>
         <LocalizationProvider dateAdapter={AdapterDayjs}>
-          <Grid container spacing={3}>
-            <Grid item xs={12} sm={6} md={4}>
+          <Grid container spacing={3} alignItems="center">
+            <Grid item xs={12} sm={6} md={3}>
               <DateTimePicker
                 label="Fecha inicio"
                 value={startDate}
@@ -98,7 +100,7 @@ const ProductDetail: React.FC = () => {
                 slotProps={{ textField: { fullWidth: true } }}
               />
             </Grid>
-            <Grid item xs={12} sm={6} md={4}>
+            <Grid item xs={12} sm={6} md={3}>
               <DateTimePicker
                 label="Fecha fin"
                 value={endDate}
@@ -106,8 +108,21 @@ const ProductDetail: React.FC = () => {
                 slotProps={{ textField: { fullWidth: true } }}
               />
             </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Button
+                variant="contained"
+                onClick={fetchLogs}
+                disabled={loading}
+                fullWidth
+              >
+                {loading ? 'Cargando…' : 'Actualizar logs'}
+              </Button>
+            </Grid>
           </Grid>
         </LocalizationProvider>
+        <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
+          Cambia las fechas y pulsa &quot;Actualizar logs&quot; para consultar. Evita solicitudes frecuentes a Tuya.
+        </Typography>
 
         <TextField
           label="Buscar por fecha"
@@ -119,17 +134,28 @@ const ProductDetail: React.FC = () => {
       </Paper>
 
       <TableContainer component={Paper}>
-        <Typography variant="h5" sx={{ p: 2 }}>Product Logs</Typography>
+        <Typography variant="h5" sx={{ p: 2 }}>
+          {isNivel ? 'Logs de Nivel' : 'Product Logs'}
+        </Typography>
         <Table>
           <TableHead>
             <TableRow>
               <TableCell>Fecha</TableCell>
-              <TableCell>TDS (ppm)</TableCell>
-              <TableCell>Flujo Producción (L/s)</TableCell>
-              <TableCell>Flujo Rechazo (L/s)</TableCell>
-              <TableCell>Volumen Producción (L)</TableCell>
-              <TableCell>Volumen Rechazo (L)</TableCell>
-              <TableCell>Tiempo Ejecución (s)</TableCell>
+              {isNivel ? (
+                <>
+                  <TableCell>Nivel (%)</TableCell>
+                  <TableCell>Profundidad (cm)</TableCell>
+                </>
+              ) : (
+                <>
+                  <TableCell>TDS (ppm)</TableCell>
+                  <TableCell>Flujo Producción (L/s)</TableCell>
+                  <TableCell>Flujo Rechazo (L/s)</TableCell>
+                  <TableCell>Volumen Producción (L)</TableCell>
+                  <TableCell>Volumen Rechazo (L)</TableCell>
+                  <TableCell>Tiempo Ejecución (s)</TableCell>
+                </>
+              )}
               <TableCell>Origen</TableCell>
             </TableRow>
           </TableHead>
@@ -137,63 +163,77 @@ const ProductDetail: React.FC = () => {
             {filteredLogs.length > 0 ? (
               filteredLogs
                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map((log) => {
-                  const tiempoEjecucion = log.tiempo_fin !== undefined && log.tiempo_inicio !== undefined
-                    ? (log.tiempo_fin - log.tiempo_inicio)/1000
-                    : 'N/A';
-
-                  return (
+                .map((log) => (
+                  isNivel ? (
                     <TableRow key={log._id}>
                       <TableCell>{new Date(log.date).toLocaleString()}</TableCell>
                       <TableCell>
                         <Chip
-                          label={`${log.tds?.toFixed(2) ?? 'N/A'} ppm`}
+                          label={log.flujo_rechazo != null ? `${Number(log.flujo_rechazo).toFixed(1)}%` : 'N/A'}
+                          color="primary"
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={log.flujo_produccion != null ? `${Number(log.flujo_produccion).toFixed(1)} cm` : 'N/A'}
                           color="default"
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={log.flujo_produccion != null ? `${log.flujo_produccion.toFixed(2)} L/s` : 'N/A'}
-                          color="success"
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={log.flujo_rechazo != null ? `${log.flujo_rechazo.toFixed(2)} L/s` : 'N/A'}
-                          color="error"
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={log.production_volume != null ? `${log.production_volume.toFixed(2)} L` : 'N/A'}
-                          color="success"
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={log.rejected_volume != null ? `${log.rejected_volume.toFixed(2)} L` : 'N/A'}
-                          color="error"
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={`${tiempoEjecucion} s`}
-                          color="info"
                           size="small"
                         />
                       </TableCell>
                       <TableCell>{log.source || 'N/A'}</TableCell>
                     </TableRow>
-                  );
-                })
+                  ) : (
+                    (() => {
+                      const tiempoEjecucion = log.tiempo_fin !== undefined && log.tiempo_inicio !== undefined
+                        ? (log.tiempo_fin - log.tiempo_inicio) / 1000
+                        : 'N/A';
+                      return (
+                        <TableRow key={log._id}>
+                          <TableCell>{new Date(log.date).toLocaleString()}</TableCell>
+                          <TableCell>
+                            <Chip label={`${log.tds?.toFixed(2) ?? 'N/A'} ppm`} color="default" size="small" />
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={log.flujo_produccion != null ? `${log.flujo_produccion.toFixed(2)} L/s` : 'N/A'}
+                              color="success"
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={log.flujo_rechazo != null ? `${log.flujo_rechazo.toFixed(2)} L/s` : 'N/A'}
+                              color="error"
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={log.production_volume != null ? `${log.production_volume.toFixed(2)} L` : 'N/A'}
+                              color="success"
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={log.rejected_volume != null ? `${log.rejected_volume.toFixed(2)} L` : 'N/A'}
+                              color="error"
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Chip label={`${tiempoEjecucion} s`} color="info" size="small" />
+                          </TableCell>
+                          <TableCell>{log.source || 'N/A'}</TableCell>
+                        </TableRow>
+                      );
+                    })()
+                  )
+                ))
             ) : (
               <TableRow>
-                <TableCell colSpan={6} align="center">
+                <TableCell colSpan={isNivel ? 4 : 8} align="center">
                   No hay logs disponibles
                 </TableCell>
               </TableRow>
@@ -214,4 +254,8 @@ const ProductDetail: React.FC = () => {
   );
 };
 
-export default ProductDetail;
+ProductLogs.propTypes = {
+  productType: PropTypes.string,
+};
+
+export default ProductLogs;
