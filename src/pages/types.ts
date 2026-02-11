@@ -16,6 +16,12 @@ interface Status {
     status: Status[];
   lat: number;
   lon: number;
+  /** Unix timestamp (seconds). Tuya last update time. */
+  update_time?: number;
+  /** Unix timestamp (seconds). When device was last seen active (if set by API). */
+  last_time_active?: number;
+  /** Unix timestamp (seconds). Max of update_time and latest ProductLog with non-zero value; used for "Última vez actualizado". */
+  last_updated_display?: number;
   /** When true, product is included in the Tuya logs routine (cron). Admin-configurable in Personalización > Productos rutina logs. */
   tuya_logs_routine_enabled?: boolean;
   // Allow dynamic properties (strings) to be added to a product object

@@ -52,6 +52,30 @@ MetricCard.propTypes = {
   unit: PropTypes.string,
 };
 
+/** Mexico timezone for consistent "last time online" display (GMT-07:00). */
+const MEXICO_TZ = 'America/Hermosillo';
+
+/** Format "Última vez actualizado" from last_updated_display (API), or update_time / last_time_active (Unix seconds). */
+function formatLastTimeOnline(product: Product): string {
+  const ts = product.last_updated_display ?? product.last_time_active ?? product.update_time;
+  if (ts == null || ts <= 0) return 'N/A';
+  try {
+    const date = new Date(ts * 1000);
+    return date.toLocaleString('es-MX', {
+      timeZone: MEXICO_TZ,
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return 'N/A';
+  }
+}
 
 const ProductDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -198,6 +222,10 @@ const ProductDetail: React.FC = () => {
                   color={product.online ? 'success' : 'error'}
                   size="small"
                 />
+              </Typography>
+              <Typography variant="body1">
+                <strong>Última vez actualizado:</strong>{' '}
+                {formatLastTimeOnline(product)}
               </Typography>
               <Typography variant="body1">
                 <strong>Modelo:</strong> {product.model || 'N/A'}
