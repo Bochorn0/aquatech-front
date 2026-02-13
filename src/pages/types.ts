@@ -293,4 +293,7 @@ export interface PuntosVenta {
     city_name: String;
     name: String;
     productos: Product[] | string[];
+    /** When true, cron generates random sensor data for this punto (backend column dev_mode). */
+    dev_mode?: boolean;
+    devMode?: boolean;
 }

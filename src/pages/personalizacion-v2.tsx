@@ -714,14 +714,14 @@ export function CustomizationPageV2() {
   const handlePvEdit = async (pv: PuntosVenta) => {
     const pvId = pv._id || pv.id || null;
     console.log('[handlePvEdit] Editing puntoVenta:', pv, 'pvId:', pvId);
-    setPvFormData(pv);
+    setPvFormData({ ...pv, devMode: pv.dev_mode ?? pv.devMode });
     setEditPvId(pvId ? String(pvId) : null);
     if (pvId) {
       await fetchSensorsForEdit(String(pvId));
-      // Load dev mode preference from localStorage
+      // Dev mode: from API (dev_mode) or localStorage
       const devModeKey = `devMode_${pvId}`;
-      const stored = localStorage.getItem(devModeKey);
-      setDevModeEnabled(stored === 'true');
+      const fromApi = pv.dev_mode === true || pv.devMode === true;
+      setDevModeEnabled(fromApi || localStorage.getItem(devModeKey) === 'true');
     }
     setPvModalOpen(true);
   };
@@ -896,11 +896,12 @@ export function CustomizationPageV2() {
   const handlePvSubmit = async () => {
     setLoading(true);
     try {
+      const payload = { ...pvFormData, devMode: pvFormData.devMode ?? devModeEnabled };
       if (pvFormData._id || pvFormData.id) {
         const id = pvFormData._id || pvFormData.id;
-        await apiV2Call(`/puntoVentas/${id}`, 'PATCH', pvFormData);
+        await apiV2Call(`/puntoVentas/${id}`, 'PATCH', payload);
       } else {
-        await apiV2Call('/puntoVentas', 'POST', pvFormData);
+        await apiV2Call('/puntoVentas', 'POST', payload);
       }
       handleClosePvModal();
       fetchPuntosVenta();
@@ -1935,16 +1936,23 @@ export function CustomizationPageV2() {
                     control={
                       <Switch
                         checked={devModeEnabled}
-                        onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+                        onChange={async (event: React.ChangeEvent<HTMLInputElement>) => {
                           const enabled = event.target.checked;
                           setDevModeEnabled(enabled);
                           const devModeKey = `devMode_${editPvId}`;
                           localStorage.setItem(devModeKey, enabled.toString());
+                          setPvFormData((prev) => ({ ...prev, devMode: enabled }));
+                          try {
+                            await apiV2Call(`/puntoVentas/${editPvId}`, 'PATCH', { devMode: enabled });
+                          } catch (err) {
+                            console.error('Error updating dev mode:', err);
+                            MySwal.fire('Error', 'No se pudo guardar el modo desarrollo', 'error');
+                          }
                         }}
                         color="primary"
                       />
                     }
-                    label="Habilitar Modo Desarrollo (Mostrar dropdown de escenarios)"
+                    label="Habilitar Modo Desarrollo (generar datos aleatorios y mostrar escenarios)"
                   />
                 )}
                 

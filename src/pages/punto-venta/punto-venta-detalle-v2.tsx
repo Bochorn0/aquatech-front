@@ -210,14 +210,12 @@ export default function PuntoVentaDetalleV2() {
     console.log('[PuntoVentaDetalleV2] Status del producto:', tiwaterProduct.status);
   }
 
-  // Dev mode: Check if user is admin and showDev flag is enabled from localStorage
+  // Dev mode: from API (dev_mode column) or fallback to localStorage
   const userStr = localStorage.getItem('user');
   const user = userStr ? JSON.parse(userStr) : null;
   const isAdmin = user?.role?.name === 'admin' || user?.role === 'admin';
-  
-  // Get dev mode preference from localStorage for this puntoVenta
   const devModeKey = `devMode_${id}`;
-  const showDev = localStorage.getItem(devModeKey) === 'true';
+  const showDev = punto?.dev_mode === true || localStorage.getItem(devModeKey) === 'true';
   const showDevDropdown = showDev && isAdmin;
 
   const handleGenerateScenario = async () => {
