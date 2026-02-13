@@ -210,12 +210,11 @@ export default function PuntoVentaDetalleV2() {
     console.log('[PuntoVentaDetalleV2] Status del producto:', tiwaterProduct.status);
   }
 
-  // Dev mode: from API (dev_mode column) or fallback to localStorage
+  // Dev mode: only boolean column from API
   const userStr = localStorage.getItem('user');
   const user = userStr ? JSON.parse(userStr) : null;
   const isAdmin = user?.role?.name === 'admin' || user?.role === 'admin';
-  const devModeKey = `devMode_${id}`;
-  const showDev = punto?.dev_mode === true || localStorage.getItem(devModeKey) === 'true';
+  const showDev = punto?.dev_mode === true;
   const showDevDropdown = showDev && isAdmin;
 
   const handleGenerateScenario = async () => {

@@ -714,14 +714,13 @@ export function CustomizationPageV2() {
   const handlePvEdit = async (pv: PuntosVenta) => {
     const pvId = pv._id || pv.id || null;
     console.log('[handlePvEdit] Editing puntoVenta:', pv, 'pvId:', pvId);
-    setPvFormData({ ...pv, devMode: pv.dev_mode ?? pv.devMode });
+    // dev_mode: only boolean column from API, not meta or other JSON
+    const devModeValue = pv.dev_mode === true;
+    setPvFormData({ ...pv, devMode: devModeValue });
     setEditPvId(pvId ? String(pvId) : null);
     if (pvId) {
       await fetchSensorsForEdit(String(pvId));
-      // Dev mode: from API (dev_mode) or localStorage
-      const devModeKey = `devMode_${pvId}`;
-      const fromApi = pv.dev_mode === true || pv.devMode === true;
-      setDevModeEnabled(fromApi || localStorage.getItem(devModeKey) === 'true');
+      setDevModeEnabled(devModeValue);
     }
     setPvModalOpen(true);
   };
@@ -896,7 +895,7 @@ export function CustomizationPageV2() {
   const handlePvSubmit = async () => {
     setLoading(true);
     try {
-      const payload = { ...pvFormData, devMode: pvFormData.devMode ?? devModeEnabled };
+      const payload = { ...pvFormData, devMode: devModeEnabled };
       if (pvFormData._id || pvFormData.id) {
         const id = pvFormData._id || pvFormData.id;
         await apiV2Call(`/puntoVentas/${id}`, 'PATCH', payload);
@@ -1939,8 +1938,6 @@ export function CustomizationPageV2() {
                         onChange={async (event: React.ChangeEvent<HTMLInputElement>) => {
                           const enabled = event.target.checked;
                           setDevModeEnabled(enabled);
-                          const devModeKey = `devMode_${editPvId}`;
-                          localStorage.setItem(devModeKey, enabled.toString());
                           setPvFormData((prev) => ({ ...prev, devMode: enabled }));
                           try {
                             await apiV2Call(`/puntoVentas/${editPvId}`, 'PATCH', { devMode: enabled });
