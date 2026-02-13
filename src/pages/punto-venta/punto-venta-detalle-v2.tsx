@@ -254,6 +254,43 @@ export default function PuntoVentaDetalleV2() {
       return;
     }
 
+    if (selectedScenario === 'generate-mock-data-now') {
+      setGenerating(true);
+      try {
+        const response = await fetch(`${CONFIG.API_BASE_URL}/puntoVentas/${id}/generate-mock-data-now`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        const result = await response.json();
+        if (result.success) {
+          console.log('[Dev] Mock data now:', result);
+          alert(`✅ ${result.message}\n\nTopic: ${result.data?.topic ?? '-'}\nTimestamp: ${result.data?.timestamp ?? 'ahora'}`);
+          try {
+            const res = await fetch(`${CONFIG.API_BASE_URL_V2}/puntoVentas/${id}?_t=${Date.now()}`, {
+              headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (res.ok) {
+              const json = await res.json();
+              const puntoData = json.data || json;
+              setPunto(puntoData);
+              prepareChartDataNiveles(puntoData, setChartDataNiveles);
+            }
+          } catch (_) { /* ignore */ }
+        } else {
+          alert(`❌ Error: ${result.message}`);
+        }
+      } catch (error) {
+        console.error('[Dev] Error generate mock data now:', error);
+        alert('❌ Error al generar datos mock. Verifica la consola.');
+      } finally {
+        setGenerating(false);
+      }
+      return;
+    }
+
     if (selectedScenario === 'simulate-low-cruda') {
       setGenerating(true);
       try {
@@ -436,6 +473,9 @@ export default function PuntoVentaDetalleV2() {
                   >
                     <MenuItem value="generate-daily-data">
                       Generar datos diarios (24 horas)
+                    </MenuItem>
+                    <MenuItem value="generate-mock-data-now">
+                      Generar datos mock ahora
                     </MenuItem>
                     <MenuItem value="simulate-low-cruda">
                       Simular bajo nivel de agua cruda
