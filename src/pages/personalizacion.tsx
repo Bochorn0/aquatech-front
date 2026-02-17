@@ -542,6 +542,20 @@ const handlePvChange = (e: any) => {
     setProductFormData({ cliente: '', city: '', state: '', product_type: 'Osmosis' });
   };
 
+  const handleProductDelete = async (product: Product & { _id?: string }) => {
+    const productId = product._id ?? product.id;
+    if (!productId) return;
+    try {
+      const result = await confirmationAlert();
+      if (result.isConfirmed) {
+        await remove<Product>(`/products/${productId}`);
+        fetchProducts();
+      }
+    } catch (error) {
+      console.error('Error deleting product:', error);
+    }
+  };
+
   const productSearchLower = productSearchText.trim().toLowerCase();
   const filteredProducts = productSearchLower
     ? products.filter((p) => {
@@ -971,6 +985,11 @@ const handlePvChange = (e: any) => {
                                 <IconButton onClick={() => handleProductEdit(prod)} sx={{ mr: 1, color: 'primary.main' }}>
                                   <SvgColor src='./assets/icons/actions/edit.svg' />
                                 </IconButton>
+                                {isAdmin && (
+                                  <IconButton onClick={() => handleProductDelete(prod)} sx={{ color: 'danger.main' }} title="Eliminar equipo">
+                                    <SvgColor src='./assets/icons/actions/delete.svg' />
+                                  </IconButton>
+                                )}
                               </StyledTableCell>
                             </StyledTableRow>
                           );
