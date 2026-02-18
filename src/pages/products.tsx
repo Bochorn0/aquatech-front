@@ -196,15 +196,19 @@ useEffect(() => {
   });
 
   const mappedFilteredData = filteredProducts.map((product: Product) => {
-    const updatedProduct = { ...product };
-  
-    // Map the status values and add them as separate properties
-    product.status.forEach((statusItem) => {
-      updatedProduct[statusItem.code] = statusItem.value;
-    });
-
-    updatedProduct.status = []
-    return updatedProduct;
+    const tds = product.status?.find((s) => s.code === 'tds_out')?.value;
+    const volTotal = product.status?.find((s) => s.code === 'flowrate_total_1')?.value;
+    const volRechazo = product.status?.find((s) => s.code === 'flowrate_total_2')?.value;
+    const clientName = typeof product.cliente === 'object' && product.cliente !== null ? (product.cliente as { name?: string }).name : '';
+    return {
+      Producto: product.name ?? '',
+      Status: product.online ? 'Online' : 'Offline',
+      Ciudad: product.city ?? '',
+      Cliente: clientName ?? '',
+      TDS: tds != null ? `${tds} ppm` : 'N/A',
+      'Volumen total Producto': volTotal != null ? `${volTotal} L` : 'N/A',
+      'Volumen rechazo': volRechazo != null ? `${volRechazo} L` : 'N/A',
+    };
   });
 
   if (loading) {
