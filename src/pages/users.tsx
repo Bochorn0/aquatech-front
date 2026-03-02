@@ -119,6 +119,8 @@ export default function UserRoleManagement() {
     setUserForm({
       ...user,
       client_id: clientId ? String(clientId) : CLIENT_ALL,
+      // Ensure role dropdown shows current role (API may send role_id but not role)
+      role: (user.role ?? user.role_id ?? '') as User['role'],
     });
     setUserModalOpen(true);
   };
@@ -136,12 +138,17 @@ export default function UserRoleManagement() {
     setLoading(true);
     try {
       const clientId = userForm.client_id === CLIENT_ALL || !userForm.client_id ? null : userForm.client_id;
+      // Prefer current dropdown selection over stale role_id so role change is persisted
+      const roleFromDropdown = typeof userForm.role === 'object' && userForm.role != null && userForm.role._id != null
+        ? userForm.role._id
+        : (userForm.role != null && String(userForm.role).trim() !== '' ? userForm.role : userForm.role_id);
+      const selectedRoleId = roleFromDropdown != null ? String(roleFromDropdown) : undefined;
       const payload: Record<string, unknown> = {
         ...userForm,
         client_id: clientId,
         postgres_client_id: clientId,
         cliente: clientId,
-        role_id: userForm.role?._id || userForm.role_id || userForm.role,
+        role_id: selectedRoleId,
       };
       delete payload.password;
       if (userForm.password?.trim()) payload.password = userForm.password;
