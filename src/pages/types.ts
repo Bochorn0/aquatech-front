@@ -287,6 +287,7 @@ export interface PuntosVenta {
     _id?: string;
     id?: string; // For PostgreSQL compatibility
     codigo_tienda?: string; // Required for v2.0 PostgreSQL (maps to code)
+    code?: string; // Store code (alias for codigo_tienda)
     cliente: Cliente | string;
     client_name: string;
     city: City | string;
