@@ -12,6 +12,9 @@ const ICON_URL = process.env.REACT_APP_ICON_URL || 'https://images.tuyacn.com';
 const PORT = process.env.PORT || '3000';
 
 
+/** Timezone for display (Hermosillo, Sonora - UTC-7) */
+export const APP_TIMEZONE = 'America/Hermosillo';
+
 export type ConfigValue = {
   appName: string;
   appVersion: string;
@@ -20,6 +23,7 @@ export type ConfigValue = {
   TIWATER_API_KEY: string;
   ICON_URL: string;
   PORT: string;
+  timezone: string;
 };
 
 // ----------------------------------------------------------------------
@@ -32,6 +36,7 @@ export const CONFIG: ConfigValue = {
   TIWATER_API_KEY,
   ICON_URL,
   PORT,
+  timezone: APP_TIMEZONE,
 };
 
 

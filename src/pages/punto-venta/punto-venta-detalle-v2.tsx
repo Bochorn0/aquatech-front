@@ -3090,7 +3090,8 @@ function TiwaterDashboard({ data, product, loading }: { data: any; product?: any
             month: 'long',
             day: 'numeric',
             hour: '2-digit',
-            minute: '2-digit'
+            minute: '2-digit',
+            timeZone: 'America/Hermosillo'
           })}
         </Alert>
       )}

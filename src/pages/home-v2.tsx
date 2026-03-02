@@ -40,6 +40,7 @@ import {
 } from 'src/utils/sensor-metrics-helper';
 
 import { CONFIG } from 'src/config-global';
+import { parseTimestampAsUTC } from 'src/utils/date-timezone';
 import { get as getV2 } from 'src/api/axiosHelperV2';
 import { PieChart } from 'src/pages/charts/pie-chart';
 import { DashboardContent } from 'src/layouts/dashboard';
@@ -544,16 +545,17 @@ export function HomeV2Page() {
           }))
         );
         
-        // Sort by timestamp
-        allReadings.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        // Sort by timestamp (parse as UTC for correct ordering)
+        allReadings.sort((a, b) => parseTimestampAsUTC(a.timestamp || a.createdAt).getTime() - parseTimestampAsUTC(b.timestamp || b.createdAt).getTime());
         
         const categories = allReadings.map(r => {
-          const date = new Date(r.timestamp);
-          const time = date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+          const ts = r.timestamp || r.createdAt;
+          const date = parseTimestampAsUTC(ts);
+          const time = date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Hermosillo' });
           
           // For week/month views, add date label
           if (selectedTimeRange === 'week' || selectedTimeRange === 'month') {
-            const dateStr = date.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit' });
+            const dateStr = date.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', timeZone: 'America/Hermosillo' });
             return `${time}\n${dateStr}`;
           }
           
@@ -581,16 +583,17 @@ export function HomeV2Page() {
           }))
         );
         
-        // Sort by timestamp
-        allReadings.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        // Sort by timestamp (parse as UTC for correct ordering)
+        allReadings.sort((a, b) => parseTimestampAsUTC(a.timestamp || a.createdAt).getTime() - parseTimestampAsUTC(b.timestamp || b.createdAt).getTime());
         
         const categories = allReadings.map(r => {
-          const date = new Date(r.timestamp);
-          const time = date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+          const ts = r.timestamp || r.createdAt;
+          const date = parseTimestampAsUTC(ts);
+          const time = date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Hermosillo' });
           
           // For week/month views, add date label
           if (selectedTimeRange === 'week' || selectedTimeRange === 'month') {
-            const dateStr = date.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit' });
+            const dateStr = date.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', timeZone: 'America/Hermosillo' });
             return `${time}\n${dateStr}`;
           }
           
@@ -959,6 +962,7 @@ export function HomeV2Page() {
                                               hour: '2-digit',
                                               minute: '2-digit',
                                               second: '2-digit',
+                                              timeZone: 'America/Hermosillo',
                                             });
                                             
                                             const metricStatus = evaluateMetricStatus(
