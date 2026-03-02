@@ -62,9 +62,11 @@ useEffect(() => {
         firstClients = firstClients.filter((client) => client.name !== 'All');
         setClientFilters(firstClients);
 
-        const client = JSON.parse(user).cliente as Cliente;
-        setSelectedClient(client.name);
-        setCurretRole(JSON.parse(user).role.name);
+        const parsed = JSON.parse(user);
+        const client = parsed.cliente as Cliente;
+        const clientName = parsed.client_name ?? client?.name ?? '';
+        setSelectedClient(clientName || 'All');
+        setCurretRole(parsed.role?.name ?? '');
       }
     } catch (error) {
       console.error('Error fetching clients:', error);
@@ -79,12 +81,13 @@ useEffect(() => {
       let clientId = '' as Cliente['_id'];
       const user = localStorage.getItem('user');
 
-      // Find clientId only if clientFilters is loaded
       if (clientFilters.length > 0) {
-        clientId = clientFilters.find((client) => client.name === selectedClient)?._id || '';
-      } else if (user && isInitialFetch) {
-        const client = JSON.parse(user).cliente as Cliente;
-        clientId = client._id;
+        clientId = clientFilters.find((client) => client.name === selectedClient)?._id ?? '';
+      }
+      if (!clientId && user) {
+        const parsed = JSON.parse(user);
+        const id = parsed.postgresClientId ?? parsed.client_id ?? parsed.cliente?._id ?? parsed.cliente;
+        if (id != null && id !== '') clientId = String(id);
       }
 
       const productParams = { 
