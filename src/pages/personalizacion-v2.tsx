@@ -10,6 +10,7 @@ import {
   Table,
   Button,
   Dialog,
+  Divider,
   Select,
   Switch,
   MenuItem,
@@ -286,6 +287,14 @@ export function CustomizationPageV2() {
   // Dev mode state for puntoVenta
   const [devModeEnabled, setDevModeEnabled] = useState<boolean>(false);
 
+  // Regiones module (admin only)
+  const [regions, setRegions] = useState<{ id: string; code: string; name: string }[]>([]);
+  const [regionEditModal, setRegionEditModal] = useState<{ id: string; code: string; name: string } | null>(null);
+  const [regionPuntos, setRegionPuntos] = useState<{ id: string; name: string; codigo_tienda: string }[]>([]);
+  const [regionAssignPv, setRegionAssignPv] = useState<string>('');
+  const [regionFormData, setRegionFormData] = useState({ code: '', name: '' });
+  const [savingRegion, setSavingRegion] = useState(false);
+
   // Helper to ensure string type
   const toStr = (val: any): string => String(val);
 
@@ -360,6 +369,81 @@ export function CustomizationPageV2() {
     fetchCities();
     fetchPuntosVenta();
   }, []);
+
+  const fetchRegions = async () => {
+    try {
+      const response = await apiV2Call('/regions');
+      setRegions(Array.isArray(response) ? response : []);
+    } catch (error) {
+      console.error('Error fetching regions:', error);
+    }
+  };
+
+  const fetchRegionPuntos = async (regionId: string) => {
+    try {
+      const response = await apiV2Call(`/regions/${regionId}/puntos`);
+      setRegionPuntos(Array.isArray(response) ? response : []);
+    } catch (error) {
+      console.error('Error fetching region puntos:', error);
+      setRegionPuntos([]);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdmin && tabIndex === 4) fetchRegions();
+  }, [tabIndex, isAdmin]);
+
+  useEffect(() => {
+    if (regionEditModal?.id) {
+      fetchRegionPuntos(regionEditModal.id);
+      setRegionFormData({ code: regionEditModal.code, name: regionEditModal.name });
+    } else {
+      setRegionPuntos([]);
+    }
+  }, [regionEditModal?.id, regionEditModal?.code, regionEditModal?.name]);
+
+  const handleSaveRegion = async () => {
+    if (!regionEditModal) return;
+    setSavingRegion(true);
+    try {
+      await apiV2Call(`/regions/${regionEditModal.id}`, 'PATCH', {
+        code: regionFormData.code.trim().toUpperCase(),
+        name: regionFormData.name.trim()
+      });
+      setRegionEditModal((r) => r ? { ...r, code: regionFormData.code, name: regionFormData.name } : null);
+      fetchRegions();
+    } catch (e) {
+      console.error('Error saving region:', e);
+      MySwal.fire('Error', 'Error al guardar región', 'error');
+    } finally {
+      setSavingRegion(false);
+    }
+  };
+
+  const handleUnassignPuntoFromRegion = async (puntoId: string) => {
+    if (!regionEditModal) return;
+    try {
+      await apiV2Call(`/puntoVentas/${puntoId}`, 'PATCH', { region_id: null });
+      fetchRegionPuntos(regionEditModal.id);
+      fetchPuntosVenta();
+    } catch (e) {
+      console.error('Error unassigning punto:', e);
+      MySwal.fire('Error', 'Error al desvincular punto', 'error');
+    }
+  };
+
+  const handleAssignPuntoToRegion = async () => {
+    if (!regionEditModal || !regionAssignPv) return;
+    try {
+      await apiV2Call(`/puntoVentas/${regionAssignPv}`, 'PATCH', { region_id: regionEditModal.id });
+      setRegionAssignPv('');
+      fetchRegionPuntos(regionEditModal.id);
+      fetchPuntosVenta();
+    } catch (e) {
+      console.error('Error assigning punto:', e);
+      MySwal.fire('Error', 'Error al asignar punto', 'error');
+    }
+  };
 
   // Debug: Monitor sensors state changes
   useEffect(() => {
@@ -976,6 +1060,7 @@ export function CustomizationPageV2() {
           <CustomTab label="PuntosVenta" />
           {isAdmin && <CustomTab label="Clientes" />}
           {isAdmin && <CustomTab label="Ciudades" />}
+          {isAdmin && <CustomTab label="Regiones" />}
         </CustomTabs>
         
         {tabIndex === 0 && (
@@ -1189,6 +1274,60 @@ export function CustomizationPageV2() {
           </Grid>
         )}
         
+        {isAdmin && tabIndex === 4 && (
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <Box sx={{ overflowX: 'auto' }}>
+                <Grid container>
+                  <Grid item xs={12} sm={9}>
+                    <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
+                      Lista de regiones (MQTT topic)
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Box>
+              <StyledTableContainer>
+                <Paper elevation={3}>
+                  <Box sx={{ overflowX: 'auto' }}>
+                    <Table>
+                      <TableHead>
+                        <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
+                          <StyledTableCellHeader>Código</StyledTableCellHeader>
+                          <StyledTableCellHeader>Nombre</StyledTableCellHeader>
+                          <StyledTableCellHeader>Puntos vinculados</StyledTableCellHeader>
+                          <StyledTableCellHeader>Acciones</StyledTableCellHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {regions.map((r) => (
+                          <StyledTableRow key={r.id}>
+                            <StyledTableCell>{r.code}</StyledTableCell>
+                            <StyledTableCell>{r.name}</StyledTableCell>
+                            <StyledTableCell>
+                              <Button
+                                variant="text"
+                                size="small"
+                                onClick={() => setRegionEditModal(r)}
+                              >
+                                Ver / editar
+                              </Button>
+                            </StyledTableCell>
+                            <StyledTableCell>
+                              <IconButton sx={{ color: 'primary.main' }} onClick={() => setRegionEditModal(r)} title="Editar región">
+                                <SvgColor src="./assets/icons/actions/edit.svg" />
+                              </IconButton>
+                            </StyledTableCell>
+                          </StyledTableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </Box>
+                </Paper>
+              </StyledTableContainer>
+            </Grid>
+          </Grid>
+        )}
+
         {isAdmin && tabIndex === 3 && (
           <Grid container spacing={2}>
             <Grid item xs={12}>
@@ -1867,6 +2006,86 @@ export function CustomizationPageV2() {
               <Button onClick={handleCloseCityModal} color="secondary">Cancelar</Button>
               <Button onClick={handleCitySubmit} variant="contained" color="primary" disabled={loading}>
                 {loading ? <CircularProgress size={24} /> : (cityFormData._id || cityFormData.id) ? "Actualizar" : "Guardar"}
+              </Button>
+            </DialogActions>
+          </Dialog>
+          
+          {/* Region Edit Modal */}
+          <Dialog open={!!regionEditModal} onClose={() => setRegionEditModal(null)} fullWidth maxWidth="sm">
+            <DialogTitle>Editar región: {regionEditModal?.name || regionEditModal?.code}</DialogTitle>
+            <DialogContent>
+              {regionEditModal && (
+                <Box display="flex" flexDirection="column" gap={2} mt={1}>
+                  <TextField
+                    label="Código (MQTT topic)"
+                    value={regionFormData.code}
+                    onChange={(e) => setRegionFormData((f) => ({ ...f, code: e.target.value }))}
+                    fullWidth
+                    helperText="Usado en topic: tiwater/CODIGO/ciudad/codigo_tienda/data"
+                  />
+                  <TextField
+                    label="Nombre"
+                    value={regionFormData.name}
+                    onChange={(e) => setRegionFormData((f) => ({ ...f, name: e.target.value }))}
+                    fullWidth
+                  />
+                  <Divider sx={{ my: 1 }} />
+                  <Typography variant="subtitle2" fontWeight={600}>Puntos de venta vinculados</Typography>
+                  {regionPuntos.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">Ningún punto asignado</Typography>
+                  ) : (
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <StyledTableCellHeader>Código</StyledTableCellHeader>
+                          <StyledTableCellHeader>Nombre</StyledTableCellHeader>
+                          <StyledTableCellHeader>Acciones</StyledTableCellHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {regionPuntos.map((p) => (
+                          <TableRow key={p.id}>
+                            <StyledTableCell>{p.codigo_tienda || '-'}</StyledTableCell>
+                            <StyledTableCell>{p.name || '-'}</StyledTableCell>
+                            <StyledTableCell>
+                              <IconButton size="small" color="error" onClick={() => handleUnassignPuntoFromRegion(p.id)} title="Desvincular">
+                                <SvgColor src="./assets/icons/actions/delete.svg" />
+                              </IconButton>
+                            </StyledTableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                    <FormControl size="small" sx={{ minWidth: 200 }}>
+                      <InputLabel>Asignar punto</InputLabel>
+                      <Select
+                        value={regionAssignPv}
+                        label="Asignar punto"
+                        onChange={(e) => setRegionAssignPv(e.target.value)}
+                      >
+                        <MenuItem value="">Seleccionar…</MenuItem>
+                        {puntosVenta
+                          .filter((pv) => !regionPuntos.some((rp) => rp.id === String(pv.id ?? pv._id)))
+                          .map((pv) => (
+                            <MenuItem key={pv.id ?? pv._id} value={String(pv.id ?? pv._id)}>
+                              {pv.codigo_tienda || pv.code || ''} — {pv.name || ''}
+                            </MenuItem>
+                          ))}
+                      </Select>
+                    </FormControl>
+                    <Button variant="outlined" size="small" onClick={handleAssignPuntoToRegion} disabled={!regionAssignPv}>
+                      Asignar
+                    </Button>
+                  </Box>
+                </Box>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setRegionEditModal(null)} color="secondary">Cerrar</Button>
+              <Button onClick={handleSaveRegion} variant="contained" color="primary" disabled={savingRegion}>
+                {savingRegion ? <CircularProgress size={24} /> : 'Guardar cambios'}
               </Button>
             </DialogActions>
           </Dialog>
