@@ -18,8 +18,14 @@ import {
   InputLabel,
   Typography,
   FormControl,
-  CircularProgress
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton
 } from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
 
 import { fNumber } from 'src/utils/format-number';
 import { getDashboardVersion } from 'src/utils/permissions';
@@ -41,6 +47,9 @@ export default function PuntoVentaDetalleV2() {
   const [customSensorKey, setCustomSensorKey] = useState<string>('');
   const [customSensorValue, setCustomSensorValue] = useState<string>('');
   const [generatingCustom, setGeneratingCustom] = useState<boolean>(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const handleLocationUpdated = () => setRefreshTrigger((t) => t + 1);
 
   useEffect(() => {
     const fetchTiwaterData = async (codigoTienda: string) => {
@@ -189,7 +198,7 @@ export default function PuntoVentaDetalleV2() {
       return () => clearInterval(interval);
     }
     return undefined;
-  }, [id]);
+  }, [id, refreshTrigger]);
 
   if (loading || !punto) {
     return (
@@ -544,12 +553,14 @@ export default function PuntoVentaDetalleV2() {
           <Grid item xs={12}>
             <UnifiedOverviewCard 
               punto={punto}
+              puntoId={id}
               latestSensorTimestamp={latestSensorTimestamp}
               osmosis={osmosis}
               metricas={metricas}
               tiwaterData={tiwaterData}
               tiwaterProduct={tiwaterProduct}
               metricsConfig={metricsConfig}
+              onLocationUpdated={handleLocationUpdated}
             />
           </Grid>
 
@@ -1382,10 +1393,98 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
 /* 🧱 Card: Unified Overview (Estado + Osmosis in one card) */
 /* -------------------------------------------------------------------------- */
 
-function UnifiedOverviewCard({ punto, latestSensorTimestamp, osmosis, metricas, tiwaterData, tiwaterProduct, metricsConfig }: any) {
+function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, metricas, tiwaterData, tiwaterProduct, metricsConfig, onLocationUpdated }: any) {
   // State to force re-render every minute
   const [currentTime, setCurrentTime] = useState(Date.now());
-  
+  const [editLocationOpen, setEditLocationOpen] = useState(false);
+  const [regions, setRegions] = useState<{ id: string; code: string; name: string }[]>([]);
+  const [ciudades, setCiudades] = useState<{ id: string; name: string; regionId: string }[]>([]);
+  const [editForm, setEditForm] = useState({ region_id: '', ciudad_id: '', lat: '', long: '' });
+  const [savingLocation, setSavingLocation] = useState(false);
+
+  const fetchRegions = async () => {
+    try {
+      const res = await fetch(`${CONFIG.API_BASE_URL_V2}/regions`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRegions(Array.isArray(data) ? data : data?.data ?? []);
+      }
+    } catch (e) {
+      console.error('Error fetching regions:', e);
+    }
+  };
+
+  const fetchCiudades = async (regionId: string) => {
+    if (!regionId) {
+      setCiudades([]);
+      return;
+    }
+    try {
+      const res = await fetch(`${CONFIG.API_BASE_URL_V2}/ciudades?region_id=${regionId}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCiudades(Array.isArray(data) ? data : data?.data ?? []);
+      }
+    } catch (e) {
+      console.error('Error fetching ciudades:', e);
+    }
+  };
+
+  const handleOpenEditLocation = () => {
+    setEditForm({
+      region_id: punto?.region?.id ?? '',
+      ciudad_id: punto?.ciudad?.id ?? '',
+      lat: punto?.lat != null ? String(punto.lat) : '',
+      long: punto?.long != null ? String(punto.long) : ''
+    });
+    fetchRegions();
+    if (punto?.region?.id) fetchCiudades(punto.region.id);
+    else setCiudades([]);
+    setEditLocationOpen(true);
+  };
+
+  const handleRegionChange = (regionId: string) => {
+    setEditForm((f) => ({ ...f, region_id: regionId, ciudad_id: '' }));
+    fetchCiudades(regionId);
+  };
+
+  const handleSaveLocation = async () => {
+    if (!puntoId) return;
+    setSavingLocation(true);
+    try {
+      const payload: Record<string, unknown> = {};
+      if (editForm.region_id) payload.region_id = editForm.region_id;
+      if (editForm.ciudad_id) payload.ciudad_id = editForm.ciudad_id;
+      if (editForm.lat !== '') payload.lat = parseFloat(editForm.lat);
+      if (editForm.long !== '') payload.long = parseFloat(editForm.long);
+
+      const res = await fetch(`${CONFIG.API_BASE_URL_V2}/puntoVentas/${puntoId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        setEditLocationOpen(false);
+        onLocationUpdated?.();
+      } else {
+        const err = await res.json();
+        alert(err?.message || 'Error al guardar');
+      }
+    } catch (e) {
+      console.error('Error saving location:', e);
+      alert('Error al guardar ubicación');
+    } finally {
+      setSavingLocation(false);
+    }
+  };
+
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(Date.now());
@@ -1555,9 +1654,22 @@ function UnifiedOverviewCard({ punto, latestSensorTimestamp, osmosis, metricas, 
             {punto.name || 'Tienda'}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {punto.city?.city || 'Hermosillo'}, {punto.city?.state || 'Sonora'}
+            {punto.region?.name && `${punto.region.name} · `}
+            {punto.city?.city || punto.ciudad?.name || 'Hermosillo'}, {punto.city?.state || 'Sonora'}
             {punto.cliente?.name && ` • ${punto.cliente.name}`}
           </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
+            {(punto.lat != null || punto.long != null) && (
+              <Typography variant="caption" color="text.secondary">
+                Lat: {punto.lat ?? '—'} · Long: {punto.long ?? '—'}
+              </Typography>
+            )}
+            {onLocationUpdated && (
+              <IconButton size="small" onClick={handleOpenEditLocation} title="Editar región y ubicación" sx={{ p: 0.25 }}>
+                <EditIcon fontSize="small" />
+              </IconButton>
+            )}
+          </Box>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 1, borderRadius: 1, bgcolor: isOnline ? 'success.lighter' : 'error.lighter' }}>
           <Box sx={{ 
@@ -1698,11 +1810,70 @@ function UnifiedOverviewCard({ punto, latestSensorTimestamp, osmosis, metricas, 
               height="100%"
               style={{ border: 0 }}
               loading="lazy"
-              src={`https://www.google.com/maps?q=${punto.city?.lat || 29.0729},${punto.city?.lon || -110.9559}&z=14&output=embed`}
+              src={`https://www.google.com/maps?q=${punto.lat ?? punto.city?.lat ?? 29.0729},${punto.long ?? punto.city?.lon ?? -110.9559}&z=14&output=embed`}
             />
           </Box>
         </Grid>
       </Grid>
+
+      {/* Edit location modal */}
+      <Dialog open={editLocationOpen} onClose={() => setEditLocationOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Editar región y ubicación</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Región</InputLabel>
+              <Select
+                value={editForm.region_id}
+                label="Región"
+                onChange={(e) => handleRegionChange(e.target.value)}
+              >
+                <MenuItem value="">Sin región</MenuItem>
+                {regions.map((r) => (
+                  <MenuItem key={r.id} value={r.id}>{r.name} ({r.code})</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth size="small">
+              <InputLabel>Ciudad</InputLabel>
+              <Select
+                value={editForm.ciudad_id}
+                label="Ciudad"
+                onChange={(e) => setEditForm((f) => ({ ...f, ciudad_id: e.target.value }))}
+              >
+                <MenuItem value="">Sin ciudad</MenuItem>
+                {ciudades.map((c) => (
+                  <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              label="Latitud"
+              type="number"
+              size="small"
+              value={editForm.lat}
+              onChange={(e) => setEditForm((f) => ({ ...f, lat: e.target.value }))}
+              fullWidth
+              inputProps={{ step: 'any' }}
+            />
+            <TextField
+              label="Longitud"
+              type="number"
+              size="small"
+              value={editForm.long}
+              onChange={(e) => setEditForm((f) => ({ ...f, long: e.target.value }))}
+              fullWidth
+              inputProps={{ step: 'any' }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditLocationOpen(false)}>Cancelar</Button>
+          <Button variant="contained" onClick={handleSaveLocation} disabled={savingLocation}>
+            {savingLocation ? 'Guardando…' : 'Guardar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Card>
   );
 }
