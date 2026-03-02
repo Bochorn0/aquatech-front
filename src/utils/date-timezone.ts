@@ -14,7 +14,7 @@ export function formatTimestampLocal(
 ): string {
   if (timestamp == null) return '';
   const date = parseTimestamp(timestamp);
-  if (!date || isNaN(date.getTime())) return '';
+  if (!date || Number.isNaN(date.getTime())) return '';
   return date.toLocaleTimeString('es-MX', { ...options, timeZone: APP_TIMEZONE });
 }
 
@@ -26,7 +26,7 @@ export function formatDateTimeLocal(
 ): string {
   if (timestamp == null) return '';
   const date = parseTimestamp(timestamp);
-  if (!date || isNaN(date.getTime())) return '';
+  if (!date || Number.isNaN(date.getTime())) return '';
   return date.toLocaleString('es-MX', {
     timeZone: APP_TIMEZONE,
     day: '2-digit',
@@ -57,7 +57,7 @@ function parseTimestamp(ts: string | number | Date | null | undefined): Date | n
   // Ensure ISO strings without Z are treated as UTC (API timestamps)
   const normalized = str.endsWith('Z') || str.includes('+') || /-\d{2}:\d{2}$/.test(str)
     ? str
-    : str + 'Z';
+    : `${str}Z`;
   const d = new Date(normalized);
-  return isNaN(d.getTime()) ? null : d;
+  return Number.isNaN(d.getTime()) ? null : d;
 }
