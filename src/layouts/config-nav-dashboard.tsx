@@ -52,6 +52,11 @@ export const allNavItems = [
     icon: icon('ic-user'),
   },
   {
+    title: 'Notificaciones',
+    path: '/notificaciones',
+    icon: icon('ic-blog'),
+  },
+  {
     title: 'Controladores',
     path: '/controladores',
     icon: icon('ic-controllers'),

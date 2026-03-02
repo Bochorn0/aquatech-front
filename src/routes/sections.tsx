@@ -34,6 +34,7 @@ export const MapsPage = lazy(() => import('src/pages/maps'));
 export const CalidadAguaPage = lazy(() => import('src/pages/calidad-agua'));
 export const ProductsDetailPage = lazy(() => import('src/pages/products/product-details'));
 export const MQTTDocumentationPage = lazy(() => import('src/pages/mqtt-documentation'));
+export const NotificationsDashboardPage = lazy(() => import('src/pages/notifications-dashboard'));
 export const TIWaterCatalogPage = lazy(() => import('src/pages/tiwater-catalog'));
 export const TIWaterCatalogProductPage = lazy(() => import('src/pages/tiwater-catalog/tiwater-catalog-product'));
 export const Page404 = lazy(() => import('src/pages/not_fund'));
@@ -322,6 +323,16 @@ export function Router() {
             </TokenProtectedRoute>
           ),
           path: 'tiwater-catalog/:id',
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <PermissionProtectedRoute requiredPath={['/usuarios', '/notificaciones']}>
+                <NotificationsDashboardPage />
+              </PermissionProtectedRoute>
+            </TokenProtectedRoute>
+          ),
+          path: 'notificaciones',
         }
         // {
         //   element: (
