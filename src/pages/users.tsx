@@ -135,7 +135,7 @@ export default function UserRoleManagement() {
     setLoading(true);
     try {
       const clientId = userForm.client_id === CLIENT_ALL || !userForm.client_id ? null : userForm.client_id;
-      const payload = {
+      const payload: Record<string, unknown> = {
         ...userForm,
         client_id: clientId,
         postgres_client_id: clientId,

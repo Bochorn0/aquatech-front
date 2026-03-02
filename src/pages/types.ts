@@ -226,7 +226,8 @@ interface Status {
     nombre: string;
     email: string;
     client_name: string;
-    password: string;
+    password?: string;
+    role_id?: string;
     role_name: string;
     cliente?: string;
     client_id?: string; // Client reference (null/ALL = admin sees all)
