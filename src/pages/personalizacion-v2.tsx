@@ -632,8 +632,8 @@ export function CustomizationPageV2() {
         codigo_tienda: pv.codigo_tienda || pv.code || '',
         cliente: pv.cliente?._id || pv.cliente || pv.clientId || '',
         client_name: pv.cliente?.name || '',
-        city: pv.city?._id || pv.city || '',
-        city_name: pv.city?.city || '',
+        city: pv.city?._id || pv.city || pv.ciudad?.id || '',
+        city_name: pv.city?.city || pv.ciudad?.name || '',
         productos: [] // Products removed - using sensors instead
       }));
 
