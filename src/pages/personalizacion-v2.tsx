@@ -297,6 +297,10 @@ export function CustomizationPageV2() {
   const [regionCreateModalOpen, setRegionCreateModalOpen] = useState(false);
   const [creatingRegion, setCreatingRegion] = useState(false);
 
+  // Admin events: generate mock puntos de venta via MQTT
+  const [mockPuntosCount, setMockPuntosCount] = useState<number>(5);
+  const [generatingMockPuntos, setGeneratingMockPuntos] = useState(false);
+
   // Helper to ensure string type
   const toStr = (val: any): string => String(val);
 
@@ -489,6 +493,30 @@ export function CustomizationPageV2() {
     } catch (e: any) {
       const msg = e?.response?.data?.message || e?.message || 'Error al eliminar región';
       MySwal.fire('Error', msg, 'error');
+    }
+  };
+
+  const handleGenerateMockPuntosVenta = async () => {
+    setGeneratingMockPuntos(true);
+    try {
+      const response = await fetch(`${CONFIG.API_BASE_URL_V2}/admin/events/generate-puntos-venta`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({ count: mockPuntosCount }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.message || `Error ${response.status}`);
+      }
+      MySwal.fire('Listo', data?.message || 'Puntos de venta mock generados.', 'success');
+      fetchPuntosVenta();
+    } catch (e: any) {
+      MySwal.fire('Error', e?.message || 'No se pudieron generar los puntos de venta mock.', 'error');
+    } finally {
+      setGeneratingMockPuntos(false);
     }
   };
 
@@ -1108,6 +1136,7 @@ export function CustomizationPageV2() {
           {isAdmin && <CustomTab label="Clientes" />}
           {isAdmin && <CustomTab label="Ciudades" />}
           {isAdmin && <CustomTab label="Regiones" />}
+          {isAdmin && <CustomTab label="Eventos de prueba" />}
         </CustomTabs>
         
         {tabIndex === 0 && (
@@ -1381,6 +1410,46 @@ export function CustomizationPageV2() {
                   </Box>
                 </Paper>
               </StyledTableContainer>
+            </Grid>
+          </Grid>
+        )}
+
+        {isAdmin && tabIndex === 5 && (
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <Paper elevation={3} sx={{ p: 3 }}>
+                <Typography variant="h5" gutterBottom>
+                  Eventos de prueba
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Generar datos mock para probar MQTT y el tráfico de sensores. Los puntos se crean vía MQTT y se activa dev_mode.
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                  <FormControl size="small" sx={{ minWidth: 140 }}>
+                    <InputLabel>Nº de puntos</InputLabel>
+                    <Select
+                      value={mockPuntosCount}
+                      label="Nº de puntos"
+                      onChange={(e) => setMockPuntosCount(Number(e.target.value))}
+                    >
+                      <MenuItem value={5}>5</MenuItem>
+                      <MenuItem value={10}>10</MenuItem>
+                      <MenuItem value={25}>25</MenuItem>
+                      <MenuItem value={50}>50</MenuItem>
+                      <MenuItem value={135}>135</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={handleGenerateMockPuntosVenta}
+                    disabled={generatingMockPuntos}
+                    startIcon={generatingMockPuntos ? <CircularProgress size={18} color="inherit" /> : <Iconify icon="mdi:send" />}
+                  >
+                    {generatingMockPuntos ? 'Generando…' : 'Generar puntos de venta (mock)'}
+                  </Button>
+                </Box>
+              </Paper>
             </Grid>
           </Grid>
         )}
