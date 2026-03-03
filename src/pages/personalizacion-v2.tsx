@@ -1,33 +1,33 @@
 import Swal from "sweetalert2";
 import { Helmet } from "react-helmet-async";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRef, useMemo, useEffect, useState } from "react";
 
 import {
+  Box,
   Accordion,
   AccordionDetails,
   AccordionSummary,
-  Box,
-  Button,
   Chip,
-  CircularProgress,
+  Button,
   Dialog,
   DialogActions,
-  DialogContent,
-  DialogTitle,
   Divider,
+  DialogTitle,
+  DialogContent,
+  CircularProgress,
   FormControl,
   FormControlLabel,
   Grid,
   IconButton,
-  InputLabel,
-  MenuItem,
   Paper,
+  MenuItem,
+  InputLabel,
   Select,
-  Switch,
   Table,
   TableBody,
-  TableHead,
   TableRow,
+  TableHead,
+  Switch,
   TextField,
   Typography
 } from "@mui/material";
@@ -581,13 +581,13 @@ export function CustomizationPageV2() {
     setStressRemainingSec(0);
   };
 
-  useEffect(
-    () => () => (
-      void (stressIntervalRef.current && clearInterval(stressIntervalRef.current)),
-      void (stressTimerRef.current && clearInterval(stressTimerRef.current))
-    ),
-    []
-  );
+  useEffect(() => {
+    const cleanup = () => {
+      if (stressIntervalRef.current) clearInterval(stressIntervalRef.current);
+      if (stressTimerRef.current) clearInterval(stressTimerRef.current);
+    };
+    return cleanup;
+  }, []);
 
   // Debug: Monitor sensors state changes
   useEffect(() => {

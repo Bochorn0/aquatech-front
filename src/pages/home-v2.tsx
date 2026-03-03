@@ -39,8 +39,9 @@ import {
   type DashboardMetricChart,
 } from 'src/utils/sensor-metrics-helper';
 
-import { CONFIG } from 'src/config-global';
 import { parseTimestampAsUTC } from 'src/utils/date-timezone';
+import { CONFIG } from 'src/config-global';
+
 import { get as getV2 } from 'src/api/axiosHelperV2';
 import { PieChart } from 'src/pages/charts/pie-chart';
 import { DashboardContent } from 'src/layouts/dashboard';

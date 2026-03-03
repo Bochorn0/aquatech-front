@@ -34,8 +34,8 @@ import {
 import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
 import { CONFIG } from "src/config-global";
-import { get, post, patch, remove } from "src/api/axiosHelper";
 import { get as getV2 } from "src/api/axiosHelperV2";
+import { get, post, patch, remove } from "src/api/axiosHelper";
 
 import { SvgColor } from 'src/components/svg-color';
 

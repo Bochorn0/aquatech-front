@@ -2,30 +2,30 @@ import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 
+import EditIcon from '@mui/icons-material/Edit';
 import { useTheme } from '@mui/material/styles';
 import CardHeader from '@mui/material/CardHeader';
-import { 
+import {
+  Alert,
   Box,
+  Button,
   Card,
   Chip,
-  Grid,
-  Alert,
-  Button,
-  Select,
-  Divider,
-  MenuItem,
-  TextField,
-  InputLabel,
-  Typography,
-  FormControl,
   CircularProgress,
   Dialog,
-  DialogTitle,
-  DialogContent,
   DialogActions,
-  IconButton
+  DialogContent,
+  DialogTitle,
+  Divider,
+  FormControl,
+  Grid,
+  IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
+  TextField,
+  Typography
 } from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
 
 import { fNumber } from 'src/utils/format-number';
 import { getDashboardVersion } from 'src/utils/permissions';
