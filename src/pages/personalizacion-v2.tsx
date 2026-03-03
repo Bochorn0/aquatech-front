@@ -1,35 +1,35 @@
 import Swal from "sweetalert2";
 import { Helmet } from "react-helmet-async";
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  Box,
-  Chip,
-  Grid,
-  Paper,
-  Table,
-  Button,
-  Dialog,
-  Divider,
-  Select,
-  Switch,
-  MenuItem,
-  TableRow,
   Accordion,
-  TableBody,
-  TableHead,
-  TextField,
-  IconButton,
-  InputLabel,
-  Typography,
-  DialogTitle,
-  FormControl,
-  DialogActions,
-  DialogContent,
   AccordionDetails,
   AccordionSummary,
+  Box,
+  Button,
+  Chip,
   CircularProgress,
-  FormControlLabel
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  FormControl,
+  FormControlLabel,
+  Grid,
+  IconButton,
+  InputLabel,
+  MenuItem,
+  Paper,
+  Select,
+  Switch,
+  Table,
+  TableBody,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography
 } from "@mui/material";
 
 import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
@@ -581,12 +581,13 @@ export function CustomizationPageV2() {
     setStressRemainingSec(0);
   };
 
-  useEffect(() => {
-    return () => {
-      if (stressIntervalRef.current) clearInterval(stressIntervalRef.current);
-      if (stressTimerRef.current) clearInterval(stressTimerRef.current);
-    };
-  }, []);
+  useEffect(
+    () => () => (
+      void (stressIntervalRef.current && clearInterval(stressIntervalRef.current)),
+      void (stressTimerRef.current && clearInterval(stressTimerRef.current))
+    ),
+    []
+  );
 
   // Debug: Monitor sensors state changes
   useEffect(() => {
