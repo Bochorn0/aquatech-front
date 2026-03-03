@@ -35,6 +35,7 @@ import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableCont
 
 import { CONFIG } from "src/config-global";
 import { get, post, patch, remove } from "src/api/axiosHelper";
+import { get as getV2 } from "src/api/axiosHelperV2";
 
 import { SvgColor } from 'src/components/svg-color';
 
@@ -155,23 +156,34 @@ export function CustomizationPage() {
   };
 
   const fetchClients = async () => {
+    let list: Cliente[] = [];
     try {
       const response = await get<Cliente[]>(`/clients`);
-      let filteredClients = response.filter(client => client.name !== 'All');
-
-      const user = localStorage.getItem('user');
-      if (user) {
-        const client_ = JSON.parse(user).cliente as Cliente;
-        console.log('client_',client_);
-        if (client_.name && client_.name !== 'All') {
-        filteredClients = filteredClients.filter(client => client.name === client_.name);
-        }
-        console.log('filteredClients',filteredClients);
+      list = Array.isArray(response) ? response : [];
+    } catch (err) {
+      console.error("Error fetching clients (v1):", err);
+      try {
+        const v2Response = await getV2<Cliente[]>(`/clients`);
+        list = Array.isArray(v2Response) ? v2Response : [];
+      } catch (v2Err) {
+        console.error("Error fetching clients (v2 fallback):", v2Err);
       }
-      setClients(filteredClients);
-    } catch (error) {
-      console.error("Error fetching clients:", error);
     }
+    let filteredClients = list.filter((client) => client?.name !== 'All');
+    const user = localStorage.getItem('user');
+    if (user) {
+      try {
+        const client_ = JSON.parse(user).cliente as Cliente;
+        if (client_?.name && client_.name !== 'All') {
+          filteredClients = filteredClients.filter(
+            (client) => client?.name && client.name.toLowerCase() === client_.name.toLowerCase()
+          );
+        }
+      } catch {
+        // ignore invalid user
+      }
+    }
+    setClients(filteredClients);
   };
 
   const fetchProducts = async () => {
@@ -195,19 +207,27 @@ export function CustomizationPage() {
 const fetchPuntosVenta = async () => {
   try {
     const response = await get<PuntosVenta[]>(`/puntoVentas/all`);
+    const list = Array.isArray(response) ? response : [];
 
-    // Normalizamos todos los puntos de venta
-    const formatted = response.map((pv) => ({
-      ...pv,
-      cliente: typeof pv.cliente === 'object' && pv.cliente !== null ? pv.cliente._id : pv.cliente,
-      client_name: typeof pv.cliente === 'object' && pv.cliente !== null ? pv.cliente.name : "",
-      city: typeof pv.city === 'object' && pv.city !== null ? pv.city._id : pv.city,
-      city_name: typeof pv.city === 'object' && pv.city !== null ? pv.city.city : "",
-      productos: Array.isArray(pv.productos) ? pv.productos.map((p: any) => typeof p === 'object' && p !== null ? p._id : p) : []
-    }));
+    const formatted = list.map((pv) => {
+      const clienteObj = typeof pv.cliente === 'object' && pv.cliente !== null ? pv.cliente as any : null;
+      const cityObj = typeof pv.city === 'object' && pv.city !== null ? pv.city as any : null;
+      const clienteId = clienteObj ? (clienteObj._id ?? clienteObj.id) : (pv as any).clientId ?? pv.cliente;
+      const cityId = cityObj ? (cityObj._id ?? cityObj.id) : pv.city;
+      const productIds = Array.isArray(pv.productos)
+        ? (pv.productos as any[]).map((p) => (typeof p === 'object' && p != null ? (p._id ?? p.id) : p))
+        : [];
+      return {
+        ...pv,
+        cliente: clienteId ?? '',
+        client_name: clienteObj?.name ?? '',
+        city: cityId ?? '',
+        city_name: cityObj?.city ?? '',
+        productos: productIds,
+      };
+    });
 
     setPuntosVenta(formatted as unknown as PuntosVenta[]);
-
   } catch (error) {
     console.error("Error fetching puntos de venta:", error);
   }
@@ -261,22 +281,31 @@ const fetchPuntosVenta = async () => {
   };
 
   const handlePvEdit = (pv: PuntosVenta) => {
-    // Ensure productos is an array of IDs (strings)
+    const clientIdStr =
+      typeof pv.cliente === 'object' && pv.cliente !== null
+        ? (pv.cliente as any)._id ?? (pv.cliente as any).id ?? ''
+        : typeof pv.cliente === 'string'
+          ? pv.cliente
+          : (pv as any).clientId ?? '';
+    const cityIdStr =
+      typeof pv.city === 'object' && pv.city !== null
+        ? (pv.city as any)._id ?? (pv.city as any).id ?? ''
+        : typeof pv.city === 'string'
+          ? pv.city
+          : '';
+    const productIds: string[] = Array.isArray(pv.productos)
+      ? (pv.productos
+          .map((p: any) => {
+            if (typeof p === 'object' && p !== null) return (p as any)._id ?? (p as any).id ?? '';
+            return typeof p === 'string' || typeof p === 'number' ? String(p) : '';
+          })
+          .filter((id) => id !== '') as string[])
+      : [];
     const normalizedPv: PuntosVenta = {
       ...pv,
-      productos: Array.isArray(pv.productos) 
-        ? (pv.productos.map((p: any) => 
-            typeof p === 'object' && p !== null && p._id 
-              ? p._id 
-              : p
-          ).filter((id: any) => id && id !== '') as string[])
-        : [],
-      cliente: typeof pv.cliente === 'object' && pv.cliente !== null && pv.cliente._id
-        ? pv.cliente._id 
-        : (typeof pv.cliente === 'string' ? pv.cliente : ''),
-      city: typeof pv.city === 'object' && pv.city !== null && pv.city._id
-        ? pv.city._id 
-        : (typeof pv.city === 'string' ? pv.city : ''),
+      cliente: clientIdStr,
+      city: cityIdStr,
+      productos: productIds,
     };
     setPvFormData(normalizedPv);
     setPvModalOpen(true);
@@ -396,8 +425,9 @@ const handlePvChange = (e: any) => {
   const handleClientSubmit = async () => {
     setLoading(true);
     try {
-      if (clientFormData._id) {
-        await patch<Cliente>(`/clients/${clientFormData._id}`, clientFormData);
+      const clientId = clientFormData._id ?? clientFormData.id;
+      if (clientId) {
+        await patch<Cliente>(`/clients/${clientId}`, clientFormData);
       } else {
         await post<Cliente>(`/clients`, clientFormData);
       }
@@ -430,26 +460,29 @@ const handlePvChange = (e: any) => {
   const handlePvSubmit = async () => {
     setLoading(true);
     try {
-      // Normalize data before sending: extract IDs from objects
+      const clienteId =
+        typeof pvFormData.cliente === 'object' && pvFormData.cliente !== null
+          ? (pvFormData.cliente as any)._id ?? (pvFormData.cliente as any).id
+          : pvFormData.cliente;
+      const cityId =
+        typeof pvFormData.city === 'object' && pvFormData.city !== null
+          ? (pvFormData.city as any)._id ?? (pvFormData.city as any).id
+          : pvFormData.city;
+      const productIds = Array.isArray(pvFormData.productos)
+        ? pvFormData.productos
+            .map((p: any) => (typeof p === 'object' && p != null ? (p as any)._id ?? (p as any).id : String(p)))
+            .filter((id) => id !== '')
+        : [];
       const normalizedData = {
         name: pvFormData.name,
-        cliente: typeof pvFormData.cliente === 'object' && pvFormData.cliente !== null 
-          ? pvFormData.cliente._id 
-          : pvFormData.cliente,
-        city: typeof pvFormData.city === 'object' && pvFormData.city !== null 
-          ? pvFormData.city._id 
-          : pvFormData.city,
-        productos: Array.isArray(pvFormData.productos) 
-          ? pvFormData.productos.map((p: any) => 
-              typeof p === 'object' && p !== null && p._id 
-                ? p._id 
-                : p
-            ).filter((id: any) => id && id !== '') // Filter out empty strings
-          : [],
+        cliente: clienteId ?? '',
+        city: cityId ?? '',
+        productos: productIds,
       };
 
-      if (pvFormData._id) {
-        await patch<City>(`/puntoVentas/${pvFormData._id}`, normalizedData);
+      const pvId = (pvFormData as any)._id ?? (pvFormData as any).id;
+      if (pvId) {
+        await patch<City>(`/puntoVentas/${pvId}`, normalizedData);
       } else {
         await post<City>(`/puntoVentas`, normalizedData);
       }
@@ -831,7 +864,7 @@ const handlePvChange = (e: any) => {
                       </TableHead>
                       <TableBody>
                         {clients.map((client) => (
-                          <StyledTableRow key={client._id}>
+                          <StyledTableRow key={client._id ?? client.id ?? ''}>
                             <StyledTableCell>{client.name}</StyledTableCell>
                             <StyledTableCell>{client.email}</StyledTableCell>
                             <StyledTableCell>{client.phone}</StyledTableCell>
@@ -839,7 +872,7 @@ const handlePvChange = (e: any) => {
                               <IconButton sx={{ mr: 1, color: 'primary.main' }} onClick={() => handleClientEdit(client)}>
                                 <SvgColor src='./assets/icons/actions/edit.svg' />
                               </IconButton>
-                              <IconButton sx={{ mr: 1, color: 'danger.main' }} onClick={() => handleClientDelete(client._id!)}>
+                              <IconButton sx={{ mr: 1, color: 'danger.main' }} onClick={() => handleClientDelete((client._id ?? client.id) ?? '')}>
                                 <SvgColor src='./assets/icons/actions/delete.svg' />
                               </IconButton>
                             </StyledTableCell>
@@ -1082,7 +1115,7 @@ const handlePvChange = (e: any) => {
                 <InputLabel>Cliente</InputLabel>
                 <Select value={formData.cliente} name="cliente" onChange={handleChange} fullWidth>
                   {clients.map((cliente) => (
-                    <MenuItem key={cliente._id} value={cliente._id}>{cliente.name}</MenuItem>
+                    <MenuItem key={cliente._id ?? cliente.id ?? ''} value={cliente._id ?? cliente.id ?? ''}>{cliente.name}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
@@ -1125,7 +1158,7 @@ const handlePvChange = (e: any) => {
           </DialogActions>
         </Dialog>
         <Dialog open={clientModalOpen} onClose={handleCloseClientModal} fullWidth maxWidth="sm">
-          <DialogTitle>{clientFormData._id ? "Editar Cliente" : "Nuevo Cliente"}</DialogTitle>
+          <DialogTitle>{(clientFormData._id ?? clientFormData.id) ? "Editar Cliente" : "Nuevo Cliente"}</DialogTitle>
           <DialogContent>
             <Box display="flex" flexDirection="column" gap={2} mt={1}>
               <TextField label="Nombre" name="name" value={clientFormData.name} onChange={handleClientChange} fullWidth />
@@ -1148,7 +1181,7 @@ const handlePvChange = (e: any) => {
           <DialogActions>
             <Button onClick={handleCloseClientModal} color="secondary">Cancelar</Button>
             <Button onClick={handleClientSubmit} variant="contained" color="primary" disabled={loading}>
-              {loading ? <CircularProgress size={24} /> : clientFormData._id ? "Actualizar" : "Guardar"}
+              {loading ? <CircularProgress size={24} /> : (clientFormData._id ?? clientFormData.id) ? "Actualizar" : "Guardar"}
             </Button>
           </DialogActions>
         </Dialog>
@@ -1178,7 +1211,7 @@ const handlePvChange = (e: any) => {
         </Dialog>
         <Dialog open={pvModalOpen} onClose={handleClosePvModal} fullWidth maxWidth="sm">
           <DialogTitle>
-            {pvFormData._id ? "Editar Punto de Venta" : "Nuevo Punto de Venta"}
+            {(pvFormData as any)._id ?? (pvFormData as any).id ? "Editar Punto de Venta" : "Nuevo Punto de Venta"}
           </DialogTitle>
 
           <DialogContent>
@@ -1198,21 +1231,24 @@ const handlePvChange = (e: any) => {
                 <Select
                   multiple
                   name="productos"
-                  value={pvFormData.productos || []}
+                  value={Array.isArray(pvFormData.productos) ? pvFormData.productos.map((id) => String(id)) : []}
                   onChange={handlePvChange}
                   renderValue={(selected) =>
                     products
-                      .filter((p) => selected.includes(p._id))
+                      .filter((p) => selected.includes(String((p as any)._id ?? (p as any).id ?? '')))
                       .map((p) => p.name)
                       .join(", ")
                   }
                 >
-                  {products.map((prod) => (
-                    <MenuItem key={prod._id} value={prod._id}>
-                      <Checkbox checked={pvFormData.productos?.includes(prod._id)} />
-                      <ListItemText primary={prod.name} />
-                    </MenuItem>
-                  ))}
+                  {products.map((prod) => {
+                    const prodId = (prod as any)._id ?? (prod as any).id ?? '';
+                    return (
+                      <MenuItem key={prodId} value={prodId}>
+                        <Checkbox checked={(pvFormData.productos || []).map(String).includes(String(prodId))} />
+                        <ListItemText primary={prod.name} />
+                      </MenuItem>
+                    );
+                  })}
                 </Select>
               </FormControl>
 
@@ -1220,15 +1256,18 @@ const handlePvChange = (e: any) => {
               <FormControl fullWidth>
                 <InputLabel>Ciudad</InputLabel>
                 <Select
-                  value={pvFormData.city || ""}
+                  value={pvFormData.city != null && pvFormData.city !== '' ? String(pvFormData.city) : ''}
                   name="city"
                   onChange={handlePvChange}
                 >
-                  {cities.map((c) => (
-                    <MenuItem key={c._id} value={c._id}>
-                      {c.city || c._id}
-                    </MenuItem>
-                  ))}
+                  {cities.map((c) => {
+                    const cId = (c as any)._id ?? (c as any).id ?? '';
+                    return (
+                      <MenuItem key={cId} value={cId}>
+                        {(c as any).city || cId}
+                      </MenuItem>
+                    );
+                  })}
                 </Select>
               </FormControl>
 
@@ -1236,12 +1275,12 @@ const handlePvChange = (e: any) => {
               <FormControl fullWidth>
                 <InputLabel>Cliente</InputLabel>
                 <Select
-                  value={pvFormData.cliente || ""}
+                  value={pvFormData.cliente != null && pvFormData.cliente !== '' ? String(pvFormData.cliente) : ''}
                   name="cliente"
                   onChange={handlePvChange}
                 >
                   {clients.map((cli) => (
-                    <MenuItem key={cli._id} value={cli._id}>
+                    <MenuItem key={cli._id ?? cli.id ?? ''} value={cli._id ?? cli.id ?? ''}>
                       {cli.name}
                     </MenuItem>
                   ))}
@@ -1260,7 +1299,7 @@ const handlePvChange = (e: any) => {
               color="primary"
               disabled={loading}
             >
-              {loading ? <CircularProgress size={24} /> : pvFormData._id ? "Actualizar" : "Guardar"}
+              {loading ? <CircularProgress size={24} /> : ((pvFormData as any)._id ?? (pvFormData as any).id) ? "Actualizar" : "Guardar"}
             </Button>
           </DialogActions>
         </Dialog>
@@ -1281,7 +1320,7 @@ const handlePvChange = (e: any) => {
                   fullWidth
                 >
                   {clients.map((cli) => (
-                    <MenuItem key={cli._id} value={cli._id}>
+                    <MenuItem key={cli._id ?? cli.id ?? ''} value={cli._id ?? cli.id ?? ''}>
                       {cli.name}
                     </MenuItem>
                   ))}
@@ -1351,7 +1390,7 @@ const handlePvChange = (e: any) => {
                 >
                   <MenuItem value="">(sin cambiar)</MenuItem>
                   {clients.map((cli) => (
-                    <MenuItem key={cli._id} value={cli._id}>
+                    <MenuItem key={cli._id ?? cli.id ?? ''} value={cli._id ?? cli.id ?? ''}>
                       {cli.name}
                     </MenuItem>
                   ))}
