@@ -294,6 +294,8 @@ export function CustomizationPageV2() {
   const [regionAssignPv, setRegionAssignPv] = useState<string>('');
   const [regionFormData, setRegionFormData] = useState({ code: '', name: '' });
   const [savingRegion, setSavingRegion] = useState(false);
+  const [regionCreateModalOpen, setRegionCreateModalOpen] = useState(false);
+  const [creatingRegion, setCreatingRegion] = useState(false);
 
   // Helper to ensure string type
   const toStr = (val: any): string => String(val);
@@ -442,6 +444,51 @@ export function CustomizationPageV2() {
     } catch (e) {
       console.error('Error assigning punto:', e);
       MySwal.fire('Error', 'Error al asignar punto', 'error');
+    }
+  };
+
+  const handleOpenRegionCreate = () => {
+    setRegionFormData({ code: '', name: '' });
+    setRegionCreateModalOpen(true);
+  };
+
+  const handleCloseRegionCreate = () => {
+    setRegionCreateModalOpen(false);
+    setRegionFormData({ code: '', name: '' });
+  };
+
+  const handleCreateRegion = async () => {
+    const code = regionFormData.code.trim().toUpperCase();
+    const name = regionFormData.name.trim() || code;
+    if (!code) {
+      MySwal.fire('Aviso', 'El código de región es requerido', 'warning');
+      return;
+    }
+    setCreatingRegion(true);
+    try {
+      await apiV2Call('/regions', 'POST', { code, name });
+      MySwal.fire('Éxito', 'Región creada', 'success');
+      handleCloseRegionCreate();
+      fetchRegions();
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || 'Error al crear región';
+      MySwal.fire('Error', msg, 'error');
+    } finally {
+      setCreatingRegion(false);
+    }
+  };
+
+  const handleDeleteRegion = async (id: string) => {
+    const result = await confirmationAlert();
+    if (!result.isConfirmed) return;
+    try {
+      await apiV2Call(`/regions/${id}`, 'DELETE');
+      if (regionEditModal?.id === id) setRegionEditModal(null);
+      fetchRegions();
+      MySwal.fire('Éxito', 'Región eliminada', 'success');
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || 'Error al eliminar región';
+      MySwal.fire('Error', msg, 'error');
     }
   };
 
@@ -1284,6 +1331,13 @@ export function CustomizationPageV2() {
                       Lista de regiones (MQTT topic)
                     </Typography>
                   </Grid>
+                  <Grid item xs={12} sm={3} textAlign="right">
+                    <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
+                      <Button variant="contained" color="primary" onClick={handleOpenRegionCreate} fullWidth>
+                        Nueva región
+                      </Button>
+                    </Typography>
+                  </Grid>
                 </Grid>
               </Box>
               <StyledTableContainer>
@@ -1315,6 +1369,9 @@ export function CustomizationPageV2() {
                             <StyledTableCell>
                               <IconButton sx={{ color: 'primary.main' }} onClick={() => setRegionEditModal(r)} title="Editar región">
                                 <SvgColor src="./assets/icons/actions/edit.svg" />
+                              </IconButton>
+                              <IconButton sx={{ color: 'danger.main' }} onClick={() => handleDeleteRegion(r.id)} title="Eliminar región">
+                                <SvgColor src="./assets/icons/actions/delete.svg" />
                               </IconButton>
                             </StyledTableCell>
                           </StyledTableRow>
@@ -2082,10 +2139,49 @@ export function CustomizationPageV2() {
                 </Box>
               )}
             </DialogContent>
+            <DialogActions sx={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+              <Button
+                onClick={() => regionEditModal && handleDeleteRegion(regionEditModal.id)}
+                color="error"
+                disabled={savingRegion}
+              >
+                Eliminar región
+              </Button>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button onClick={() => setRegionEditModal(null)} color="secondary">Cerrar</Button>
+                <Button onClick={handleSaveRegion} variant="contained" color="primary" disabled={savingRegion}>
+                  {savingRegion ? <CircularProgress size={24} /> : 'Guardar cambios'}
+                </Button>
+              </Box>
+            </DialogActions>
+          </Dialog>
+
+          {/* Create Region Modal */}
+          <Dialog open={regionCreateModalOpen} onClose={handleCloseRegionCreate} fullWidth maxWidth="sm">
+            <DialogTitle>Nueva región</DialogTitle>
+            <DialogContent>
+              <Box display="flex" flexDirection="column" gap={2} mt={1}>
+                <TextField
+                  label="Código (MQTT topic)"
+                  value={regionFormData.code}
+                  onChange={(e) => setRegionFormData((f) => ({ ...f, code: e.target.value }))}
+                  fullWidth
+                  placeholder="ej. NORTE"
+                  helperText="Usado en topic: tiwater/CODIGO/ciudad/codigo_tienda/data"
+                />
+                <TextField
+                  label="Nombre"
+                  value={regionFormData.name}
+                  onChange={(e) => setRegionFormData((f) => ({ ...f, name: e.target.value }))}
+                  fullWidth
+                  placeholder="ej. Región Norte"
+                />
+              </Box>
+            </DialogContent>
             <DialogActions>
-              <Button onClick={() => setRegionEditModal(null)} color="secondary">Cerrar</Button>
-              <Button onClick={handleSaveRegion} variant="contained" color="primary" disabled={savingRegion}>
-                {savingRegion ? <CircularProgress size={24} /> : 'Guardar cambios'}
+              <Button onClick={handleCloseRegionCreate} color="secondary">Cancelar</Button>
+              <Button onClick={handleCreateRegion} variant="contained" color="primary" disabled={creatingRegion}>
+                {creatingRegion ? <CircularProgress size={24} /> : 'Crear región'}
               </Button>
             </DialogActions>
           </Dialog>
