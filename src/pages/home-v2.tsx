@@ -46,7 +46,6 @@ import { get as getV2 } from 'src/api/axiosHelperV2';
 import { PieChart } from 'src/pages/charts/pie-chart';
 import { DashboardContent } from 'src/layouts/dashboard';
 import { NivelHistoricoChart } from 'src/pages/charts/nivel-historico-chart';
-import { DashboardV2Map } from 'src/pages/dashboard-v2-map';
 
 // ----------------------------------------------------------------------
 // Types
@@ -780,10 +779,6 @@ export function HomeV2Page() {
               disableCloseOnSelect
               sx={{ width: '100%' }}
             />
-          </Grid>
-
-          <Grid xs={12}>
-            <DashboardV2Map puntos={filteredPuntos} />
           </Grid>
 
           {nivelCrudaChart && selectedCharts.includes('Histórico de Nivel Cruda') && (

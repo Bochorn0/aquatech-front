@@ -16,6 +16,7 @@ import { Speed, WaterDrop, TrendingUp, Visibility } from '@mui/icons-material';
 import { CONFIG } from 'src/config-global';
 import { get as getV2 } from 'src/api/axiosHelperV2';
 import { DashboardContent } from 'src/layouts/dashboard';
+import { DashboardV2Map } from 'src/pages/dashboard-v2-map';
 import { MultipleBarChart, type BarClickInfo } from 'src/pages/charts/multiple-bar-chart';
 
 // ----------------------------------------------------------------------
@@ -30,6 +31,14 @@ type PuntoVentaV2 = {
   clientId?: string;
   cliente?: ClienteV2 | string;
   updatedAt?: string;
+  lat?: number | null;
+  long?: number | null;
+  city?: {
+    city?: string;
+    state?: string;
+    lat?: number;
+    lon?: number;
+  } | null;
 };
 type SensorReading = {
   sensorType?: string;
@@ -458,6 +467,13 @@ export function DashboardGlobal() {
         )}
 
         <Grid container spacing={3}>
+          {/* Map: all puntos de venta by state; click state to see pins */}
+          {filteredPuntos.length > 0 && (
+            <Grid xs={12}>
+              <DashboardV2Map puntos={filteredPuntos} />
+            </Grid>
+          )}
+
           {/* Summary cards — grouped: niveles, producción/rechazo, puntos/eficiencia */}
           <Grid xs={12} sm={6} md={4}>
             <Card sx={{ height: '100%' }}>
