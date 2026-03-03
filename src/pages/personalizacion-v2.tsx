@@ -1,6 +1,6 @@
 import Swal from "sweetalert2";
 import { Helmet } from "react-helmet-async";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 
 import {
   Box,
@@ -301,6 +301,15 @@ export function CustomizationPageV2() {
   const [mockPuntosCount, setMockPuntosCount] = useState<number>(5);
   const [generatingMockPuntos, setGeneratingMockPuntos] = useState(false);
 
+  // MQTT stress tester
+  const [stressPuntoIds, setStressPuntoIds] = useState<string[]>([]);
+  const [stressLapseMin, setStressLapseMin] = useState<number>(1);
+  const [stressSensorCount, setStressSensorCount] = useState<number>(19);
+  const [stressRunning, setStressRunning] = useState(false);
+  const [stressRemainingSec, setStressRemainingSec] = useState(0);
+  const stressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // Helper to ensure string type
   const toStr = (val: any): string => String(val);
 
@@ -519,6 +528,65 @@ export function CustomizationPageV2() {
       setGeneratingMockPuntos(false);
     }
   };
+
+  const runStressMqttBatch = async () => {
+    if (stressPuntoIds.length === 0) return;
+    try {
+      await fetch(`${CONFIG.API_BASE_URL_V2}/admin/events/stress-mqtt`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({
+          puntoVentaIds: stressPuntoIds,
+          sensorKeysCount: stressSensorCount,
+        }),
+      });
+    } catch {
+      // ignore per-batch errors; test continues
+    }
+  };
+
+  const handleStartStressTest = () => {
+    if (stressPuntoIds.length === 0) {
+      MySwal.fire('Selecciona al menos un punto de venta', '', 'warning');
+      return;
+    }
+    const totalSec = stressLapseMin * 60;
+    setStressRemainingSec(totalSec);
+    setStressRunning(true);
+    stressIntervalRef.current = setInterval(runStressMqttBatch, 500);
+    stressTimerRef.current = setInterval(() => {
+      setStressRemainingSec((prev) => {
+        const next = prev - 1;
+        if (next <= 0) {
+          if (stressIntervalRef.current) clearInterval(stressIntervalRef.current);
+          if (stressTimerRef.current) clearInterval(stressTimerRef.current);
+          stressIntervalRef.current = null;
+          stressTimerRef.current = null;
+          setStressRunning(false);
+        }
+        return Math.max(0, next);
+      });
+    }, 1000);
+  };
+
+  const handleStopStressTest = () => {
+    if (stressIntervalRef.current) clearInterval(stressIntervalRef.current);
+    if (stressTimerRef.current) clearInterval(stressTimerRef.current);
+    stressIntervalRef.current = null;
+    stressTimerRef.current = null;
+    setStressRunning(false);
+    setStressRemainingSec(0);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (stressIntervalRef.current) clearInterval(stressIntervalRef.current);
+      if (stressTimerRef.current) clearInterval(stressTimerRef.current);
+    };
+  }, []);
 
   // Debug: Monitor sensors state changes
   useEffect(() => {
@@ -1448,6 +1516,88 @@ export function CustomizationPageV2() {
                   >
                     {generatingMockPuntos ? 'Generando…' : 'Generar puntos de venta (mock)'}
                   </Button>
+                </Box>
+              </Paper>
+            </Grid>
+            <Grid item xs={12}>
+              <Paper elevation={3} sx={{ p: 3 }}>
+                <Typography variant="h6" gutterBottom>
+                  MQTT Stress Tester
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Envía mensajes mock a MQTT de forma continua para medir la carga del broker. Selecciona puntos existentes, duración y número de sensores por mensaje.
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                    <FormControl size="small" sx={{ minWidth: 260 }}>
+                      <InputLabel>Puntos de venta</InputLabel>
+                      <Select
+                        multiple
+                        value={stressPuntoIds}
+                        label="Puntos de venta"
+                        onChange={(e) => setStressPuntoIds(typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)}
+                        renderValue={(selected) => (selected as string[]).length ? `${(selected as string[]).length} seleccionado(s)` : 'Ninguno'}
+                        disabled={stressRunning}
+                      >
+                        {puntosVenta.filter((pv) => pv._id || pv.id).map((pv) => (
+                          <MenuItem key={pv._id || pv.id} value={String(pv._id ?? pv.id)}>
+                            {pv.name || pv.codigo_tienda || pv._id || pv.id}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl size="small" sx={{ minWidth: 120 }}>
+                      <InputLabel>Duración</InputLabel>
+                      <Select
+                        value={stressLapseMin}
+                        label="Duración"
+                        onChange={(e) => setStressLapseMin(Number(e.target.value))}
+                        disabled={stressRunning}
+                      >
+                        <MenuItem value={1}>1 min</MenuItem>
+                        <MenuItem value={2}>2 min</MenuItem>
+                        <MenuItem value={3}>3 min</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <FormControl size="small" sx={{ minWidth: 140 }}>
+                      <InputLabel># sensores/msg</InputLabel>
+                      <Select
+                        value={stressSensorCount}
+                        label="# sensores/msg"
+                        onChange={(e) => setStressSensorCount(Number(e.target.value))}
+                        disabled={stressRunning}
+                      >
+                        {Array.from({ length: 19 }, (_, i) => i + 1).map((n) => (
+                          <MenuItem key={n} value={n}>{n}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    {!stressRunning ? (
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        onClick={handleStartStressTest}
+                        disabled={stressPuntoIds.length === 0}
+                        startIcon={<Iconify icon="mdi:play" />}
+                      >
+                        Iniciar
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="contained"
+                        color="error"
+                        onClick={handleStopStressTest}
+                        startIcon={<Iconify icon="mdi:stop" />}
+                      >
+                        Detener
+                      </Button>
+                    )}
+                  </Box>
+                  {stressRunning && (
+                    <Typography variant="body2" color="text.secondary">
+                      Ejecutando… {Math.floor(stressRemainingSec / 60)}:{String(stressRemainingSec % 60).padStart(2, '0')} restantes (envío cada 500 ms)
+                    </Typography>
+                  )}
                 </Box>
               </Paper>
             </Grid>
