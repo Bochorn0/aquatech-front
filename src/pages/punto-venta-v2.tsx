@@ -25,43 +25,14 @@ export default function PuntoVentaTableListV2() {
   const [clientFilters, setClientFilters] = useState<string[]>([]);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [sensorsCount, setSensorsCount] = useState<Record<string, number>>({});
-
   const navigate = useNavigate();
 
   // ---------------------------------------------
-  // 🔹 Fetch sensors count for a punto venta
-  // ---------------------------------------------
-  const fetchSensorsCount = async (pvId: string): Promise<number> => {
-    try {
-      const response = await fetch(`${CONFIG.API_BASE_URL_V2}/puntoVentas/${pvId}/sensors`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (!response.ok) {
-        return 0;
-      }
-
-      const result = await response.json();
-      const sensorsData = Array.isArray(result) ? result : (result?.data || result?.sensors || []);
-      return sensorsData.length;
-    } catch (error) {
-      console.error(`Error fetching sensors for PV ${pvId}:`, error);
-      return 0;
-    }
-  };
-
-  // ---------------------------------------------
-  // 🔹 Cargar datos desde API (PostgreSQL v2.0)
+  // 🔹 Cargar datos desde API (PostgreSQL v2.0) — status y sensors_count vienen en la respuesta
   // ---------------------------------------------
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Use v2.0 API endpoint for PostgreSQL data
         const response = await fetch(`${CONFIG.API_BASE_URL_V2}/puntoVentas/all`, {
           method: 'GET',
           headers: {
@@ -75,33 +46,18 @@ export default function PuntoVentaTableListV2() {
         }
 
         const result = await response.json();
-        // Handle both direct array response and wrapped response
         const data: PuntosVenta[] = Array.isArray(result) ? result : (result.data || result);
         setPuntosVenta(data);
         setFiltered(data);
 
-        // Generar filtros únicos
         const uniqueCities = Array.from(
           new Set(data.map((pv: PuntosVenta) => typeof pv.city === 'object' && pv.city !== null ? pv.city.city : '').filter(Boolean) as string[])
         );
         const uniqueClients = Array.from(
           new Set(data.map((pv: PuntosVenta) => typeof pv.cliente === 'object' && pv.cliente !== null ? pv.cliente.name : '').filter(Boolean) as string[])
         );
-
         setCityFilters(uniqueCities);
         setClientFilters(uniqueClients);
-
-        // Fetch sensors count for each punto venta
-        const counts: Record<string, number> = {};
-        await Promise.all(
-          data.map(async (pv: PuntosVenta) => {
-            const pvId = pv._id || (pv as any).id || '';
-            if (pvId) {
-              counts[pvId] = await fetchSensorsCount(String(pvId));
-            }
-          })
-        );
-        setSensorsCount(counts);
       } catch (error) {
         console.error('Error al obtener puntos de venta:', error);
       } finally {
@@ -248,9 +204,11 @@ export default function PuntoVentaTableListV2() {
                           <StyledTableCell>{pv.name}</StyledTableCell>
                           <StyledTableCell>{typeof pv.cliente === 'object' && pv.cliente !== null ? pv.cliente.name : 'N/A'}</StyledTableCell>
                           <StyledTableCell>{typeof pv.city === 'object' && pv.city !== null ? pv.city.city : 'N/A'}</StyledTableCell>
-                          <StyledTableCell>{typeof pv.city === 'object' && pv.city !== null ? pv.city.state : 'N/A'}</StyledTableCell>
                           <StyledTableCell>
-                            {sensorsCount[puntoId] ?? 0}
+                            {pv.online === true ? 'En línea' : 'Desconectado'}
+                          </StyledTableCell>
+                          <StyledTableCell>
+                            {pv.sensors_count ?? 0}
                           </StyledTableCell>
                           <StyledTableCell>
                             <Button

@@ -29,7 +29,9 @@ import {
   AccordionDetails,
   AccordionSummary,
   CircularProgress,
-  FormControlLabel
+  InputAdornment,
+  FormControlLabel,
+  TablePagination
 } from "@mui/material";
 
 import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
@@ -325,6 +327,90 @@ export function CustomizationPageV2() {
   const [stressRemainingSec, setStressRemainingSec] = useState(0);
   const stressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Search and pagination per table (Métricas, Puntos de venta, Clientes, Regiones, Ciudades)
+  const [searchMetrics, setSearchMetrics] = useState('');
+  const [pageMetrics, setPageMetrics] = useState(0);
+  const [rowsPerPageMetrics, setRowsPerPageMetrics] = useState(10);
+  const [searchPuntos, setSearchPuntos] = useState('');
+  const [pagePuntos, setPagePuntos] = useState(0);
+  const [rowsPerPagePuntos, setRowsPerPagePuntos] = useState(10);
+  const [searchClients, setSearchClients] = useState('');
+  const [pageClients, setPageClients] = useState(0);
+  const [rowsPerPageClients, setRowsPerPageClients] = useState(10);
+  const [searchRegions, setSearchRegions] = useState('');
+  const [pageRegions, setPageRegions] = useState(0);
+  const [rowsPerPageRegions, setRowsPerPageRegions] = useState(10);
+  const [searchCities, setSearchCities] = useState('');
+  const [pageCities, setPageCities] = useState(0);
+  const [rowsPerPageCities, setRowsPerPageCities] = useState(10);
+
+  const ROWS_PER_PAGE_OPTIONS = [5, 10, 25, 50];
+
+  const filteredPuntos = useMemo(() => {
+    if (!searchPuntos.trim()) return puntosVenta;
+    const q = searchPuntos.toLowerCase().trim();
+    return puntosVenta.filter(
+      (pv) =>
+        (pv.name ?? '').toLowerCase().includes(q) ||
+        (pv.client_name ?? '').toLowerCase().includes(q) ||
+        (pv.city_name ?? '').toLowerCase().includes(q) ||
+        (pv.codigo_tienda ?? '').toLowerCase().includes(q)
+    );
+  }, [puntosVenta, searchPuntos]);
+
+  const paginatedPuntos = useMemo(() => {
+    const start = pagePuntos * rowsPerPagePuntos;
+    return filteredPuntos.slice(start, start + rowsPerPagePuntos);
+  }, [filteredPuntos, pagePuntos, rowsPerPagePuntos]);
+
+  const filteredClients = useMemo(() => {
+    if (!searchClients.trim()) return clients;
+    const q = searchClients.toLowerCase().trim();
+    return clients.filter(
+      (c) =>
+        (c.name ?? '').toLowerCase().includes(q) ||
+        (c.email ?? '').toLowerCase().includes(q) ||
+        (c.phone ?? '').toLowerCase().includes(q)
+    );
+  }, [clients, searchClients]);
+
+  const paginatedClients = useMemo(() => {
+    const start = pageClients * rowsPerPageClients;
+    return filteredClients.slice(start, start + rowsPerPageClients);
+  }, [filteredClients, pageClients, rowsPerPageClients]);
+
+  const filteredRegions = useMemo(() => {
+    if (!searchRegions.trim()) return regions;
+    const q = searchRegions.toLowerCase().trim();
+    return regions.filter(
+      (r) =>
+        (r.code ?? '').toLowerCase().includes(q) ||
+        (r.name ?? '').toLowerCase().includes(q)
+    );
+  }, [regions, searchRegions]);
+
+  const paginatedRegions = useMemo(() => {
+    const start = pageRegions * rowsPerPageRegions;
+    return filteredRegions.slice(start, start + rowsPerPageRegions);
+  }, [filteredRegions, pageRegions, rowsPerPageRegions]);
+
+  const filteredCities = useMemo(() => {
+    if (!searchCities.trim()) return cities;
+    const q = searchCities.toLowerCase().trim();
+    return cities.filter(
+      (c) =>
+        (c.state ?? '').toLowerCase().includes(q) ||
+        (c.city ?? '').toLowerCase().includes(q) ||
+        String(c.lat ?? '').includes(q) ||
+        String(c.lon ?? '').includes(q)
+    );
+  }, [cities, searchCities]);
+
+  const paginatedCities = useMemo(() => {
+    const start = pageCities * rowsPerPageCities;
+    return filteredCities.slice(start, start + rowsPerPageCities);
+  }, [filteredCities, pageCities, rowsPerPageCities]);
 
   // Helper to ensure string type
   const toStr = (val: any): string => String(val);
@@ -631,18 +717,18 @@ export function CustomizationPageV2() {
   const fetchClients = async () => {
     try {
       const response = await apiV2Call('/clients');
-      let filteredClients = (Array.isArray(response) ? response : []).filter((client: Cliente) => client.name !== 'All');
+      let clientsFromApi = (Array.isArray(response) ? response : []).filter((client: Cliente) => client.name !== 'All');
 
       const user = localStorage.getItem('user');
       if (user) {
         const client_ = JSON.parse(user).cliente as Cliente;
         if (client_.name && client_.name !== 'All') {
-          filteredClients = filteredClients.filter((client: Cliente) => client.name === client_.name);
+          clientsFromApi = clientsFromApi.filter((client: Cliente) => client.name === client_.name);
         }
       }
       // Deduplicate clients by id - more robust comparison
       const seen = new Set<string | number>();
-      const uniqueClients = filteredClients.filter((client: Cliente) => {
+      const uniqueClients = clientsFromApi.filter((client: Cliente) => {
         const clientId = client._id || client.id;
         if (!clientId) return false; // Skip entries without ID
         const idStr = String(clientId);
@@ -652,7 +738,7 @@ export function CustomizationPageV2() {
         seen.add(idStr);
         return true;
       });
-      console.log('[fetchClients] Total clients:', filteredClients.length, 'Unique:', uniqueClients.length);
+      console.log('[fetchClients] Total clients:', clientsFromApi.length, 'Unique:', uniqueClients.length);
       setClients(uniqueClients);
     } catch (error) {
       console.error("Error fetching clients:", error);
@@ -753,6 +839,22 @@ export function CustomizationPageV2() {
     });
     return Array.from(byKey.values());
   }, [metrics]);
+
+  const filteredMetricsByPv = useMemo(() => {
+    if (!searchMetrics.trim()) return metricsByPuntoVenta;
+    const q = searchMetrics.toLowerCase().trim();
+    return metricsByPuntoVenta.filter(
+      (row) =>
+        (row.client_name ?? '').toLowerCase().includes(q) ||
+        (row.punto_venta_name ?? '').toLowerCase().includes(q) ||
+        row.metrics.some((m) => (m.metric_name ?? m.metric_type ?? '').toLowerCase().includes(q))
+    );
+  }, [metricsByPuntoVenta, searchMetrics]);
+
+  const paginatedMetricsByPv = useMemo(() => {
+    const start = pageMetrics * rowsPerPageMetrics;
+    return filteredMetricsByPv.slice(start, start + rowsPerPageMetrics);
+  }, [filteredMetricsByPv, pageMetrics, rowsPerPageMetrics]);
 
   const handleChange = (e: any) => {
     const { name, value } = e.target;
@@ -1248,6 +1350,22 @@ export function CustomizationPageV2() {
                     </Typography>
                   </Grid>
                 </Grid>
+                <Box sx={{ px: 2, pb: 1 }}>
+                  <TextField
+                    size="small"
+                    placeholder="Buscar por cliente, punto de venta o métrica…"
+                    value={searchMetrics}
+                    onChange={(e) => { setSearchMetrics(e.target.value); setPageMetrics(0); }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Iconify icon="eva:search-fill" width={20} />
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={{ maxWidth: 400 }}
+                  />
+                </Box>
               </Box>
               <StyledTableContainer>
                 <Paper elevation={3}>
@@ -1263,7 +1381,7 @@ export function CustomizationPageV2() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {metricsByPuntoVenta.map((row) => (
+                        {paginatedMetricsByPv.map((row) => (
                           <StyledTableRow key={`${row.cliente}|${row.punto_venta_id}`}>
                             <StyledTableCell>{row.client_name || '-'}</StyledTableCell>
                             <StyledTableCell>{row.punto_venta_name || 'Todos'}</StyledTableCell>
@@ -1301,6 +1419,16 @@ export function CustomizationPageV2() {
                       </TableBody>
                     </Table>
                   </Box>
+                  <TablePagination
+                    component="div"
+                    count={filteredMetricsByPv.length}
+                    page={pageMetrics}
+                    onPageChange={(_, newPage) => setPageMetrics(newPage)}
+                    rowsPerPage={rowsPerPageMetrics}
+                    onRowsPerPageChange={(e) => { setRowsPerPageMetrics(parseInt(e.target.value, 10)); setPageMetrics(0); }}
+                    rowsPerPageOptions={ROWS_PER_PAGE_OPTIONS}
+                    labelRowsPerPage="Filas por página"
+                  />
                 </Paper>
               </StyledTableContainer>
             </Grid>
@@ -1325,6 +1453,22 @@ export function CustomizationPageV2() {
                     </Typography>
                   </Grid>
                 </Grid>
+                <Box sx={{ px: 2, pb: 1 }}>
+                  <TextField
+                    size="small"
+                    placeholder="Buscar por nombre, cliente, ciudad o código…"
+                    value={searchPuntos}
+                    onChange={(e) => { setSearchPuntos(e.target.value); setPagePuntos(0); }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Iconify icon="eva:search-fill" width={20} />
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={{ maxWidth: 400 }}
+                  />
+                </Box>
               </Box>
               <StyledTableContainer>
                 <Paper elevation={3}>
@@ -1340,7 +1484,7 @@ export function CustomizationPageV2() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {puntosVenta.map((pv) => (
+                        {paginatedPuntos.map((pv) => (
                           <StyledTableRow key={pv._id || pv.id}>
                             <StyledTableCell>{pv.client_name}</StyledTableCell>
                             <StyledTableCell>{pv.name}</StyledTableCell>
@@ -1379,6 +1523,16 @@ export function CustomizationPageV2() {
                       </TableBody>
                     </Table>
                   </Box>
+                  <TablePagination
+                    component="div"
+                    count={filteredPuntos.length}
+                    page={pagePuntos}
+                    onPageChange={(_, newPage) => setPagePuntos(newPage)}
+                    rowsPerPage={rowsPerPagePuntos}
+                    onRowsPerPageChange={(e) => { setRowsPerPagePuntos(parseInt(e.target.value, 10)); setPagePuntos(0); }}
+                    rowsPerPageOptions={ROWS_PER_PAGE_OPTIONS}
+                    labelRowsPerPage="Filas por página"
+                  />
                 </Paper>
               </StyledTableContainer>
             </Grid>
@@ -1403,6 +1557,22 @@ export function CustomizationPageV2() {
                     </Typography>
                   </Grid>
                 </Grid>
+                <Box sx={{ px: 2, pb: 1 }}>
+                  <TextField
+                    size="small"
+                    placeholder="Buscar por nombre, email o teléfono…"
+                    value={searchClients}
+                    onChange={(e) => { setSearchClients(e.target.value); setPageClients(0); }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Iconify icon="eva:search-fill" width={20} />
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={{ maxWidth: 400 }}
+                  />
+                </Box>
               </Box>
               <StyledTableContainer>
                 <Paper elevation={3}>
@@ -1417,7 +1587,7 @@ export function CustomizationPageV2() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {clients.map((client) => (
+                        {paginatedClients.map((client) => (
                           <StyledTableRow key={client._id || client.id}>
                             <StyledTableCell>{client.name}</StyledTableCell>
                             <StyledTableCell>{client.email}</StyledTableCell>
@@ -1435,6 +1605,16 @@ export function CustomizationPageV2() {
                       </TableBody>
                     </Table>
                   </Box>
+                  <TablePagination
+                    component="div"
+                    count={filteredClients.length}
+                    page={pageClients}
+                    onPageChange={(_, newPage) => setPageClients(newPage)}
+                    rowsPerPage={rowsPerPageClients}
+                    onRowsPerPageChange={(e) => { setRowsPerPageClients(parseInt(e.target.value, 10)); setPageClients(0); }}
+                    rowsPerPageOptions={ROWS_PER_PAGE_OPTIONS}
+                    labelRowsPerPage="Filas por página"
+                  />
                 </Paper>
               </StyledTableContainer>
             </Grid>
@@ -1459,6 +1639,22 @@ export function CustomizationPageV2() {
                     </Typography>
                   </Grid>
                 </Grid>
+                <Box sx={{ px: 2, pb: 1 }}>
+                  <TextField
+                    size="small"
+                    placeholder="Buscar por código o nombre…"
+                    value={searchRegions}
+                    onChange={(e) => { setSearchRegions(e.target.value); setPageRegions(0); }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Iconify icon="eva:search-fill" width={20} />
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={{ maxWidth: 400 }}
+                  />
+                </Box>
               </Box>
               <StyledTableContainer>
                 <Paper elevation={3}>
@@ -1473,7 +1669,7 @@ export function CustomizationPageV2() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {regions.map((r) => (
+                        {paginatedRegions.map((r) => (
                           <StyledTableRow key={r.id}>
                             <StyledTableCell>{r.code}</StyledTableCell>
                             <StyledTableCell>{r.name}</StyledTableCell>
@@ -1499,6 +1695,16 @@ export function CustomizationPageV2() {
                       </TableBody>
                     </Table>
                   </Box>
+                  <TablePagination
+                    component="div"
+                    count={filteredRegions.length}
+                    page={pageRegions}
+                    onPageChange={(_, newPage) => setPageRegions(newPage)}
+                    rowsPerPage={rowsPerPageRegions}
+                    onRowsPerPageChange={(e) => { setRowsPerPageRegions(parseInt(e.target.value, 10)); setPageRegions(0); }}
+                    rowsPerPageOptions={ROWS_PER_PAGE_OPTIONS}
+                    labelRowsPerPage="Filas por página"
+                  />
                 </Paper>
               </StyledTableContainer>
             </Grid>
@@ -1645,6 +1851,22 @@ export function CustomizationPageV2() {
                     </Typography>
                   </Grid>
                 </Grid>
+                <Box sx={{ px: 2, pb: 1 }}>
+                  <TextField
+                    size="small"
+                    placeholder="Buscar por estado, ciudad, lat o lon…"
+                    value={searchCities}
+                    onChange={(e) => { setSearchCities(e.target.value); setPageCities(0); }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Iconify icon="eva:search-fill" width={20} />
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={{ maxWidth: 400 }}
+                  />
+                </Box>
               </Box>
               <StyledTableContainer>
                 <Paper elevation={3}>
@@ -1660,7 +1882,7 @@ export function CustomizationPageV2() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {cities.map((city) => (
+                        {paginatedCities.map((city) => (
                           <StyledTableRow key={city._id || city.id}>
                             <StyledTableCell>{city.state}</StyledTableCell>
                             <StyledTableCell>{city.city}</StyledTableCell>
@@ -1679,6 +1901,16 @@ export function CustomizationPageV2() {
                       </TableBody>
                     </Table>
                   </Box>
+                  <TablePagination
+                    component="div"
+                    count={filteredCities.length}
+                    page={pageCities}
+                    onPageChange={(_, newPage) => setPageCities(newPage)}
+                    rowsPerPage={rowsPerPageCities}
+                    onRowsPerPageChange={(e) => { setRowsPerPageCities(parseInt(e.target.value, 10)); setPageCities(0); }}
+                    rowsPerPageOptions={ROWS_PER_PAGE_OPTIONS}
+                    labelRowsPerPage="Filas por página"
+                  />
                 </Paper>
               </StyledTableContainer>
             </Grid>

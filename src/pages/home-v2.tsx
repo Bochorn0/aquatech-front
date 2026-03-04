@@ -425,70 +425,65 @@ export function HomeV2Page() {
     setLoading(true);
 
     const run = async () => {
-      const results = await Promise.all(
-        filteredPuntos.map(async (pv) => {
-          try {
-            // Fetch sensors with historical readings based on time range
-            const sensors = await getV2<any[]>(
-              `/puntoVentas/${pv.id}/sensors/readings`,
-              { timeRange: selectedTimeRange }
-            );
-            const list = Array.isArray(sensors) ? sensors : [];
-            const pvId = String(pv.id ?? pv._id);
-            const pvName = pv.name || `PV ${pvId}`;
-            const clientName =
-              typeof pv.cliente === 'object' && pv.cliente != null
-                ? (pv.cliente as ClienteV2).name
-                : '';
+      // Single batch: sensor_latest for all filtered puntos (no historic on list view — use detail page for that)
+      const codes = filteredPuntos
+        .map((pv) => ((pv as any).codigo_tienda ?? (pv as any).code ?? '').toString().trim().toUpperCase())
+        .filter(Boolean);
+      const uniqueCodes = Array.from(new Set(codes));
+      let byCode: Record<string, { type: string; name: string; value: number | null; timestamp: string | null; resourceId?: string | null; resourceType?: string | null }[]> = {};
 
-            return list.map((s, idx) => {
-              const name = s.sensorName ?? s.sensor_name ?? s.name ?? `Sensor ${idx}`;
-              const originalSensorType = s.sensorType ?? s.sensor_type ?? s.type ?? '';
-              const sensorId = s.id ?? idx;
-              const { latestReading, readingsCount = 0, readings = [] } = s;
-              
-              // Parse value to number for metric evaluation
-              const rawValue = latestReading?.value ?? null;
-              let value = rawValue !== null && rawValue !== undefined
-                ? (typeof rawValue === 'string' ? parseFloat(rawValue) : rawValue)
-                : null;
-              
-              // Ensure NaN is converted to null
-              if (value !== null && Number.isNaN(value)) {
-                value = null;
-              }
-              const online = isSensorOnline(latestReading);
-              const readingTime = latestReading?.timestamp || latestReading?.createdAt;
-              
-              return {
-                id: `${pvId}-${sensorId}`,
-                puntoVentaId: pvId,
-                puntoVentaName: pvName,
-                clientName,
-                sensorName: name,
-                sensorType: originalSensorType,
-                sensorTypeDisplay: getSensorDisplayName(originalSensorType),
-                value,
-                online,
-                lastReadingTime: readingTime,
-                readingsCount,
-                readings: Array.isArray(readings) ? readings : [],
-              } as SensorRecord & { 
-                lastReadingTime?: string; 
-                readingsCount: number;
-                readings: Array<{ value: any; timestamp: string; createdAt: string }>;
-                sensorTypeDisplay: string;
-              };
-            });
-          } catch (e) {
-            return [];
+      if (uniqueCodes.length > 0) {
+        try {
+          const latestRes = await getV2<{ codigo_tienda?: string; sensors?: { type: string; name: string; value: number | null; timestamp: string | null; resourceId?: string | null; resourceType?: string | null }[] } | Record<string, { type: string; name: string; value: number | null; timestamp: string | null }[]>>(
+            `/sensors/latest`,
+            { codigo_tienda: uniqueCodes.join(',') }
+          );
+          if (latestRes && typeof latestRes === 'object' && !Array.isArray(latestRes)) {
+            if ('codigo_tienda' in latestRes && Array.isArray((latestRes as any).sensors)) {
+              byCode[(latestRes as any).codigo_tienda ?? uniqueCodes[0]] = (latestRes as any).sensors;
+            } else {
+              byCode = latestRes as Record<string, { type: string; name: string; value: number | null; timestamp: string | null }[]>;
+            }
           }
-        })
-      );
+        } catch (_) {
+          // leave byCode empty
+        }
+      }
 
       if (cancelled) return;
 
-      const allSensors: SensorRecord[] = results.flat();
+      const allSensors: SensorRecord[] = [];
+      filteredPuntos.forEach((pv) => {
+        const pvId = String(pv.id ?? pv._id);
+        const pvName = pv.name || `PV ${pvId}`;
+        const clientName = typeof pv.cliente === 'object' && pv.cliente != null ? (pv.cliente as ClienteV2).name : '';
+        const code = ((pv as any).codigo_tienda ?? (pv as any).code ?? '').toString().trim().toUpperCase();
+        const sensors = code ? (byCode[code] ?? []) : [];
+        sensors.forEach((s, idx) => {
+          const name = s.name ?? `Sensor ${idx}`;
+          const originalSensorType = s.type ?? '';
+          const rawValue = s.value;
+          let value = rawValue !== null && rawValue !== undefined ? (typeof rawValue === 'string' ? parseFloat(rawValue) : rawValue) : null;
+          if (value !== null && Number.isNaN(value)) value = null;
+          const readingTime = s.timestamp ?? null;
+          const latestReading = value !== null || readingTime ? { value, timestamp: readingTime ?? undefined, createdAt: readingTime ?? undefined } : null;
+          const online = isSensorOnline(latestReading);
+          allSensors.push({
+            id: `${pvId}-${originalSensorType}-${idx}`,
+            puntoVentaId: pvId,
+            puntoVentaName: pvName,
+            clientName,
+            sensorName: name,
+            sensorType: originalSensorType,
+            sensorTypeDisplay: getSensorDisplayName(originalSensorType),
+            value,
+            online,
+            lastReadingTime: readingTime ?? undefined,
+            readingsCount: 0,
+            readings: [],
+          } as SensorRecord & { lastReadingTime?: string; readingsCount: number; readings: Array<{ value: any; timestamp: string; createdAt: string }>; sensorTypeDisplay: string });
+        });
+      });
 
       const metricConfigs: MetricConfig[] = metrics.map((m) => ({
         id: m.id ?? m._id,

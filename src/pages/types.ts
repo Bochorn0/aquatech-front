@@ -300,4 +300,8 @@ export interface PuntosVenta {
     dev_mode?: boolean;
     /** Form/edit: used for PATCH body (API accepts camelCase) */
     devMode?: boolean;
+    /** From API: true if sensor_latest has data within 5 min for this codigo_tienda */
+    online?: boolean;
+    /** From API: count of rows in puntoventasensors for this punto */
+    sensors_count?: number;
 }

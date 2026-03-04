@@ -1,28 +1,30 @@
-import React, { useRef, useMemo, useState, useCallback, useEffect } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
-import L from 'leaflet';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import { Marker as SimpleMapMarker, Geography, Geographies, ComposableMap } from 'react-simple-maps';
-
 import 'leaflet/dist/leaflet.css';
 
+import L from 'leaflet';
+import { Link as RouterLink } from 'react-router-dom';
+import { Popup, Marker, useMap, TileLayer, MapContainer } from 'react-leaflet';
+import React, { useRef, useMemo, useState, useEffect, useCallback } from 'react';
+import { Geography, Geographies, ComposableMap, Marker as SimpleMapMarker } from 'react-simple-maps';
+
 import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
 import Link from '@mui/material/Link';
-import FormControl from '@mui/material/FormControl';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import InputLabel from '@mui/material/InputLabel';
 import List from '@mui/material/List';
-import ListItem from '@mui/material/ListItem';
-import ListItemText from '@mui/material/ListItemText';
-import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
+import Button from '@mui/material/Button';
 import Select from '@mui/material/Select';
 import Switch from '@mui/material/Switch';
 import Tooltip from '@mui/material/Tooltip';
+import ListItem from '@mui/material/ListItem';
+import MenuItem from '@mui/material/MenuItem';
+import InputLabel from '@mui/material/InputLabel';
 import Typography from '@mui/material/Typography';
+import FormControl from '@mui/material/FormControl';
+import ListItemText from '@mui/material/ListItemText';
+import FormControlLabel from '@mui/material/FormControlLabel';
 
 import geoData from 'src/utils/states.json';
+
+import { CONFIG } from 'src/config-global';
 
 type GeoJSONFeature = {
   type: string;
@@ -190,6 +192,7 @@ export type PuntoVentaMapItem = {
   online?: boolean;
   lat?: number | null;
   long?: number | null;
+  codigo_tienda?: string | null;
   city?: {
     city?: string;
     state?: string;
@@ -198,9 +201,51 @@ export type PuntoVentaMapItem = {
   } | null;
 };
 
+/** Latest value per sensor from GET /api/v2.0/sensors/latest */
+type SensorLatestItem = {
+  type: string;
+  name: string;
+  value: number | null;
+  timestamp: string | null;
+  resourceId?: string | null;
+  resourceType?: string | null;
+};
+
+/** Display metrics derived from sensor_latest (for captions) */
+type LatestMetrics = {
+  eficiencia: number | null;
+  rechazo: number | null;
+  nivelCruda: number | null;
+  nivelPurificada: number | null;
+};
+
 const DEFAULT_REGION_COLORS = [
   '#1976d2', '#2e7d32', '#ed6c02', '#9c27b0', '#00838f', '#c62828', '#558b2f', '#6a1b9a', '#5d4037', '#0277bd',
 ];
+
+/** Derive display metrics from sensor_latest array (match by type/name conventions). */
+function latestMetricsFromSensors(sensors: SensorLatestItem[]): LatestMetrics {
+  const out: LatestMetrics = { eficiencia: null, rechazo: null, nivelCruda: null, nivelPurificada: null };
+  if (!Array.isArray(sensors) || sensors.length === 0) return out;
+  const lower = (s: string) => (s ?? '').toLowerCase();
+  sensors.forEach((s) => {
+    const t = lower(s.type);
+    const n = lower(s.name ?? '');
+    const v = s.value != null ? Number(s.value) : null;
+    if (v == null) return;
+    if (t === 'eficiencia' || n.includes('eficiencia')) out.eficiencia = v;
+    else if (t === 'flujo_rechazo' || t === 'rechazo' || n.includes('rechazo')) out.rechazo = v;
+    else if (t === 'nivel_cruda' || t === 'liquid_level_percent' || n.includes('cruda')) {
+      if (s.resourceType === 'nivel' || n.includes('cruda')) out.nivelCruda = v;
+    } else if (t === 'nivel_purificada' || n.includes('purificada')) out.nivelPurificada = v;
+    else if ((t === 'liquid_level_percent' || n.includes('nivel')) && (n.includes('purificada') || s.resourceType === 'tiwater')) {
+      if (out.nivelPurificada == null) out.nivelPurificada = v;
+    } else if ((t === 'liquid_level_percent' || n.includes('nivel')) && (n.includes('cruda') || s.resourceType === 'nivel')) {
+      if (out.nivelCruda == null) out.nivelCruda = v;
+    }
+  });
+  return out;
+}
 
 const redMarkerIcon = L.divIcon({
   className: 'custom-marker',
@@ -239,6 +284,7 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
   const [showAllPuntos, setShowAllPuntos] = useState(false);
   const [showDetailMap, setShowDetailMap] = useState(false);
   const [detailMapPuntoId, setDetailMapPuntoId] = useState<string | null>(null);
+  const [sensorLatestByCodigoTienda, setSensorLatestByCodigoTienda] = useState<Record<string, SensorLatestItem[]>>({});
   const mapContainerRef = useRef<HTMLDivElement>(null);
 
   const STATE_ZOOM_MIN = 2500;
@@ -402,6 +448,7 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
     setScale(1400);
     setShowDetailMap(false);
     setDetailMapPuntoId(null);
+    setSensorLatestByCodigoTienda({});
   }, []);
 
   const puntosInSelectedState = useMemo(() => {
@@ -437,6 +484,41 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
     [puntosInSelectedState, getPvCoords]
   );
 
+  // Fetch latest sensor values for all puntos in selected state (for state-level captions)
+  useEffect(() => {
+    if (!selectedState || puntoPinCoords.length === 0) {
+      setSensorLatestByCodigoTienda({});
+      return;
+    }
+    const codes = puntoPinCoords
+      .map(({ punto }) => (punto.codigo_tienda ?? (punto as { code?: string }).code ?? '').toString().trim().toUpperCase())
+      .filter(Boolean);
+    const unique = Array.from(new Set(codes));
+    if (unique.length === 0) {
+      setSensorLatestByCodigoTienda({});
+      return;
+    }
+    const codigoTiendaParam = unique.join(',');
+    fetch(`${CONFIG.API_BASE_URL_V2}/sensors/latest?codigo_tienda=${encodeURIComponent(codigoTiendaParam)}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token') ?? ''}`,
+      },
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(res.statusText))))
+      .then((data: { codigo_tienda?: string; sensors?: SensorLatestItem[] } | Record<string, SensorLatestItem[]>) => {
+        if (unique.length === 1 && 'codigo_tienda' in data && Array.isArray(data.sensors)) {
+          const key: string = (data as { codigo_tienda?: string }).codigo_tienda ?? unique[0];
+          setSensorLatestByCodigoTienda({ [key]: data.sensors });
+        } else if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
+          setSensorLatestByCodigoTienda(data as Record<string, SensorLatestItem[]>);
+        } else {
+          setSensorLatestByCodigoTienda({});
+        }
+      })
+      .catch(() => setSensorLatestByCodigoTienda({}));
+  }, [selectedState, puntoPinCoords]);
+
   // Centroid of puntos in state (for detail map "Vista estado" so iframe shows distribution area)
   const puntosInStateCentroid = useMemo((): [number, number] | null => {
     if (puntoPinCoords.length === 0) return null;
@@ -449,7 +531,7 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
     return [sumLon / puntoPinCoords.length, sumLat / puntoPinCoords.length];
   }, [puntoPinCoords]);
 
-  /** Mock metrics per punto (deterministic from id). Replace with API later. */
+  /** Mock metrics per punto (fallback when no sensor_latest data). */
   const getMockMetrics = useCallback((punto: PuntoVentaMapItem) => {
     const seed = String(punto.id ?? punto._id ?? punto.name ?? '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
     const eficiencia = 40 + (seed % 26);
@@ -458,6 +540,18 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
     const nivelPurificada = 25 + ((seed * 3) % 25);
     return { eficiencia, rechazo, nivelCruda, nivelPurificada };
   }, []);
+
+  /** Latest metrics from sensor_latest for a punto (by codigo_tienda). Returns null if none. */
+  const getLatestMetricsForPunto = useCallback(
+    (punto: PuntoVentaMapItem): LatestMetrics | null => {
+      const code = (punto.codigo_tienda ?? (punto as { code?: string }).code ?? '').toString().trim().toUpperCase();
+      if (!code) return null;
+      const sensors = sensorLatestByCodigoTienda[code];
+      if (!Array.isArray(sensors) || sensors.length === 0) return null;
+      return latestMetricsFromSensors(sensors);
+    },
+    [sensorLatestByCodigoTienda]
+  );
 
   // All puntos with valid coords (for "show all pointers" on country view)
   const allPuntoCoords = useMemo(
@@ -505,7 +599,6 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
               label={<Typography variant="body2">Mapa detallado (Google Maps)</Typography>}
             />
             {showDetailMap && (
-              <>
                 <FormControl size="small" sx={{ minWidth: 200 }}>
                   <InputLabel>Centrar en</InputLabel>
                   <Select
@@ -525,7 +618,6 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
                     })}
                   </Select>
                 </FormControl>
-              </>
             )}
           </>
         )}
@@ -702,31 +794,45 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
 
           {/* State view: one pin per punto de venta */}
           {selectedState &&
-            puntoPinCoords.map(({ punto, coordinates }, index) => (
-              <SimpleMapMarker key={punto.id ?? punto._id ?? index} coordinates={coordinates}>
-                <circle r={4} fill="#d32f2f" stroke="#fff" strokeWidth={2} />
-                <Tooltip
-                  title={
-                    <Box component="span">
-                      <Typography variant="caption" display="block" fontWeight="bold">
-                        {punto.name}
-                      </Typography>
-                      <Typography variant="caption" display="block">
-                        {punto.city?.city ?? ''}
-                        {punto.city?.state ? `, ${punto.city.state}` : ''}
-                      </Typography>
-                      <Typography variant="caption" display="block" color="textSecondary">
-                        lat: {coordinates[1]?.toFixed(4)}, lon: {coordinates[0]?.toFixed(4)}
-                      </Typography>
-                    </Box>
-                  }
-                >
-                  <text textAnchor="middle" y={-6} fontSize={6} fontFamily="Arial" fill="#333">
-                    {punto.name?.slice(0, 14)}
-                  </text>
-                </Tooltip>
-              </SimpleMapMarker>
-            ))}
+            puntoPinCoords.map(({ punto, coordinates }, index) => {
+              const latest = getLatestMetricsForPunto(punto);
+              const parts: string[] = [];
+              if (latest?.eficiencia != null) parts.push(`Eficiencia ${latest.eficiencia}%`);
+              if (latest?.rechazo != null) parts.push(`Rechazo ${latest.rechazo.toFixed(1)}`);
+              if (latest?.nivelCruda != null) parts.push(`Nivel cruda ${latest.nivelCruda}%`);
+              if (latest?.nivelPurificada != null) parts.push(`Nivel purif. ${latest.nivelPurificada}%`);
+              const latestLine = parts.length > 0 ? parts.join(' · ') : null;
+              return (
+                <SimpleMapMarker key={punto.id ?? punto._id ?? index} coordinates={coordinates}>
+                  <circle r={4} fill="#d32f2f" stroke="#fff" strokeWidth={2} />
+                  <Tooltip
+                    title={
+                      <Box component="span">
+                        <Typography variant="caption" display="block" fontWeight="bold">
+                          {punto.name}
+                        </Typography>
+                        <Typography variant="caption" display="block">
+                          {punto.city?.city ?? ''}
+                          {punto.city?.state ? `, ${punto.city.state}` : ''}
+                        </Typography>
+                        {latestLine && (
+                          <Typography variant="caption" display="block" sx={{ mt: 0.25 }} color="primary.main">
+                            {latestLine}
+                          </Typography>
+                        )}
+                        <Typography variant="caption" display="block" color="textSecondary">
+                          lat: {coordinates[1]?.toFixed(4)}, lon: {coordinates[0]?.toFixed(4)}
+                        </Typography>
+                      </Box>
+                    }
+                  >
+                    <text textAnchor="middle" y={-6} fontSize={6} fontFamily="Arial" fill="#333">
+                      {punto.name?.slice(0, 14)}
+                    </text>
+                  </Tooltip>
+                </SimpleMapMarker>
+              );
+            })}
         </ComposableMap>
         )}
         </div>
@@ -738,7 +844,7 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
                 Puntos de venta en {selectedStateName}
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-                {puntoPinCoords.length} punto(s) — valores de ejemplo (mock; reemplazar por API)
+                {puntoPinCoords.length} punto(s) — últimos valores de sensores
               </Typography>
               {puntoPinCoords.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">No hay puntos en este estado</Typography>
@@ -746,8 +852,14 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
                 <List dense disablePadding>
                   {puntoPinCoords.map(({ punto }, index) => {
                     const id = String(punto.id ?? punto._id ?? '');
+                    const latest = getLatestMetricsForPunto(punto);
                     const mock = getMockMetrics(punto);
                     const regionName = punto.region?.name;
+                    const hasLatest = latest && (latest.eficiencia != null || latest.rechazo != null || latest.nivelCruda != null || latest.nivelPurificada != null);
+                    const ef = hasLatest && latest!.eficiencia != null ? latest!.eficiencia : mock.eficiencia;
+                    const re = hasLatest && latest!.rechazo != null ? latest!.rechazo : mock.rechazo;
+                    const nc = hasLatest && latest!.nivelCruda != null ? latest!.nivelCruda : mock.nivelCruda;
+                    const np = hasLatest && latest!.nivelPurificada != null ? latest!.nivelPurificada : mock.nivelPurificada;
                     return (
                       <ListItem key={id || `pv-${index}`} disablePadding sx={{ flexDirection: 'column', alignItems: 'stretch', py: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}>
                         <Typography variant="body2" fontWeight={500}>{punto.name || 'Sin nombre'}</Typography>
@@ -757,7 +869,8 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
                           </Typography>
                         )}
                         <Typography variant="caption" component="div" color="text.secondary">
-                          Eficiencia: {mock.eficiencia}%, Rechazo: {mock.rechazo.toFixed(1)}, Nivel Cruda: {mock.nivelCruda}%, Nivel purificada: {mock.nivelPurificada}%
+                          Eficiencia: {ef != null ? `${ef}%` : '—'}, Rechazo: {re != null ? re.toFixed(1) : '—'}, Nivel Cruda: {nc != null ? `${nc}%` : '—'}, Nivel purificada: {np != null ? `${np}%` : '—'}
+                          {hasLatest ? '' : ' (ejemplo)'}
                         </Typography>
                         <Link component={RouterLink} to={`/dashboard/v2/detalle/${id}`} variant="caption" sx={{ mt: 0.25, display: 'inline-block' }}>
                           Ver detalle

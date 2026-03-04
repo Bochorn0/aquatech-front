@@ -28,6 +28,7 @@ type PuntoVentaV2 = {
   updatedAt?: string;
   lat?: number | null;
   long?: number | null;
+  codigo_tienda?: string | null;
   city?: {
     city?: string;
     state?: string;
