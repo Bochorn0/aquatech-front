@@ -55,6 +55,22 @@ const MySwal = Swal.mixin({
   }
 });
 
+// Preset colors for region map (name + hex) — avoid hex input confusion
+const REGION_PRESET_COLORS: { name: string; hex: string }[] = [
+  { name: 'Azul', hex: '#1976d2' },
+  { name: 'Verde', hex: '#2e7d32' },
+  { name: 'Naranja', hex: '#ed6c02' },
+  { name: 'Morado', hex: '#9c27b0' },
+  { name: 'Turquesa', hex: '#00838f' },
+  { name: 'Rojo', hex: '#c62828' },
+  { name: 'Verde oscuro', hex: '#558b2f' },
+  { name: 'Púrpura', hex: '#6a1b9a' },
+  { name: 'Café', hex: '#5d4037' },
+  { name: 'Azul claro', hex: '#0277bd' },
+  { name: 'Rosa', hex: '#ad1457' },
+  { name: 'Ámbar', hex: '#ff8f00' },
+];
+
 const estados = [
   'Aguascalientes',
   'Baja California',
@@ -2312,29 +2328,41 @@ export function CustomizationPageV2() {
                     onChange={(e) => setRegionFormData((f) => ({ ...f, name: e.target.value }))}
                     fullWidth
                   />
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <TextField
-                      label="Color (mapa)"
-                      value={regionFormData.color}
-                      onChange={(e) => setRegionFormData((f) => ({ ...f, color: e.target.value }))}
-                      placeholder="#1976d2"
-                      fullWidth
-                      helperText="Opcional. Hex para el mapa global. Ej: #1976d2"
-                    />
-                    {regionFormData.color && (
-                      <Box
-                        sx={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: 1,
-                          bgcolor: regionFormData.color.startsWith('#') ? regionFormData.color : `#${regionFormData.color}`,
-                          border: '1px solid',
-                          borderColor: 'divider',
-                          flexShrink: 0,
-                        }}
-                        title={regionFormData.color}
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Color en el mapa (opcional)</Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+                      {REGION_PRESET_COLORS.map(({ name, hex }) => {
+                        const isSelected = (regionFormData.color || '').trim().toLowerCase() === hex.toLowerCase()
+                          || (regionFormData.color || '').trim().toLowerCase() === hex.slice(1).toLowerCase();
+                        return (
+                          <Chip
+                            key={hex}
+                            label={name}
+                            onClick={() => setRegionFormData((f) => ({ ...f, color: hex }))}
+                            sx={{
+                              bgcolor: hex,
+                              color: '#fff',
+                              border: isSelected ? 2 : 1,
+                              borderColor: isSelected ? 'primary.main' : 'divider',
+                              '&:hover': { opacity: 0.9 },
+                            }}
+                          />
+                        );
+                      })}
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                      <Typography variant="body2" color="text.secondary">Personalizado:</Typography>
+                      <input
+                        type="color"
+                        value={(regionFormData.color || '#1976d2').startsWith('#') ? (regionFormData.color || '#1976d2') : `#${regionFormData.color || '1976d2'}`}
+                        onChange={(e) => setRegionFormData((f) => ({ ...f, color: e.target.value }))}
+                        style={{ width: 36, height: 36, padding: 0, border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer' }}
+                        title="Elegir color"
                       />
-                    )}
+                      <Typography variant="caption" color="text.secondary">
+                        {regionFormData.color ? `Seleccionado: ${regionFormData.color}` : 'Ninguno'}
+                      </Typography>
+                    </Box>
                   </Box>
                   <Divider sx={{ my: 1 }} />
                   <Typography variant="subtitle2" fontWeight={600}>Puntos de venta vinculados</Typography>
@@ -2426,14 +2454,42 @@ export function CustomizationPageV2() {
                   fullWidth
                   placeholder="ej. Región Norte"
                 />
-                <TextField
-                  label="Color (mapa)"
-                  value={regionFormData.color}
-                  onChange={(e) => setRegionFormData((f) => ({ ...f, color: e.target.value }))}
-                  placeholder="#1976d2"
-                  fullWidth
-                  helperText="Opcional. Hex para diferenciar regiones en el mapa global"
-                />
+                <Box>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>Color en el mapa (opcional)</Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+                    {REGION_PRESET_COLORS.map(({ name, hex }) => {
+                      const isSelected = (regionFormData.color || '').trim().toLowerCase() === hex.toLowerCase()
+                        || (regionFormData.color || '').trim().toLowerCase() === hex.slice(1).toLowerCase();
+                      return (
+                        <Chip
+                          key={hex}
+                          label={name}
+                          onClick={() => setRegionFormData((f) => ({ ...f, color: hex }))}
+                          sx={{
+                            bgcolor: hex,
+                            color: '#fff',
+                            border: isSelected ? 2 : 1,
+                            borderColor: isSelected ? 'primary.main' : 'divider',
+                            '&:hover': { opacity: 0.9 },
+                          }}
+                        />
+                      );
+                    })}
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                    <Typography variant="body2" color="text.secondary">Personalizado:</Typography>
+                    <input
+                      type="color"
+                      value={(regionFormData.color || '#1976d2').startsWith('#') ? (regionFormData.color || '#1976d2') : `#${regionFormData.color || '1976d2'}`}
+                      onChange={(e) => setRegionFormData((f) => ({ ...f, color: e.target.value }))}
+                      style={{ width: 36, height: 36, padding: 0, border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer' }}
+                      title="Elegir color"
+                    />
+                    <Typography variant="caption" color="text.secondary">
+                      {regionFormData.color ? `Seleccionado: ${regionFormData.color}` : 'Ninguno'}
+                    </Typography>
+                  </Box>
+                </Box>
               </Box>
             </DialogContent>
             <DialogActions>

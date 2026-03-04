@@ -147,7 +147,7 @@ useEffect(() => {
             id: productId,
             commands: [{ "code": "water_wash", "value": true }]
           };
-          const response = await post(`/products/sendCommand`, requestData);
+          await post(`/products/sendCommand`, requestData);
           setCurrentProducts((prevProducts) =>
             prevProducts.map((product) =>
               product.id === productId ? { ...product, online: true } : product

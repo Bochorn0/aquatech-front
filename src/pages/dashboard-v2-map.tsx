@@ -1,16 +1,26 @@
-import React, { useRef, useMemo, useState, useCallback } from 'react';
-import { Marker, Geography, Geographies, ComposableMap } from 'react-simple-maps';
+import React, { useRef, useMemo, useState, useCallback, useEffect } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
+import L from 'leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { Marker as SimpleMapMarker, Geography, Geographies, ComposableMap } from 'react-simple-maps';
+
+import 'leaflet/dist/leaflet.css';
 
 import Box from '@mui/material/Box';
-import Paper from '@mui/material/Paper';
+import Button from '@mui/material/Button';
+import Link from '@mui/material/Link';
+import FormControl from '@mui/material/FormControl';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import InputLabel from '@mui/material/InputLabel';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
-import Button from '@mui/material/Button';
+import MenuItem from '@mui/material/MenuItem';
+import Paper from '@mui/material/Paper';
+import Select from '@mui/material/Select';
 import Switch from '@mui/material/Switch';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import FormControlLabel from '@mui/material/FormControlLabel';
 
 import geoData from 'src/utils/states.json';
 
@@ -120,6 +130,54 @@ function getStateCentroid(stateName: string): [number, number] | null {
   return [lon, lat];
 }
 
+/** Bounding box of a geometry (all rings). */
+function getGeometryBounds(geometry: GeoJSONFeature['geometry']): { minLon: number; maxLon: number; minLat: number; maxLat: number } | null {
+  const rings = getRings(geometry);
+  if (rings.length === 0) return null;
+  let minLon = Infinity;
+  let maxLon = -Infinity;
+  let minLat = Infinity;
+  let maxLat = -Infinity;
+  rings.forEach((ring) => {
+    ring.forEach((point: number[]) => {
+      const lon = point[0];
+      const lat = point[1];
+      if (Number.isFinite(lon)) {
+        minLon = Math.min(minLon, lon);
+        maxLon = Math.max(maxLon, lon);
+      }
+      if (Number.isFinite(lat)) {
+        minLat = Math.min(minLat, lat);
+        maxLat = Math.max(maxLat, lat);
+      }
+    });
+  });
+  if (!Number.isFinite(minLon) || !Number.isFinite(maxLon) || !Number.isFinite(minLat) || !Number.isFinite(maxLat)) return null;
+  return { minLon, maxLon, minLat, maxLat };
+}
+
+/** Center and scale so the state fits nicely in the view (bbox-based, consistent across states). */
+function getStateViewCenterAndScale(geometry: GeoJSONFeature['geometry']): { center: [number, number]; scale: number } {
+  const bounds = getGeometryBounds(geometry);
+  const REF_SPAN_DEG = 16;
+  const MIN_SCALE = 3000;
+  const MAX_SCALE = 14000;
+  const PADDING = 0.9;
+
+  if (!bounds) {
+    return { center: MEXICO_CENTER, scale: 5000 };
+  }
+  const center: [number, number] = [
+    (bounds.minLon + bounds.maxLon) / 2,
+    (bounds.minLat + bounds.maxLat) / 2,
+  ];
+  const spanLon = bounds.maxLon - bounds.minLon;
+  const spanLat = bounds.maxLat - bounds.minLat;
+  const spanDeg = Math.max(spanLon, spanLat, 0.3);
+  const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, (1400 * REF_SPAN_DEG) / spanDeg * PADDING));
+  return { center, scale };
+}
+
 export type RegionMapItem = { id: string; code: string; name: string; color?: string | null };
 
 export type PuntoVentaMapItem = {
@@ -144,6 +202,27 @@ const DEFAULT_REGION_COLORS = [
   '#1976d2', '#2e7d32', '#ed6c02', '#9c27b0', '#00838f', '#c62828', '#558b2f', '#6a1b9a', '#5d4037', '#0277bd',
 ];
 
+const redMarkerIcon = L.divIcon({
+  className: 'custom-marker',
+  html: '<div style="background:#d32f2f;width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>',
+  iconSize: [14, 14],
+  iconAnchor: [7, 7],
+});
+
+function LeafletFitBounds({ positions }: { positions: [number, number][] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (positions.length === 0) return;
+    if (positions.length === 1) {
+      map.setView(positions[0], 12);
+      return;
+    }
+    const bounds = L.latLngBounds(positions);
+    map.fitBounds(bounds, { padding: [24, 24], maxZoom: 14 });
+  }, [map, positions]);
+  return null;
+}
+
 type DashboardV2MapProps = {
   puntos: PuntoVentaMapItem[];
   regions?: RegionMapItem[];
@@ -158,6 +237,8 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
   const [stateViewScale, setStateViewScale] = useState(4000);
   const [stateViewCenter, setStateViewCenter] = useState<[number, number]>(MEXICO_CENTER);
   const [showAllPuntos, setShowAllPuntos] = useState(false);
+  const [showDetailMap, setShowDetailMap] = useState(false);
+  const [detailMapPuntoId, setDetailMapPuntoId] = useState<string | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
 
   const STATE_ZOOM_MIN = 2500;
@@ -289,60 +370,20 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
       .filter((m): m is NonNullable<typeof m> => m != null);
   }, [stateCounts]);
 
-  // Debug: log mapping totals and state breakdown (remove or guard once verified)
-  React.useEffect(() => {
-    const total = Object.values(stateCounts).reduce((a, b) => a + b, 0);
-    const byState = Object.entries(stateCounts)
-      .filter(([, c]) => c > 0)
-      .sort((a, b) => b[1] - a[1]);
-    console.log('[DashboardV2Map] Puntos:', puntos.length, '| Resolved total:', total, '| By state:', byState);
-    console.log('[DashboardV2Map] State markers to render:', stateMarkers.length, stateMarkers.map((m) => `${m.stateName}: ${m.count}`));
-    if (puntos.length > 0) {
-      const sample = puntos.slice(0, 3).map((pv) => {
-        const lon = typeof (pv.long ?? pv.city?.lon) === 'number' ? pv.long ?? pv.city?.lon! : Number(pv.long ?? pv.city?.lon);
-        const lat = typeof (pv.lat ?? pv.city?.lat) === 'number' ? pv.lat ?? pv.city?.lat! : Number(pv.lat ?? pv.city?.lat);
-        const fromCoords = Number.isFinite(lon) && Number.isFinite(lat) ? getStateFromCoords(lon, lat) : null;
-        return { name: pv.name, cityState: pv.city?.state, lat, lon, resolvedState: fromCoords ?? pv.city?.state ?? '—' };
-      });
-      console.log('[DashboardV2Map] Sample puntos (first 3):', sample);
-    }
-  }, [puntos, stateCounts, stateMarkers]);
-
   const handleStateClick = useCallback(
     (stateCode: number) => {
       setSelectedState(stateCode);
+      setShowDetailMap(true);
+      setDetailMapPuntoId(null);
       const geoState = geoStates.features.find((g: GeoJSONFeature) => g.properties.state_code === stateCode);
       if (geoState?.properties?.state_name) {
         setSelectedStateName(geoState.properties.state_name);
       }
-      if (geoState?.geometry?.coordinates) {
-        const coords = geoState.geometry.coordinates as number[][] | number[][][][];
-        const first = coords[0];
-        let centerX = 0;
-        let centerY = 0;
-        let totalPoints = 0;
-        const addRing = (ring: number[][]) => {
-          ring.forEach((p: number[]) => {
-            centerX += p[0];
-            centerY += p[1];
-            totalPoints += 1;
-          });
-        };
-        if (Array.isArray(first) && typeof first[0] === 'number') {
-          addRing(coords as number[][]);
-        } else {
-          (coords as number[][][][]).forEach((polygon: number[][][]) =>
-            polygon.forEach((ring: number[][]) => addRing(ring))
-          );
-        }
-        if (totalPoints > 0) {
-          const center: [number, number] = [centerX / totalPoints, centerY / totalPoints];
-          if (!center.some(Number.isNaN)) {
-            setCenterCoordinates(center);
-            setStateViewCenter(center);
-          }
-        }
-        setStateViewScale(stateCode === 8 ? 3800 : 4000);
+      if (geoState?.geometry) {
+        const { center, scale: stateScale } = getStateViewCenterAndScale(geoState.geometry);
+        setCenterCoordinates(center);
+        setStateViewCenter(center);
+        setStateViewScale(stateScale);
         setStateGeoJson({
           type: 'FeatureCollection',
           features: [geoState],
@@ -359,6 +400,8 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
     setCenterCoordinates(MEXICO_CENTER);
     setStateViewCenter(MEXICO_CENTER);
     setScale(1400);
+    setShowDetailMap(false);
+    setDetailMapPuntoId(null);
   }, []);
 
   const puntosInSelectedState = useMemo(() => {
@@ -394,6 +437,28 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
     [puntosInSelectedState, getPvCoords]
   );
 
+  // Centroid of puntos in state (for detail map "Vista estado" so iframe shows distribution area)
+  const puntosInStateCentroid = useMemo((): [number, number] | null => {
+    if (puntoPinCoords.length === 0) return null;
+    let sumLon = 0;
+    let sumLat = 0;
+    puntoPinCoords.forEach(({ coordinates }) => {
+      sumLon += coordinates[0];
+      sumLat += coordinates[1];
+    });
+    return [sumLon / puntoPinCoords.length, sumLat / puntoPinCoords.length];
+  }, [puntoPinCoords]);
+
+  /** Mock metrics per punto (deterministic from id). Replace with API later. */
+  const getMockMetrics = useCallback((punto: PuntoVentaMapItem) => {
+    const seed = String(punto.id ?? punto._id ?? punto.name ?? '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+    const eficiencia = 40 + (seed % 26);
+    const rechazo = 0.5 + ((seed * 7) % 15) / 10;
+    const nivelCruda = 55 + (seed % 35);
+    const nivelPurificada = 25 + ((seed * 3) % 25);
+    return { eficiencia, rechazo, nivelCruda, nivelPurificada };
+  }, []);
+
   // All puntos with valid coords (for "show all pointers" on country view)
   const allPuntoCoords = useMemo(
     () =>
@@ -421,9 +486,48 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
       </Typography>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 1 }}>
         {selectedState && (
-          <Button size="small" variant="contained" onClick={handleBackClick}>
-            Ver mapa completo
-          </Button>
+          <>
+            <Button size="small" variant="contained" onClick={handleBackClick}>
+              Ver mapa completo
+            </Button>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={showDetailMap}
+                  onChange={(_, checked) => {
+                    setShowDetailMap(checked);
+                    if (!checked) setDetailMapPuntoId(null);
+                  }}
+                  color="primary"
+                  size="small"
+                />
+              }
+              label={<Typography variant="body2">Mapa detallado (Google Maps)</Typography>}
+            />
+            {showDetailMap && (
+              <>
+                <FormControl size="small" sx={{ minWidth: 200 }}>
+                  <InputLabel>Centrar en</InputLabel>
+                  <Select
+                    value={detailMapPuntoId ?? ''}
+                    label="Centrar en"
+                    onChange={(e) => setDetailMapPuntoId(e.target.value || null)}
+                  >
+                    <MenuItem value="">Vista estado (todos)</MenuItem>
+                    {puntoPinCoords.map(({ punto }, index) => {
+                      const id = String(punto.id ?? punto._id ?? '');
+                      const label = punto.name || id || 'Sin nombre';
+                      return (
+                        <MenuItem key={id || `pv-${index}`} value={id}>
+                          {label}
+                        </MenuItem>
+                      );
+                    })}
+                  </Select>
+                </FormControl>
+              </>
+            )}
+          </>
         )}
         {!selectedState && (
           <FormControlLabel
@@ -457,6 +561,58 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
           }}
           role="presentation"
         >
+        {selectedState && showDetailMap && detailMapPuntoId ? (
+          <Box sx={{ width: '100%', height: '100%', borderRadius: 1, overflow: 'hidden', border: '1px solid', borderColor: 'divider' }}>
+            <iframe
+              title="Mapa (Google Maps)"
+              width="100%"
+              height="100%"
+              style={{ border: 0 }}
+              loading="lazy"
+              src={(() => {
+                const found = puntoPinCoords.find(({ punto }) => String(punto.id ?? punto._id) === detailMapPuntoId);
+                if (found) {
+                  const [lon, lat] = found.coordinates;
+                  return `https://www.google.com/maps?q=${lat},${lon}&z=14&output=embed`;
+                }
+                const [lon, lat] = stateViewCenter;
+                return `https://www.google.com/maps?q=${lat},${lon}&z=10&output=embed`;
+              })()}
+            />
+          </Box>
+        ) : selectedState && showDetailMap && !detailMapPuntoId ? (
+          <Box sx={{ width: '100%', height: '100%', borderRadius: 1, overflow: 'hidden', border: '1px solid', borderColor: 'divider' }}>
+            <MapContainer
+              center={puntosInStateCentroid ? [puntosInStateCentroid[1], puntosInStateCentroid[0]] : [stateViewCenter[1], stateViewCenter[0]]}
+              zoom={10}
+              style={{ width: '100%', height: '100%' }}
+              scrollWheelZoom
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              <LeafletFitBounds
+                positions={puntoPinCoords.map(({ coordinates }) => [coordinates[1], coordinates[0]] as [number, number])}
+              />
+              {puntoPinCoords.map(({ punto, coordinates }, index) => (
+                <Marker
+                  key={punto.id ?? punto._id ?? index}
+                  position={[coordinates[1], coordinates[0]]}
+                  icon={redMarkerIcon}
+                >
+                  <Popup>
+                    <Typography variant="body2" fontWeight={600}>{punto.name || 'Sin nombre'}</Typography>
+                    <Typography variant="caption" display="block">
+                      {punto.city?.city ?? ''}
+                      {punto.city?.state ? `, ${punto.city.state}` : ''}
+                    </Typography>
+                  </Popup>
+                </Marker>
+              ))}
+            </MapContainer>
+          </Box>
+        ) : (
         <ComposableMap
           projection="geoMercator"
           projectionConfig={{ scale: effectiveScale, center: effectiveCenter }}
@@ -497,7 +653,7 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
           {!selectedState &&
             showAllPuntos &&
             allPuntoCoords.map(({ punto, coordinates }, index) => (
-              <Marker key={punto.id ?? punto._id ?? `all-${index}`} coordinates={coordinates}>
+              <SimpleMapMarker key={punto.id ?? punto._id ?? `all-${index}`} coordinates={coordinates}>
                 <Tooltip
                   title={
                     <Box component="span">
@@ -513,7 +669,7 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
                 >
                   <circle r={3} fill="#d32f2f" stroke="#fff" strokeWidth={1} />
                 </Tooltip>
-              </Marker>
+              </SimpleMapMarker>
             ))}
 
           {/* Country view: state count markers (drawn after pins so numbers stay on top) */}
@@ -522,7 +678,7 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
               const r = showAllPuntos ? 8 : 6;
               const fontSize = showAllPuntos ? 9 : 8;
               return (
-                <Marker
+                <SimpleMapMarker
                   key={marker.stateName}
                   coordinates={marker.coordinates}
                   onClick={() => marker.stateCode != null && handleStateClick(marker.stateCode)}
@@ -540,14 +696,14 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
                       {marker.count}
                     </text>
                   </Tooltip>
-                </Marker>
+                </SimpleMapMarker>
               );
             })}
 
           {/* State view: one pin per punto de venta */}
           {selectedState &&
             puntoPinCoords.map(({ punto, coordinates }, index) => (
-              <Marker key={punto.id ?? punto._id ?? index} coordinates={coordinates}>
+              <SimpleMapMarker key={punto.id ?? punto._id ?? index} coordinates={coordinates}>
                 <circle r={4} fill="#d32f2f" stroke="#fff" strokeWidth={2} />
                 <Tooltip
                   title={
@@ -569,46 +725,88 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
                     {punto.name?.slice(0, 14)}
                   </text>
                 </Tooltip>
-              </Marker>
+              </SimpleMapMarker>
             ))}
         </ComposableMap>
+        )}
         </div>
-        {/* Right sidebar: totals by region */}
-        <Paper variant="outlined" sx={{ p: 2, minWidth: 220, maxWidth: 280, height: 'fit-content' }}>
-          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-            Total por región
-          </Typography>
-          <List dense disablePadding>
-            {totalsByRegion.length === 0 ? (
-              <ListItem>
-                <ListItemText primary="Sin datos por región" secondary="Asigne regiones en Personalización" />
-              </ListItem>
-            ) : (
-              totalsByRegion.map(({ region, count }, idx) => {
-                const color = getRegionColor(region.code === 'SIN_REGION' ? null : region, idx);
-                return (
-                  <ListItem key={region.id} disablePadding sx={{ py: 0.25 }}>
-                    <Box
-                      sx={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: 0.5,
-                        mr: 1,
-                        bgcolor: color,
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        flexShrink: 0,
-                      }}
-                    />
-                    <ListItemText primary={region.name} secondary={`${count} punto(s)`} primaryTypographyProps={{ variant: 'body2' }} secondaryTypographyProps={{ variant: 'caption' }} />
+        {/* Right sidebar: Total por región (country/simple map) or Métricas por región (detail map) */}
+        <Paper variant="outlined" sx={{ p: 2, minWidth: 220, maxWidth: 320, height: 'fit-content', maxHeight: selectedState && showDetailMap ? '55vh' : undefined, overflow: 'auto' }}>
+          {selectedState && showDetailMap ? (
+            <>
+              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                Puntos de venta en {selectedStateName}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                {puntoPinCoords.length} punto(s) — valores de ejemplo (mock; reemplazar por API)
+              </Typography>
+              {puntoPinCoords.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">No hay puntos en este estado</Typography>
+              ) : (
+                <List dense disablePadding>
+                  {puntoPinCoords.map(({ punto }, index) => {
+                    const id = String(punto.id ?? punto._id ?? '');
+                    const mock = getMockMetrics(punto);
+                    const regionName = punto.region?.name;
+                    return (
+                      <ListItem key={id || `pv-${index}`} disablePadding sx={{ flexDirection: 'column', alignItems: 'stretch', py: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}>
+                        <Typography variant="body2" fontWeight={500}>{punto.name || 'Sin nombre'}</Typography>
+                        {regionName && (
+                          <Typography variant="caption" color="text.secondary" sx={{ mb: 0.25 }}>
+                            {regionName}
+                          </Typography>
+                        )}
+                        <Typography variant="caption" component="div" color="text.secondary">
+                          Eficiencia: {mock.eficiencia}%, Rechazo: {mock.rechazo.toFixed(1)}, Nivel Cruda: {mock.nivelCruda}%, Nivel purificada: {mock.nivelPurificada}%
+                        </Typography>
+                        <Link component={RouterLink} to={`/dashboard/v2/detalle/${id}`} variant="caption" sx={{ mt: 0.25, display: 'inline-block' }}>
+                          Ver detalle
+                        </Link>
+                      </ListItem>
+                    );
+                  })}
+                </List>
+              )}
+            </>
+          ) : (
+            <>
+              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                Total por región
+              </Typography>
+              <List dense disablePadding>
+                {totalsByRegion.length === 0 ? (
+                  <ListItem>
+                    <ListItemText primary="Sin datos por región" secondary="Asigne regiones en Personalización" />
                   </ListItem>
-                );
-              })
-            )}
-          </List>
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-            Total: {puntos.length} punto(s)
-          </Typography>
+                ) : (
+                  totalsByRegion.map(({ region, count }) => {
+                    const fallbackIndex = region.code === 'SIN_REGION' ? -1 : regions.findIndex((r) => r.id === region.id);
+                    const color = getRegionColor(region.code === 'SIN_REGION' ? null : region, Math.max(0, fallbackIndex));
+                    return (
+                      <ListItem key={region.id} disablePadding sx={{ py: 0.25 }}>
+                        <Box
+                          sx={{
+                            width: 12,
+                            height: 12,
+                            borderRadius: 0.5,
+                            mr: 1,
+                            bgcolor: color,
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            flexShrink: 0,
+                          }}
+                        />
+                        <ListItemText primary={region.name} secondary={`${count} punto(s)`} primaryTypographyProps={{ variant: 'body2' }} secondaryTypographyProps={{ variant: 'caption' }} />
+                      </ListItem>
+                    );
+                  })
+                )}
+              </List>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                Total: {puntos.length} punto(s)
+              </Typography>
+            </>
+          )}
         </Paper>
       </Box>
     </Paper>
