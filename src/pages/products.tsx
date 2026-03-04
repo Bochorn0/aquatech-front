@@ -153,7 +153,6 @@ useEffect(() => {
               product.id === productId ? { ...product, online: true } : product
             )
           );
-          console.log('Command executed:', response);
         }
       } catch (error) {
         console.error("Error deleting user:", error);

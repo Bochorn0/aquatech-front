@@ -17,7 +17,7 @@ const HTTPS_CONFIG =
       }
     : undefined;
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   define: {
     // Expose REACT_APP_* env vars to the client (Vite only exposes VITE_* by default)
     'process.env.REACT_APP_API_BASE_URL': JSON.stringify(process.env.REACT_APP_API_BASE_URL || ''),
@@ -54,4 +54,6 @@ export default defineConfig({
   },
   server: { port: PORT, host: true, https: HTTPS_CONFIG },
   preview: { port: PORT, host: true },
-});
+  // Strip console and debugger in production so Azure/prod logs stay clean
+  esbuild: mode === 'production' ? { drop: ['console', 'debugger'] } : {},
+}));

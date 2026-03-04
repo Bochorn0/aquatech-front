@@ -1,35 +1,35 @@
 import Swal from "sweetalert2";
 import { Helmet } from "react-helmet-async";
-import { useRef, useMemo, useEffect, useState } from "react";
+import { useRef, useMemo, useState, useEffect } from "react";
 
 import {
   Box,
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
   Chip,
+  Grid,
+  Paper,
+  Table,
   Button,
   Dialog,
-  DialogActions,
-  Divider,
-  DialogTitle,
-  DialogContent,
-  CircularProgress,
-  FormControl,
-  FormControlLabel,
-  Grid,
-  IconButton,
-  Paper,
-  MenuItem,
-  InputLabel,
   Select,
-  Table,
-  TableBody,
-  TableRow,
-  TableHead,
   Switch,
+  Divider,
+  MenuItem,
+  TableRow,
+  Accordion,
+  TableBody,
+  TableHead,
   TextField,
-  Typography
+  IconButton,
+  InputLabel,
+  Typography,
+  DialogTitle,
+  FormControl,
+  DialogActions,
+  DialogContent,
+  AccordionDetails,
+  AccordionSummary,
+  CircularProgress,
+  FormControlLabel
 } from "@mui/material";
 
 import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
@@ -288,11 +288,11 @@ export function CustomizationPageV2() {
   const [devModeEnabled, setDevModeEnabled] = useState<boolean>(false);
 
   // Regiones module (admin only)
-  const [regions, setRegions] = useState<{ id: string; code: string; name: string }[]>([]);
-  const [regionEditModal, setRegionEditModal] = useState<{ id: string; code: string; name: string } | null>(null);
+  const [regions, setRegions] = useState<{ id: string; code: string; name: string; color?: string | null }[]>([]);
+  const [regionEditModal, setRegionEditModal] = useState<{ id: string; code: string; name: string; color?: string | null } | null>(null);
   const [regionPuntos, setRegionPuntos] = useState<{ id: string; name: string; codigo_tienda: string }[]>([]);
   const [regionAssignPv, setRegionAssignPv] = useState<string>('');
-  const [regionFormData, setRegionFormData] = useState({ code: '', name: '' });
+  const [regionFormData, setRegionFormData] = useState({ code: '', name: '', color: '' });
   const [savingRegion, setSavingRegion] = useState(false);
   const [regionCreateModalOpen, setRegionCreateModalOpen] = useState(false);
   const [creatingRegion, setCreatingRegion] = useState(false);
@@ -411,11 +411,15 @@ export function CustomizationPageV2() {
   useEffect(() => {
     if (regionEditModal?.id) {
       fetchRegionPuntos(regionEditModal.id);
-      setRegionFormData({ code: regionEditModal.code, name: regionEditModal.name });
+      setRegionFormData({
+        code: regionEditModal.code,
+        name: regionEditModal.name,
+        color: regionEditModal.color ?? '',
+      });
     } else {
       setRegionPuntos([]);
     }
-  }, [regionEditModal?.id, regionEditModal?.code, regionEditModal?.name]);
+  }, [regionEditModal?.id, regionEditModal?.code, regionEditModal?.name, regionEditModal?.color]);
 
   const handleSaveRegion = async () => {
     if (!regionEditModal) return;
@@ -423,9 +427,10 @@ export function CustomizationPageV2() {
     try {
       await apiV2Call(`/regions/${regionEditModal.id}`, 'PATCH', {
         code: regionFormData.code.trim().toUpperCase(),
-        name: regionFormData.name.trim()
+        name: regionFormData.name.trim(),
+        color: regionFormData.color.trim() || null,
       });
-      setRegionEditModal((r) => r ? { ...r, code: regionFormData.code, name: regionFormData.name } : null);
+      setRegionEditModal((r) => r ? { ...r, code: regionFormData.code, name: regionFormData.name, color: regionFormData.color.trim() || null } : null);
       fetchRegions();
     } catch (e) {
       console.error('Error saving region:', e);
@@ -461,25 +466,26 @@ export function CustomizationPageV2() {
   };
 
   const handleOpenRegionCreate = () => {
-    setRegionFormData({ code: '', name: '' });
+    setRegionFormData({ code: '', name: '', color: '' });
     setRegionCreateModalOpen(true);
   };
 
   const handleCloseRegionCreate = () => {
     setRegionCreateModalOpen(false);
-    setRegionFormData({ code: '', name: '' });
+    setRegionFormData({ code: '', name: '', color: '' });
   };
 
   const handleCreateRegion = async () => {
     const code = regionFormData.code.trim().toUpperCase();
     const name = regionFormData.name.trim() || code;
+    const color = regionFormData.color.trim() || null;
     if (!code) {
       MySwal.fire('Aviso', 'El código de región es requerido', 'warning');
       return;
     }
     setCreatingRegion(true);
     try {
-      await apiV2Call('/regions', 'POST', { code, name });
+      await apiV2Call('/regions', 'POST', { code, name, color });
       MySwal.fire('Éxito', 'Región creada', 'success');
       handleCloseRegionCreate();
       fetchRegions();
@@ -2306,6 +2312,30 @@ export function CustomizationPageV2() {
                     onChange={(e) => setRegionFormData((f) => ({ ...f, name: e.target.value }))}
                     fullWidth
                   />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <TextField
+                      label="Color (mapa)"
+                      value={regionFormData.color}
+                      onChange={(e) => setRegionFormData((f) => ({ ...f, color: e.target.value }))}
+                      placeholder="#1976d2"
+                      fullWidth
+                      helperText="Opcional. Hex para el mapa global. Ej: #1976d2"
+                    />
+                    {regionFormData.color && (
+                      <Box
+                        sx={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 1,
+                          bgcolor: regionFormData.color.startsWith('#') ? regionFormData.color : `#${regionFormData.color}`,
+                          border: '1px solid',
+                          borderColor: 'divider',
+                          flexShrink: 0,
+                        }}
+                        title={regionFormData.color}
+                      />
+                    )}
+                  </Box>
                   <Divider sx={{ my: 1 }} />
                   <Typography variant="subtitle2" fontWeight={600}>Puntos de venta vinculados</Typography>
                   {regionPuntos.length === 0 ? (
@@ -2395,6 +2425,14 @@ export function CustomizationPageV2() {
                   onChange={(e) => setRegionFormData((f) => ({ ...f, name: e.target.value }))}
                   fullWidth
                   placeholder="ej. Región Norte"
+                />
+                <TextField
+                  label="Color (mapa)"
+                  value={regionFormData.color}
+                  onChange={(e) => setRegionFormData((f) => ({ ...f, color: e.target.value }))}
+                  placeholder="#1976d2"
+                  fullWidth
+                  helperText="Opcional. Hex para diferenciar regiones en el mapa global"
                 />
               </Box>
             </DialogContent>
