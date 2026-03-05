@@ -721,9 +721,16 @@ export function CustomizationPageV2() {
 
       const user = localStorage.getItem('user');
       if (user) {
-        const client_ = JSON.parse(user).cliente as Cliente;
-        if (client_.name && client_.name !== 'All') {
-          clientsFromApi = clientsFromApi.filter((client: Cliente) => client.name === client_.name);
+        const client_ = JSON.parse(user).cliente as Cliente | null | undefined;
+        const clientName = client_?.name ? String(client_.name).trim() : '';
+        if (clientName && clientName !== 'All') {
+          const filtered = clientsFromApi.filter((client: Cliente) =>
+            String(client.name ?? '').trim() === clientName
+          );
+          // Avoid empty dropdown: if filter would remove all clients, show all (user client may not match API)
+          if (filtered.length > 0) {
+            clientsFromApi = filtered;
+          }
         }
       }
       // Deduplicate clients by id - more robust comparison
@@ -2020,10 +2027,18 @@ export function CustomizationPageV2() {
                     <Grid container spacing={2}>
                       <Grid item xs={12} sm={6}>
                         <FormControl fullWidth>
-                          <InputLabel>Cliente</InputLabel>
-                          <Select value={formData.cliente || formData.clientId || ''} name="cliente" onChange={handleChange}>
+                          <InputLabel id="metric-cliente-label">Cliente</InputLabel>
+                          <Select
+                            labelId="metric-cliente-label"
+                            label="Cliente"
+                            value={formData.cliente ?? formData.clientId ?? ''}
+                            name="cliente"
+                            onChange={handleChange}
+                            displayEmpty
+                          >
+                            <MenuItem value=""><em>Seleccionar cliente</em></MenuItem>
                             {clients.map((cliente) => (
-                              <MenuItem key={cliente._id || cliente.id} value={cliente._id || cliente.id}>{cliente.name}</MenuItem>
+                              <MenuItem key={cliente._id || cliente.id} value={String(cliente._id ?? cliente.id)}>{cliente.name}</MenuItem>
                             ))}
                           </Select>
                         </FormControl>
