@@ -3,7 +3,7 @@ import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { Box, Grid, Table, Paper, Button, Select, MenuItem, TableRow, TableBody, TextField, TableHead, InputLabel, Typography, FormControl, TablePagination, CircularProgress } from '@mui/material';
+import { Box, Grid, Table, Paper, Button, Select, MenuItem, TableRow, TableBody, TextField, TableCell, TableHead, InputLabel, Typography, FormControl, TablePagination, CircularProgress } from '@mui/material';
 
 import { StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
@@ -185,6 +185,7 @@ export default function PuntoVentaTableListV2() {
               <Table>
                 <TableHead>
                   <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
+                    <TableCell sx={{ width: 6, minWidth: 6, p: 0 }} />
                     <StyledTableCellHeader>Nombre</StyledTableCellHeader>
                     <StyledTableCellHeader>Cliente</StyledTableCellHeader>
                     <StyledTableCellHeader>Ciudad</StyledTableCellHeader>
@@ -197,15 +198,32 @@ export default function PuntoVentaTableListV2() {
                   {filtered
                     .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                     .map((pv) => {
-                      // Handle both MongoDB _id and PostgreSQL id
                       const puntoId = pv._id || (pv as any).id || '';
+                      const status = pv.metric_status ?? 'normal';
+                      const statusColor = status === 'critico' ? '#d32f2f' : status === 'preventivo' ? '#ed6c02' : '#2e7d32';
+                      const formatDate = (iso: string | null | undefined) => {
+                        if (!iso) return null;
+                        try {
+                          const d = new Date(iso);
+                          return Number.isNaN(d.getTime()) ? null : d.toLocaleString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                        } catch {
+                          return null;
+                        }
+                      };
+                      const lastReadingStr = formatDate(pv.last_reading_at);
+                      const estadoLine1 = pv.online === true ? 'En línea' : 'Desconectado';
+                      const estadoLine2 = lastReadingStr ? (pv.online ? lastReadingStr : `Últ. lectura: ${lastReadingStr}`) : null;
                       return (
                         <StyledTableRow key={puntoId}>
+                          <TableCell sx={{ width: 6, minWidth: 6, p: 0, verticalAlign: 'middle' }}>
+                            <Box sx={{ width: 6, minHeight: 36, height: 40, backgroundColor: statusColor, borderRadius: 0 }} />
+                          </TableCell>
                           <StyledTableCell>{pv.name}</StyledTableCell>
                           <StyledTableCell>{typeof pv.cliente === 'object' && pv.cliente !== null ? pv.cliente.name : 'N/A'}</StyledTableCell>
                           <StyledTableCell>{typeof pv.city === 'object' && pv.city !== null ? pv.city.city : 'N/A'}</StyledTableCell>
                           <StyledTableCell>
-                            {pv.online === true ? 'En línea' : 'Desconectado'}
+                            <Box component="span" display="block">{estadoLine1}</Box>
+                            {estadoLine2 && <Box component="span" display="block" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{estadoLine2}</Box>}
                           </StyledTableCell>
                           <StyledTableCell>
                             {pv.sensors_count ?? 0}

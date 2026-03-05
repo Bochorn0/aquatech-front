@@ -304,4 +304,8 @@ export interface PuntosVenta {
     online?: boolean;
     /** From API: count of rows in puntoventasensors for this punto */
     sensors_count?: number;
+    /** From API: last time sensor_latest was updated for this punto (ISO string) */
+    last_reading_at?: string | null;
+    /** From API: worst metric level — 'critico' | 'preventivo' | 'normal' */
+    metric_status?: 'critico' | 'preventivo' | 'normal';
 }
