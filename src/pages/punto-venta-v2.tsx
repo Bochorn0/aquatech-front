@@ -3,7 +3,8 @@ import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { Box, Grid, Table, Paper, Button, Select, MenuItem, TableRow, TableBody, TextField, TableCell, TableHead, InputLabel, Typography, FormControl, TablePagination, CircularProgress } from '@mui/material';
+import { Box, Grid, Table, Paper, Button, Select, MenuItem, TableRow, TableBody, TextField, TableCell, TableHead, InputLabel, Typography, FormControl, TablePagination, CircularProgress, ToggleButtonGroup, ToggleButton } from '@mui/material';
+import TableSortLabel from '@mui/material/TableSortLabel';
 
 import { StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
@@ -23,6 +24,9 @@ export default function PuntoVentaTableListV2() {
   const [selectedClient, setSelectedClient] = useState('All');
   const [cityFilters, setCityFilters] = useState<string[]>([]);
   const [clientFilters, setClientFilters] = useState<string[]>([]);
+  const [statusQuickFilter, setStatusQuickFilter] = useState<'all' | 'online' | 'critico' | 'preventivo'>('all');
+  const [orderBy, setOrderBy] = useState<string>('name');
+  const [order, setOrder] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const navigate = useNavigate();
@@ -92,8 +96,53 @@ export default function PuntoVentaTableListV2() {
       );
     }
 
+    if (statusQuickFilter === 'online') {
+      data = data.filter((pv) => pv.online === true);
+    } else if (statusQuickFilter === 'critico') {
+      data = data.filter((pv) => (pv.metric_status ?? 'normal') === 'critico');
+    } else if (statusQuickFilter === 'preventivo') {
+      data = data.filter((pv) => (pv.metric_status ?? 'normal') === 'preventivo');
+    }
+
     setFiltered(data);
-  }, [searchQuery, selectedCity, selectedClient, puntosVenta]);
+  }, [searchQuery, selectedCity, selectedClient, statusQuickFilter, puntosVenta]);
+
+  // ---------------------------------------------
+  // 🔹 Ordenar por columna
+  // ---------------------------------------------
+  const getSortValue = (pv: PuntosVenta, key: string): string | number => {
+    switch (key) {
+      case 'name':
+        return (pv.name ?? '').toLowerCase();
+      case 'cliente':
+        return (typeof pv.cliente === 'object' && pv.cliente !== null ? pv.cliente.name : '').toLowerCase();
+      case 'city':
+        return (typeof pv.city === 'object' && pv.city !== null ? pv.city.city : '').toLowerCase();
+      case 'estado':
+        return pv.online === true ? 1 : 0;
+      case 'sensors_count':
+        return pv.sensors_count ?? 0;
+      default:
+        return '';
+    }
+  };
+
+  const sortedRows = [...filtered].sort((a, b) => {
+    const va = getSortValue(a, orderBy);
+    const vb = getSortValue(b, orderBy);
+    const cmp = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb));
+    return order === 'asc' ? cmp : -cmp;
+  });
+
+  const handleSort = (column: string) => {
+    if (orderBy === column) {
+      setOrder(order === 'asc' ? 'desc' : 'asc');
+    } else {
+      setOrderBy(column);
+      setOrder('asc');
+    }
+    setPage(0);
+  };
 
   // ---------------------------------------------
   // ⏳ Estado de carga
@@ -155,6 +204,22 @@ export default function PuntoVentaTableListV2() {
               </Select>
             </FormControl>
           </Grid>
+          <Grid item xs={12}>
+            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+              Quick filters
+            </Typography>
+            <ToggleButtonGroup
+              value={statusQuickFilter}
+              exclusive
+              onChange={(_, v) => v != null && setStatusQuickFilter(v)}
+              size="small"
+            >
+              <ToggleButton value="all">Todos</ToggleButton>
+              <ToggleButton value="online">Solo en línea</ToggleButton>
+              <ToggleButton value="critico">Solo críticos</ToggleButton>
+              <ToggleButton value="preventivo">Solo preventivos</ToggleButton>
+            </ToggleButtonGroup>
+          </Grid>
         </Grid>
       </Box>
 
@@ -171,7 +236,7 @@ export default function PuntoVentaTableListV2() {
                 </Grid>
                 <Grid item xs={12} sm={3} textAlign="right" sx={{ p: 2 }}>
                   <CSVLink
-                    data={filtered}
+                    data={sortedRows}
                     filename={`PuntosVenta_V2_${new Date().toISOString()}.csv`}
                     style={{ textDecoration: 'none' }}
                   >
@@ -186,16 +251,36 @@ export default function PuntoVentaTableListV2() {
                 <TableHead>
                   <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
                     <TableCell sx={{ width: 6, minWidth: 6, p: 0 }} />
-                    <StyledTableCellHeader>Nombre</StyledTableCellHeader>
-                    <StyledTableCellHeader>Cliente</StyledTableCellHeader>
-                    <StyledTableCellHeader>Ciudad</StyledTableCellHeader>
-                    <StyledTableCellHeader>Estado</StyledTableCellHeader>
-                    <StyledTableCellHeader>Sensores</StyledTableCellHeader>
+                    <StyledTableCellHeader>
+                      <TableSortLabel active={orderBy === 'name'} direction={orderBy === 'name' ? order : 'asc'} onClick={() => handleSort('name')}>
+                        Nombre
+                      </TableSortLabel>
+                    </StyledTableCellHeader>
+                    <StyledTableCellHeader>
+                      <TableSortLabel active={orderBy === 'cliente'} direction={orderBy === 'cliente' ? order : 'asc'} onClick={() => handleSort('cliente')}>
+                        Cliente
+                      </TableSortLabel>
+                    </StyledTableCellHeader>
+                    <StyledTableCellHeader>
+                      <TableSortLabel active={orderBy === 'city'} direction={orderBy === 'city' ? order : 'asc'} onClick={() => handleSort('city')}>
+                        Ciudad
+                      </TableSortLabel>
+                    </StyledTableCellHeader>
+                    <StyledTableCellHeader>
+                      <TableSortLabel active={orderBy === 'estado'} direction={orderBy === 'estado' ? order : 'asc'} onClick={() => handleSort('estado')}>
+                        Estado
+                      </TableSortLabel>
+                    </StyledTableCellHeader>
+                    <StyledTableCellHeader>
+                      <TableSortLabel active={orderBy === 'sensors_count'} direction={orderBy === 'sensors_count' ? order : 'asc'} onClick={() => handleSort('sensors_count')}>
+                        Sensores
+                      </TableSortLabel>
+                    </StyledTableCellHeader>
                     <StyledTableCellHeader>Actions</StyledTableCellHeader>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filtered
+                  {sortedRows
                     .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                     .map((pv) => {
                       const puntoId = pv._id || (pv as any).id || '';
@@ -248,7 +333,7 @@ export default function PuntoVentaTableListV2() {
 
         <TablePagination
           component="div"
-          count={filtered.length}
+          count={sortedRows.length}
           rowsPerPage={rowsPerPage}
           page={page}
           onPageChange={(_, newPage) => setPage(newPage)}
