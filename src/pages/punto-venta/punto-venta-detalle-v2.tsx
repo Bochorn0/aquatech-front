@@ -38,6 +38,7 @@ export default function PuntoVentaDetalleV2() {
   const { id } = useParams<{ id: string }>();
   const [punto, setPunto] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [chartsLoading, setChartsLoading] = useState<boolean>(true);
   const [chartDataNiveles, setChartDataNiveles] = useState<any>(null);
   const [tiwaterData, setTiwaterData] = useState<any>(null);
   const [metricsConfig, setMetricsConfig] = useState<any[]>([]);
@@ -134,10 +135,14 @@ export default function PuntoVentaDetalleV2() {
       }
     };
 
-    const fetchPuntoVentaDetails = async (bustCache = false) => {
+    const fetchPuntoVentaDetails = async (opts: { light?: boolean; bustCache?: boolean; background?: boolean } = {}) => {
+      const { light = false, bustCache = false, background = false } = opts;
       try {
-        // Use v2.0 endpoint for PostgreSQL data (supports both id and codigo_tienda)
-        const url = `${CONFIG.API_BASE_URL_V2}/puntoVentas/${id}${bustCache ? `?_t=${Date.now()}` : ''}`;
+        const params = new URLSearchParams();
+        if (light) params.set('light', '1');
+        if (bustCache) params.set('_t', String(Date.now()));
+        const qs = params.toString();
+        const url = `${CONFIG.API_BASE_URL_V2}/puntoVentas/${id}${qs ? `?${qs}` : ''}`;
         const response = await fetch(url, {
           method: 'GET',
           headers: {
@@ -153,47 +158,40 @@ export default function PuntoVentaDetalleV2() {
         const result = await response.json();
         const puntoData = result.data || result;
         setPunto(puntoData);
-        
-        // Preparar datos de gráficas para niveles
         prepareChartDataNiveles(puntoData, setChartDataNiveles);
-        
-        // Debug: Verificar datos históricos
-        const tiwaterProd = puntoData?.productos?.find((p: any) => p.product_type === 'TIWater');
-        if (tiwaterProd) {
-          console.log('[PuntoVentaDetalleV2] Producto TIWater encontrado:', {
-            id: tiwaterProd.id,
-            hasHistorico: !!tiwaterProd.historico,
-            hasHistoricoDiario: !!tiwaterProd.historico_diario,
-            historicoHours: tiwaterProd.historico?.hours_with_data?.length || 0
-          });
+
+        if (!background) {
+          const codigoTienda = puntoData.codigo_tienda || id;
+          if (codigoTienda) {
+            fetchTiwaterData(codigoTienda);
+            fetchLatestSensorData(codigoTienda);
+          }
+          const puntoVentaId = puntoData.id || puntoData._id;
+          const clienteId = puntoData.cliente?.id || puntoData.cliente?._id || puntoData.cliente;
+          if (puntoVentaId || clienteId) {
+            fetchMetricsConfig(puntoVentaId, clienteId);
+          }
         }
-        
-        // Fetch tiwater sensor data if we have codigo_tienda
-        const codigoTienda = puntoData.codigo_tienda || id;
-        if (codigoTienda) {
-          fetchTiwaterData(codigoTienda);
-          fetchLatestSensorData(codigoTienda);
+
+        if (light) {
+          setLoading(false);
+          setChartsLoading(true);
+          fetchPuntoVentaDetails({ light: false, background: true });
+        } else {
+          setChartsLoading(false);
+          if (!background) setLoading(false);
         }
-        
-        // Fetch metrics configuration for this punto venta
-        const puntoVentaId = puntoData.id || puntoData._id;
-        const clienteId = puntoData.cliente?.id || puntoData.cliente?._id || puntoData.cliente;
-        if (puntoVentaId || clienteId) {
-          fetchMetricsConfig(puntoVentaId, clienteId);
-        }
-        
-        setLoading(false);
       } catch (error) {
         console.error('Error fetching punto venta details:', error);
         setLoading(false);
+        setChartsLoading(false);
       }
     };
 
     if (id) {
-      fetchPuntoVentaDetails();
-      // Refresh every 30 seconds
+      fetchPuntoVentaDetails({ light: true });
       const interval = setInterval(() => {
-        fetchPuntoVentaDetails();
+        fetchPuntoVentaDetails({ bustCache: true });
       }, 30000);
       return () => clearInterval(interval);
     }
@@ -581,6 +579,7 @@ export default function PuntoVentaDetalleV2() {
               tiwaterData={tiwaterData}
               tiwaterProduct={tiwaterProduct}
               metricsConfig={metricsConfig}
+              chartsLoading={chartsLoading}
             />
           </Grid>
         </Grid>
@@ -807,7 +806,7 @@ function getMatchingRule(value: number | null, rules: any[]): { rule: any; isNor
   return { rule: matched, isNormal };
 }
 
-function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterProduct, metricsConfig }: any) {
+function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterProduct, metricsConfig, chartsLoading }: any) {
   // Procesar datos de TIWater de la misma manera que TiwaterDashboard
   let processedTiwaterData: any = null;
   if (tiwaterData || tiwaterProduct) {
@@ -1033,6 +1032,12 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
         Almacenamiento
       </Typography>
       <Divider sx={{ mb: 3, borderWidth: 1 }} />
+
+      {chartsLoading && (
+        <Alert severity="info" sx={{ mb: 2 }} icon={<CircularProgress size={20} />}>
+          Cargando datos históricos para gráficas…
+        </Alert>
+      )}
 
       {/* Layout horizontal: Agua Cruda | Agua Purificada */}
       <Grid container spacing={3}>
