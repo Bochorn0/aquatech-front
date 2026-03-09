@@ -100,7 +100,7 @@ export function UserList() {
 
       <Box display="flex" gap={2} mb={2}>
         <FormControl sx={{ minWidth: 150 }}>
-          <InputLabel>Status</InputLabel>
+          <InputLabel shrink>Status</InputLabel>
           <Select value={statusFilter || ''} onChange={(e) => setStatusFilter(e.target.value || null)}>
             <MenuItem value="">All</MenuItem>
             <MenuItem value="active">Active</MenuItem>
@@ -110,7 +110,7 @@ export function UserList() {
         </FormControl>
 
         <FormControl sx={{ minWidth: 150 }}>
-          <InputLabel>Role</InputLabel>
+          <InputLabel shrink>Role</InputLabel>
           <Select value={roleFilter || ''} onChange={(e) => setRoleFilter(e.target.value || null)}>
             <MenuItem value="">All</MenuItem>
             <MenuItem value="admin">Admin</MenuItem>

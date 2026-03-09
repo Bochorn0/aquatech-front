@@ -600,7 +600,7 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
             />
             {showDetailMap && (
                 <FormControl size="small" sx={{ minWidth: 200 }}>
-                  <InputLabel>Centrar en</InputLabel>
+                  <InputLabel shrink>Centrar en</InputLabel>
                   <Select
                     value={detailMapPuntoId ?? ''}
                     label="Centrar en"

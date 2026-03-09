@@ -1999,7 +1999,7 @@ export function CustomizationPageV2() {
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                   <FormControl size="small" sx={{ minWidth: 140 }}>
-                    <InputLabel>Nº de puntos</InputLabel>
+                    <InputLabel shrink>Nº de puntos</InputLabel>
                     <Select
                       value={mockPuntosCount}
                       label="Nº de puntos"
@@ -2035,7 +2035,7 @@ export function CustomizationPageV2() {
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                     <FormControl size="small" sx={{ minWidth: 260 }}>
-                      <InputLabel>Puntos de venta</InputLabel>
+                      <InputLabel shrink>Puntos de venta</InputLabel>
                       <Select
                         multiple
                         value={stressPuntoIds}
@@ -2052,7 +2052,7 @@ export function CustomizationPageV2() {
                       </Select>
                     </FormControl>
                     <FormControl size="small" sx={{ minWidth: 120 }}>
-                      <InputLabel>Duración</InputLabel>
+                      <InputLabel shrink>Duración</InputLabel>
                       <Select
                         value={stressLapseMin}
                         label="Duración"
@@ -2065,7 +2065,7 @@ export function CustomizationPageV2() {
                       </Select>
                     </FormControl>
                     <FormControl size="small" sx={{ minWidth: 140 }}>
-                      <InputLabel># sensores/msg</InputLabel>
+                      <InputLabel shrink># sensores/msg</InputLabel>
                       <Select
                         value={stressSensorCount}
                         label="# sensores/msg"
@@ -2369,7 +2369,7 @@ export function CustomizationPageV2() {
                     <Grid container spacing={2}>
                       <Grid item xs={12} sm={6}>
                         <FormControl fullWidth>
-                          <InputLabel id="metric-cliente-label">Cliente</InputLabel>
+                          <InputLabel id="metric-cliente-label" shrink>Cliente</InputLabel>
                           <Select
                             labelId="metric-cliente-label"
                             label="Cliente"
@@ -2387,10 +2387,11 @@ export function CustomizationPageV2() {
                       </Grid>
                       <Grid item xs={12} sm={6}>
                         <FormControl fullWidth>
-                          <InputLabel>Punto de Venta</InputLabel>
-                          <Select 
-                            value={formData.punto_venta_id || ''} 
-                            name="punto_venta_id" 
+                          <InputLabel shrink>Punto de Venta</InputLabel>
+                          <Select
+                            label="Punto de Venta"
+                            value={formData.punto_venta_id || ''}
+                            name="punto_venta_id"
                             onChange={handleChange}
                             disabled={!formData.cliente && !formData.clientId}
                           >
@@ -2416,9 +2417,10 @@ export function CustomizationPageV2() {
                       </Grid>
                       <Grid item xs={12} sm={6}>
                         <FormControl fullWidth>
-                          <InputLabel>Tipo de Métrica</InputLabel>
-                          <Select 
-                            value={formData.metric_type || ''} 
+                          <InputLabel shrink>Tipo de Métrica</InputLabel>
+                          <Select
+                            label="Tipo de Métrica"
+                            value={formData.metric_type || ''}
                             name="metric_type" 
                             onChange={(e) => {
                               const newType = e.target.value;
@@ -2472,10 +2474,11 @@ export function CustomizationPageV2() {
                       </Grid>
                       <Grid item xs={12} sm={6}>
                         <FormControl fullWidth>
-                          <InputLabel>Tipo de Sensor</InputLabel>
-                          <Select 
-                            value={formData.sensor_type || ''} 
-                            name="sensor_type" 
+                          <InputLabel shrink>Tipo de Sensor</InputLabel>
+                          <Select
+                            label="Tipo de Sensor"
+                            value={formData.sensor_type || ''}
+                            name="sensor_type"
                             onChange={handleChange}
                             disabled={!formData.metric_type}
                           >
@@ -2589,7 +2592,7 @@ export function CustomizationPageV2() {
                             </Grid>
                             <Grid item xs={12} sm={3}>
                               <FormControl fullWidth>
-                                <InputLabel>Severidad</InputLabel>
+                                <InputLabel shrink>Severidad</InputLabel>
                                 <Select
                                   value={rule.severity ?? (inferSeverityFromColor(rule.color) ?? 'normal')}
                                   onChange={(e) => {
@@ -2851,7 +2854,7 @@ export function CustomizationPageV2() {
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={6}>
                     <FormControl fullWidth>
-                      <InputLabel>Cliente</InputLabel>
+                      <InputLabel shrink>Cliente</InputLabel>
                       <Select
                         label="Cliente"
                         value={regionMetricFormData.cliente ?? regionMetricFormData.clientId ?? ''}
@@ -2868,7 +2871,7 @@ export function CustomizationPageV2() {
                   </Grid>
                   <Grid item xs={12} sm={6}>
                     <FormControl fullWidth>
-                      <InputLabel>Región</InputLabel>
+                      <InputLabel shrink>Región</InputLabel>
                       <Select
                         label="Región"
                         value={regionMetricFormData.regionId ?? ''}
@@ -2885,7 +2888,7 @@ export function CustomizationPageV2() {
                   </Grid>
                   <Grid item xs={12} sm={6}>
                     <FormControl fullWidth>
-                      <InputLabel>Tipo de métrica</InputLabel>
+                      <InputLabel shrink>Tipo de métrica</InputLabel>
                       <Select
                         value={regionMetricFormData.metric_type ?? ''}
                         name="metric_type"
@@ -2905,8 +2908,9 @@ export function CustomizationPageV2() {
                   </Grid>
                   <Grid item xs={12} sm={6}>
                     <FormControl fullWidth>
-                      <InputLabel>Tipo de sensor</InputLabel>
+                      <InputLabel shrink>Tipo de sensor</InputLabel>
                       <Select
+                        label="Tipo de sensor"
                         value={regionMetricFormData.sensor_type ?? ''}
                         name="sensor_type"
                         onChange={handleRegionMetricChange}
@@ -2989,7 +2993,7 @@ export function CustomizationPageV2() {
                 <TextField label="Dirección" name="address.street" value={clientFormData.address.street} onChange={handleClientChange} fullWidth />
                 <TextField label="Ciudad" name="address.city" value={clientFormData.address.city} onChange={handleClientChange} fullWidth />
                 <FormControl fullWidth>
-                  <InputLabel>Estado</InputLabel>
+                  <InputLabel shrink>Estado</InputLabel>
                   <Select value={clientFormData.address.state} name="address.state" onChange={handleClientChange} fullWidth>
                     {estados.map((state) => (
                       <MenuItem key={state} value={state}>{state}</MenuItem>
@@ -3013,7 +3017,7 @@ export function CustomizationPageV2() {
             <DialogContent>
               <Box display="flex" flexDirection="column" gap={2} mt={1}>
                 <FormControl fullWidth>
-                  <InputLabel>Estado</InputLabel>
+                  <InputLabel shrink>Estado</InputLabel>
                   <Select value={cityFormData.state} name="state" onChange={handleCityChange} fullWidth>
                     {estados.map((state) => (
                       <MenuItem key={state} value={state}>{state}</MenuItem>
@@ -3118,7 +3122,7 @@ export function CustomizationPageV2() {
                   )}
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
                     <FormControl size="small" sx={{ minWidth: 200 }}>
-                      <InputLabel>Asignar punto</InputLabel>
+                      <InputLabel shrink>Asignar punto</InputLabel>
                       <Select
                         value={regionAssignPv}
                         label="Asignar punto"
@@ -3248,7 +3252,7 @@ export function CustomizationPageV2() {
                   fullWidth
                 />
                 <FormControl fullWidth>
-                  <InputLabel>Ciudad</InputLabel>
+                  <InputLabel shrink>Ciudad</InputLabel>
                   <Select
                     value={pvFormData.city || ""}
                     name="city"
@@ -3265,7 +3269,7 @@ export function CustomizationPageV2() {
                   </Select>
                 </FormControl>
                 <FormControl fullWidth>
-                  <InputLabel>Cliente</InputLabel>
+                  <InputLabel shrink>Cliente</InputLabel>
                   <Select
                     value={pvFormData.cliente || ""}
                     name="cliente"

@@ -1112,7 +1112,7 @@ const handlePvChange = (e: any) => {
           <DialogContent>
             <Box display="flex" flexDirection="column" gap={2} mt={1}>
               <FormControl fullWidth>
-                <InputLabel>Cliente</InputLabel>
+                <InputLabel shrink>Cliente</InputLabel>
                 <Select value={formData.cliente} name="cliente" onChange={handleChange} fullWidth>
                   {clients.map((cliente) => (
                     <MenuItem key={cliente._id ?? cliente.id ?? ''} value={cliente._id ?? cliente.id ?? ''}>{cliente.name}</MenuItem>
@@ -1120,7 +1120,7 @@ const handlePvChange = (e: any) => {
                 </Select>
               </FormControl>
               <FormControl fullWidth>
-                <InputLabel>Tipo de Producto</InputLabel>
+                <InputLabel shrink>Tipo de Producto</InputLabel>
                 <Select value={formData.product_type} name="product_type" onChange={handleChange} fullWidth>
                   {ProductTypes.map((type) => (
                     <MenuItem key={type} value={type}>{type}</MenuItem>
@@ -1168,7 +1168,7 @@ const handlePvChange = (e: any) => {
               <TextField label="Dirección" name="address.street" value={clientFormData.address.street} onChange={handleClientChange} fullWidth />
               <TextField label="Ciudad" name="address.city" value={clientFormData.address.city} onChange={handleClientChange} fullWidth />
               <FormControl fullWidth>
-                <InputLabel>Estado</InputLabel>
+                <InputLabel shrink>Estado</InputLabel>
                 <Select value={clientFormData.address.state} name="address.state" onChange={handleClientChange} fullWidth>
                   {estados.map((state) => (
                     <MenuItem key={state} value={state}>{state}</MenuItem>
@@ -1190,7 +1190,7 @@ const handlePvChange = (e: any) => {
           <DialogContent>
             <Box display="flex" flexDirection="column" gap={2} mt={1}>
               <FormControl fullWidth>
-                <InputLabel>Estado</InputLabel>
+                <InputLabel shrink>Estado</InputLabel>
                 <Select value={cityFormData.state} name="state" onChange={handleCityChange} fullWidth>
                   {estados.map((state) => (
                     <MenuItem key={state} value={state}>{state}</MenuItem>
@@ -1227,7 +1227,7 @@ const handlePvChange = (e: any) => {
 
               {/* Productos */}
               <FormControl fullWidth>
-                <InputLabel>Productos</InputLabel>
+                <InputLabel shrink>Productos</InputLabel>
                 <Select
                   multiple
                   name="productos"
@@ -1254,7 +1254,7 @@ const handlePvChange = (e: any) => {
 
               {/* Ciudad */}
               <FormControl fullWidth>
-                <InputLabel>Ciudad</InputLabel>
+                <InputLabel shrink>Ciudad</InputLabel>
                 <Select
                   value={pvFormData.city != null && pvFormData.city !== '' ? String(pvFormData.city) : ''}
                   name="city"
@@ -1273,7 +1273,7 @@ const handlePvChange = (e: any) => {
 
               {/* Cliente */}
               <FormControl fullWidth>
-                <InputLabel>Cliente</InputLabel>
+                <InputLabel shrink>Cliente</InputLabel>
                 <Select
                   value={pvFormData.cliente != null && pvFormData.cliente !== '' ? String(pvFormData.cliente) : ''}
                   name="cliente"
@@ -1312,7 +1312,7 @@ const handlePvChange = (e: any) => {
                 <TextField label="Nombre" value={productFormData.name} fullWidth disabled />
               )}
               <FormControl fullWidth>
-                <InputLabel>Cliente</InputLabel>
+                <InputLabel shrink>Cliente</InputLabel>
                 <Select
                   value={productFormData.cliente || ''}
                   name="cliente"
@@ -1327,7 +1327,7 @@ const handlePvChange = (e: any) => {
                 </Select>
               </FormControl>
               <FormControl fullWidth>
-                <InputLabel>Ciudad</InputLabel>
+                <InputLabel shrink>Ciudad</InputLabel>
                 <Select
                   value={productFormCityId}
                   name="city"
@@ -1342,7 +1342,7 @@ const handlePvChange = (e: any) => {
                 </Select>
               </FormControl>
               <FormControl fullWidth>
-                <InputLabel>Tipo de producto</InputLabel>
+                <InputLabel shrink>Tipo de producto</InputLabel>
                 <Select
                   value={productFormData.product_type || 'Osmosis'}
                   name="product_type"
@@ -1381,7 +1381,7 @@ const handlePvChange = (e: any) => {
             </Typography>
             <Box display="flex" flexDirection="column" gap={2} mt={1}>
               <FormControl fullWidth>
-                <InputLabel>Cliente</InputLabel>
+                <InputLabel shrink>Cliente</InputLabel>
                 <Select
                   value={bulkProductFormData.cliente || ''}
                   name="cliente"
@@ -1397,7 +1397,7 @@ const handlePvChange = (e: any) => {
                 </Select>
               </FormControl>
               <FormControl fullWidth>
-                <InputLabel>Ciudad</InputLabel>
+                <InputLabel shrink>Ciudad</InputLabel>
                 <Select
                   value={bulkProductCityId}
                   name="city"
@@ -1413,7 +1413,7 @@ const handlePvChange = (e: any) => {
                 </Select>
               </FormControl>
               <FormControl fullWidth>
-                <InputLabel>Tipo de producto</InputLabel>
+                <InputLabel shrink>Tipo de producto</InputLabel>
                 <Select
                   value={bulkProductFormData.product_type || ''}
                   name="product_type"

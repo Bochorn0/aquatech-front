@@ -181,7 +181,7 @@ export function DashboardPage() {
                 <Grid xs={12} md={6} lg={5}>
                   <Typography variant="h4">
                     <FormControl fullWidth sx={{ p: 3 }}>
-                    <InputLabel id="month-select-label">Meses en Grafico</InputLabel>
+                    <InputLabel id="month-select-label" shrink>Meses en Grafico</InputLabel>
                     <Select
                       labelId="month-select-label"
                       multiple
@@ -202,7 +202,7 @@ export function DashboardPage() {
                 <Grid xs={12} md={6} lg={7}>
                   <Typography variant="h4">
                     <FormControl fullWidth sx={{ p: 3 }}>
-                      <InputLabel id="city-select-label">Ciudades en Grafico</InputLabel>
+                      <InputLabel id="city-select-label" shrink>Ciudades en Grafico</InputLabel>
                       <Select
                         labelId="city-select-label"
                         multiple

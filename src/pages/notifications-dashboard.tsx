@@ -222,7 +222,7 @@ export default function NotificationsDashboard() {
               />
 
               <FormControl fullWidth>
-                <InputLabel>Tipo</InputLabel>
+                <InputLabel shrink>Tipo</InputLabel>
                 <Select
                   value={type}
                   label="Tipo"

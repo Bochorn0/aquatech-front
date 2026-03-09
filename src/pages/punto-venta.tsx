@@ -145,7 +145,7 @@ export default function PuntoVentaTableList() {
           </Grid>
           <Grid item xs={12} sm={4}>
             <FormControl fullWidth>
-              <InputLabel>Ciudad</InputLabel>
+              <InputLabel shrink>Ciudad</InputLabel>
               <Select value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)}>
                 <MenuItem value="All">Todas</MenuItem>
                 {cityFilters.map((city) => (
@@ -158,7 +158,7 @@ export default function PuntoVentaTableList() {
           </Grid>
           <Grid item xs={12} sm={4}>
             <FormControl fullWidth>
-              <InputLabel>Cliente</InputLabel>
+              <InputLabel shrink>Cliente</InputLabel>
               <Select value={selectedClient} onChange={(e) => setSelectedClient(e.target.value)}>
                 <MenuItem value="All">Todos</MenuItem>
                 {clientFilters.map((cliente) => (

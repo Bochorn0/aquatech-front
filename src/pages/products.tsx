@@ -271,7 +271,7 @@ useEffect(() => {
           </Grid>
           <Grid item xs={12} sm={2}>
           <FormControl fullWidth>
-              <InputLabel>Ciudad</InputLabel>
+              <InputLabel shrink>Ciudad</InputLabel>
               <Select value={selectedCity}  onChange={(e) => setSelectedCity(e.target.value)}>
                 <MenuItem value="All">Todas</MenuItem>
                 {cityFilters.map((city) => (
@@ -283,7 +283,7 @@ useEffect(() => {
           {currentRole === 'admin' && (
             <Grid item xs={12} sm={2}>
               <FormControl fullWidth>
-                <InputLabel>Cliente</InputLabel>
+                <InputLabel shrink>Cliente</InputLabel>
                 <Select value={selectedClient}  onChange={(e) => setSelectedClient(e.target.value)}>
                   <MenuItem value="All">Todos</MenuItem>
                   {clientFilters.map((cliente) => (
@@ -295,7 +295,7 @@ useEffect(() => {
           )}
           <Grid item xs={12} sm={2}>
             <FormControl fullWidth>
-              <InputLabel>Sucursal</InputLabel>
+              <InputLabel shrink>Sucursal</InputLabel>
               <Select value={selectedDrive} onChange={(e) => setSelectedDrive(e.target.value)}>
                 <MenuItem value="All">Todas</MenuItem>
                 {driveFilters.map((drive) => (
@@ -306,7 +306,7 @@ useEffect(() => {
           </Grid>
           <Grid item xs={12} sm={2}>
             <FormControl fullWidth>
-              <InputLabel>Status</InputLabel>
+              <InputLabel shrink>Status</InputLabel>
               <Select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
                 <MenuItem value="All">Todos</MenuItem>
                 {statusFilters.map((status) => (

@@ -296,13 +296,13 @@ export default function ControllersPage() {
             <TextField label="Nombre" name="name" value={controllerForm.name} onChange={handleControllerChange} fullWidth />
             <TextField label="IP" name="ip" value={controllerForm.ip} onChange={handleControllerChange} fullWidth />
             <FormControl fullWidth>
-              <InputLabel>Cliente</InputLabel>
+              <InputLabel shrink>Cliente</InputLabel>
               <Select name="cliente" value={controllerForm.cliente} onChange={handleControllerChange}>
                 {clients.map(c => <MenuItem key={c._id} value={c._id}>{c.name}</MenuItem>)}
               </Select>
             </FormControl>
             <FormControl fullWidth>
-              <InputLabel>Producto</InputLabel>
+              <InputLabel shrink>Producto</InputLabel>
               <Select name="product" value={controllerForm.product} onChange={handleControllerChange}>
                 {products.map(p => <MenuItem key={p._id} value={p._id}>{p.name}</MenuItem>)}
               </Select>
@@ -350,7 +350,7 @@ export default function ControllersPage() {
               inputProps={{ min: 20000, max: 60000 }}
             />
             <FormControl fullWidth>
-              <InputLabel>Tipo de Sensor</InputLabel>
+              <InputLabel shrink>Tipo de Sensor</InputLabel>
               <Select name="tipo_sensor" value={controllerForm.tipo_sensor} onChange={handleControllerChange}>
                 <MenuItem value="1">Sensor de Presion 1</MenuItem>
                 <MenuItem value="2">Sensor de Presion 2</MenuItem>
@@ -365,7 +365,7 @@ export default function ControllersPage() {
               fullWidth
             />
             <FormControl fullWidth>
-              <InputLabel>Reinicio Remoto</InputLabel>
+              <InputLabel shrink>Reinicio Remoto</InputLabel>
               <Select
                 name="reset_pending"
                 value={controllerForm.reset_pending ? "true" : "false"}
@@ -381,7 +381,7 @@ export default function ControllersPage() {
               </Select>
             </FormControl>
             <FormControl fullWidth>
-              <InputLabel>Flush Remoto</InputLabel>
+              <InputLabel shrink>Flush Remoto</InputLabel>
               <Select
                 name="flush_pending"
                 value={controllerForm.flush_pending ? "true" : "false"}
@@ -398,7 +398,7 @@ export default function ControllersPage() {
             </FormControl>
 
             {/* <FormControl fullWidth>
-              <InputLabel>Online</InputLabel>
+              <InputLabel shrink>Online</InputLabel>
               <Select name="online" value={controllerForm.online ? "true" : "false"} onChange={(e) => setControllerForm({...controllerForm, online: e.target.value === "true"})}>
                 <MenuItem value="true">Sí</MenuItem>
                 <MenuItem value="false">No</MenuItem>

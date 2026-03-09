@@ -694,7 +694,7 @@ export function HomeV2Page() {
         <Grid container spacing={3} sx={{ background: 'white' }}>
           <Grid xs={12} md={6} lg={3}>
             <FormControl fullWidth>
-              <InputLabel>Cliente</InputLabel>
+              <InputLabel shrink>Cliente</InputLabel>
               <Select
                 value={selectedClientId}
                 onChange={(e) => {
@@ -714,7 +714,7 @@ export function HomeV2Page() {
           </Grid>
           <Grid xs={12} md={6} lg={3}>
             <FormControl fullWidth>
-              <InputLabel>Punto de venta</InputLabel>
+              <InputLabel shrink>Punto de venta</InputLabel>
               <Select
                 value={selectedPuntoVentaId}
                 onChange={(e) => setSelectedPuntoVentaId(e.target.value)}
@@ -731,7 +731,7 @@ export function HomeV2Page() {
           </Grid>
           <Grid xs={12} md={6} lg={3}>
             <FormControl fullWidth>
-              <InputLabel>Rango de tiempo</InputLabel>
+              <InputLabel shrink>Rango de tiempo</InputLabel>
               <Select
                 value={selectedTimeRange}
                 onChange={(e) => setSelectedTimeRange(e.target.value as 'today' | 'week' | 'month')}

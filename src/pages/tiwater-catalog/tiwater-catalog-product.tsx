@@ -280,7 +280,7 @@ export default function TIWaterCatalogProductPage() {
 
             <Grid item xs={12} sm={6}>
               <FormControl fullWidth>
-                <InputLabel>Categoría</InputLabel>
+                <InputLabel shrink>Categoría</InputLabel>
                 <Select
                   name="category"
                   value={formData.category || ''}

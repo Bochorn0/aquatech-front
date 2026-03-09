@@ -139,7 +139,7 @@ export function DashboardPage() {
         <Grid container spacing={3} sx={{ background: 'white' }}>
           <Grid xs={12} md={6} lg={3}>
             <FormControl fullWidth>
-              <InputLabel>Ciudad</InputLabel>
+              <InputLabel shrink>Ciudad</InputLabel>
               <Select value={selectedCity} onChange={handleCityChange}>
                 <MenuItem value="All">Todas</MenuItem>
                 {cityFilters.map((city) => (
@@ -151,7 +151,7 @@ export function DashboardPage() {
           <Grid xs={12} md={6} lg={3}>
             {currentRole === 'admin' && (
               <FormControl fullWidth>
-                <InputLabel>Cliente</InputLabel>
+                <InputLabel shrink>Cliente</InputLabel>
                 <Select value={selectedClient}  onChange={(e) => setSelectedClient(e.target.value)}>
                   <MenuItem value="All">Todos</MenuItem>
                   {clientFilters.map((cliente) => (

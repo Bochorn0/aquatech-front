@@ -819,7 +819,7 @@ function NivelSection({ niveles, chartDataNiveles, osmosis = [], metrics = null,
     <Box>
       {/* Rango del histórico: 24h / semana / mes */}
       <FormControl size="small" sx={{ minWidth: 180, mb: 2 }}>
-        <InputLabel id="historico-range-label">Período histórico</InputLabel>
+        <InputLabel id="historico-range-label" shrink>Período histórico</InputLabel>
         <Select
           labelId="historico-range-label"
           value={historicoRange}

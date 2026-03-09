@@ -402,7 +402,7 @@ export default function UserRoleManagement() {
             <TextField label="Nombre" name="nombre" value={userForm.nombre} onChange={handleUserChange} fullWidth />
             <TextField label="Email" name="email" value={userForm.email} onChange={handleUserChange} fullWidth />
             <FormControl fullWidth>
-                <InputLabel>Cliente</InputLabel>
+                <InputLabel shrink>Cliente</InputLabel>
                 <Select value={userForm.client_id || ''} name="client_id" onChange={handleUserChange} fullWidth>
                   <MenuItem value={CLIENT_ALL}>
                     <em>Todos (Admin)</em>
@@ -413,7 +413,7 @@ export default function UserRoleManagement() {
                 </Select>
               </FormControl>
             <FormControl fullWidth>
-              <InputLabel>Rol</InputLabel>
+              <InputLabel shrink>Rol</InputLabel>
               <Select value={userForm.role} name="role" onChange={handleUserChange} fullWidth>
                 {roles.map((role) => (
                   <MenuItem key={role._id} value={role._id}>{role.name}</MenuItem>
@@ -433,7 +433,7 @@ export default function UserRoleManagement() {
               disabled={!!userForm.password && userForm.password.trim() !== ''}
             />
             <FormControl fullWidth>
-              <InputLabel>Estado</InputLabel>
+              <InputLabel shrink>Estado</InputLabel>
               <Select value={userForm.status} name="status" onChange={handleUserChange} fullWidth>
                 <MenuItem value="active">Activo</MenuItem>
                 <MenuItem value="inactive">Inactivo</MenuItem>
@@ -456,7 +456,7 @@ export default function UserRoleManagement() {
             <Box display="flex" flexDirection="column" gap={2} mt={1}>
               <TextField label="Nombre" name="name" value={roleForm.name} onChange={handleRoleChange} fullWidth />
               <FormControl fullWidth>
-                <InputLabel>Versión del Dashboard (landing)</InputLabel>
+                <InputLabel shrink>Versión del Dashboard (landing)</InputLabel>
                 <Select
                   name="dashboardVersion"
                   value={roleForm.dashboardVersion || 'v1'}

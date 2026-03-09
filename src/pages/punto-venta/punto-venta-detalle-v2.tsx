@@ -469,7 +469,7 @@ export default function PuntoVentaDetalleV2() {
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start' }}>
               <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                 <FormControl size="small" sx={{ minWidth: 300 }}>
-                  <InputLabel>Dev Scenarios</InputLabel>
+                  <InputLabel shrink>Dev Scenarios</InputLabel>
                   <Select
                     value={selectedScenario}
                     label="Dev Scenarios"
@@ -503,7 +503,7 @@ export default function PuntoVentaDetalleV2() {
               {/* Custom sensor value - same validation as dev scenarios, same MQTT format */}
               <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
                 <FormControl size="small" sx={{ minWidth: 260 }}>
-                  <InputLabel>Sensor</InputLabel>
+                  <InputLabel shrink>Sensor</InputLabel>
                   <Select
                     value={customSensorKey}
                     label="Sensor"
@@ -1827,7 +1827,7 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
             <FormControl fullWidth size="small">
-              <InputLabel>Región</InputLabel>
+              <InputLabel shrink>Región</InputLabel>
               <Select
                 value={editForm.region_id}
                 label="Región"
@@ -1840,7 +1840,7 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
               </Select>
             </FormControl>
             <FormControl fullWidth size="small">
-              <InputLabel>Ciudad</InputLabel>
+              <InputLabel shrink>Ciudad</InputLabel>
               <Select
                 value={editForm.ciudad_id}
                 label="Ciudad"
