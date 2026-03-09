@@ -341,6 +341,22 @@ export function CustomizationPageV2() {
   const [searchRegions, setSearchRegions] = useState('');
   const [pageRegions, setPageRegions] = useState(0);
   const [rowsPerPageRegions, setRowsPerPageRegions] = useState(10);
+  // Region metrics (metrics by region tab)
+  const [regionMetricsList, setRegionMetricsList] = useState<Metric[]>([]);
+  const [searchRegionMetrics, setSearchRegionMetrics] = useState('');
+  const [pageRegionMetrics, setPageRegionMetrics] = useState(0);
+  const [rowsPerPageRegionMetrics, setRowsPerPageRegionMetrics] = useState(10);
+  const [regionMetricModalOpen, setRegionMetricModalOpen] = useState(false);
+  const [regionMetricFormData, setRegionMetricFormData] = useState<Metric & { regionId?: string; region_name?: string }>({ ...defaultMetric });
+  const [regionMetricAlerts, setRegionMetricAlerts] = useState<MetricAlert[]>([]);
+  const [editingRegionMetricId, setEditingRegionMetricId] = useState<string | null>(null);
+  const [configurarRegion, setConfigurarRegion] = useState<{
+    clientId: string;
+    regionId: string;
+    client_name: string;
+    region_name: string;
+  } | null>(null);
+  const [loadingRegionMetrics, setLoadingRegionMetrics] = useState(false);
   const [searchCities, setSearchCities] = useState('');
   const [pageCities, setPageCities] = useState(0);
   const [rowsPerPageCities, setRowsPerPageCities] = useState(10);
@@ -506,9 +522,29 @@ export function CustomizationPageV2() {
     }
   };
 
+  const fetchRegionMetrics = async () => {
+    setLoadingRegionMetrics(true);
+    try {
+      const response = await apiV2Call('/region-metrics');
+      setRegionMetricsList(Array.isArray(response) ? response : []);
+    } catch (error) {
+      console.error('Error fetching region metrics:', error);
+      setRegionMetricsList([]);
+    } finally {
+      setLoadingRegionMetrics(false);
+    }
+  };
+
   useEffect(() => {
-    if (isAdmin && tabIndex === 4) fetchRegions();
+    if (isAdmin && tabIndex === 5) fetchRegions();
   }, [tabIndex, isAdmin]);
+
+  useEffect(() => {
+    if (tabIndex === 1) {
+      fetchRegionMetrics();
+      if (regions.length === 0) fetchRegions();
+    }
+  }, [tabIndex]);
 
   useEffect(() => {
     if (regionEditModal?.id) {
@@ -863,6 +899,43 @@ export function CustomizationPageV2() {
     return filteredMetricsByPv.slice(start, start + rowsPerPageMetrics);
   }, [filteredMetricsByPv, pageMetrics, rowsPerPageMetrics]);
 
+  // Group region metrics by client + region (one row per client/region)
+  const regionMetricsByClientRegion = useMemo(() => {
+    const byKey = new Map<string, { client_name: string; region_name: string; clientId: string; regionId: string; metrics: Metric[] }>();
+    regionMetricsList.forEach((m) => {
+      const cId = m.clientId ?? m.cliente ?? '';
+      const rId = (m as any).regionId ?? '';
+      const key = `${cId}|${rId}`;
+      if (!byKey.has(key)) {
+        byKey.set(key, {
+          client_name: (m as any).client_name ?? '',
+          region_name: (m as any).region_name ?? '',
+          clientId: String(cId),
+          regionId: String(rId),
+          metrics: []
+        });
+      }
+      byKey.get(key)!.metrics.push(m);
+    });
+    return Array.from(byKey.values());
+  }, [regionMetricsList]);
+
+  const filteredRegionMetricsByCr = useMemo(() => {
+    if (!searchRegionMetrics.trim()) return regionMetricsByClientRegion;
+    const q = searchRegionMetrics.toLowerCase().trim();
+    return regionMetricsByClientRegion.filter(
+      (row) =>
+        (row.client_name ?? '').toLowerCase().includes(q) ||
+        (row.region_name ?? '').toLowerCase().includes(q) ||
+        row.metrics.some((m) => (m.metric_name ?? m.metric_type ?? '').toLowerCase().includes(q))
+    );
+  }, [regionMetricsByClientRegion, searchRegionMetrics]);
+
+  const paginatedRegionMetricsByCr = useMemo(() => {
+    const start = pageRegionMetrics * rowsPerPageRegionMetrics;
+    return filteredRegionMetricsByCr.slice(start, start + rowsPerPageRegionMetrics);
+  }, [filteredRegionMetricsByCr, pageRegionMetrics, rowsPerPageRegionMetrics]);
+
   const handleChange = (e: any) => {
     const { name, value } = e.target;
     
@@ -1176,6 +1249,100 @@ export function CustomizationPageV2() {
     setMetricAlerts([]);
   };
 
+  const handleRegionMetricChange = (e: any) => {
+    const { name, value } = e.target;
+    setRegionMetricFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleAddRegionMetricAlert = () => {
+    setRegionMetricAlerts((prev) => [...prev, { ...defaultAlert }]);
+  };
+  const handleUpdateRegionMetricAlert = (index: number, field: keyof MetricAlert, value: any) => {
+    setRegionMetricAlerts((prev) => {
+      const next = [...prev];
+      (next[index] as any)[field] = value;
+      return next;
+    });
+  };
+  const handleRemoveRegionMetricAlert = (index: number) => {
+    setRegionMetricAlerts((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleRegionMetricSubmit = async () => {
+    const { cliente, clientId, regionId, metric_name, metric_type, sensor_type, sensor_unit, rules, conditions, enabled, read_only, display_order } = regionMetricFormData;
+    const cId = cliente ?? clientId;
+    if (!cId || !regionId) {
+      MySwal.fire('Faltan datos', 'Selecciona cliente y región.', 'warning');
+      return;
+    }
+    if (!metric_type || !sensor_type) {
+      MySwal.fire('Faltan datos', 'Selecciona tipo de métrica y sensor.', 'warning');
+      return;
+    }
+    setLoading(true);
+    try {
+      const payload = {
+        cliente: String(cId),
+        regionId: String(regionId),
+        metric_name: metric_name ?? undefined,
+        metric_type,
+        sensor_type,
+        sensor_unit: sensor_unit ?? undefined,
+        rules: Array.isArray(rules) ? rules : (rules != null ? [rules] : []),
+        conditions: conditions ?? undefined,
+        enabled: enabled !== false,
+        read_only: read_only === true,
+        display_order: Number(display_order) || 0
+      };
+      let savedId: string | null = null;
+      if (editingRegionMetricId) {
+        await apiV2Call(`/region-metrics/${editingRegionMetricId}`, 'PATCH', payload);
+        savedId = editingRegionMetricId;
+      } else {
+        const created = await apiV2Call('/region-metrics', 'POST', payload);
+        savedId = created?.id ?? created?._id ?? null;
+      }
+      if (savedId && regionMetricAlerts.length > 0) {
+        const existing = await apiV2Call(`/region-metrics/${savedId}/alerts`);
+        const existingIds = (Array.isArray(existing) ? existing : []).map((a: any) => a.id || a._id);
+        for (let i = 0; i < regionMetricAlerts.length; i++) {
+          const alert = regionMetricAlerts[i];
+          if (!alert.usuario || !alert.correo) continue;
+          const alertData = {
+            usuario: alert.usuario,
+            correo: alert.correo,
+            celular: alert.celular ?? '',
+            celularAlert: alert.celularAlert ?? alert.celular_alert ?? false,
+            dashboardAlert: alert.dashboardAlert ?? alert.dashboard_alert ?? false,
+            emailAlert: alert.emailAlert ?? alert.email_alert ?? false,
+            preventivo: alert.preventivo ?? false,
+            correctivo: alert.correctivo ?? false,
+            emailCooldownMinutes: alert.emailCooldownMinutes ?? 10,
+            emailMaxPerDay: alert.emailMaxPerDay ?? 5
+          };
+          const alertId = alert.id || alert._id;
+          if (alertId && existingIds.includes(alertId)) {
+            await apiV2Call(`/region-metrics/${savedId}/alerts/${alertId}`, 'PATCH', alertData);
+          } else {
+            await apiV2Call(`/region-metrics/${savedId}/alerts`, 'POST', alertData);
+          }
+        }
+      }
+      setRegionMetricModalOpen(false);
+      setRegionMetricFormData({ ...defaultMetric });
+      setEditingRegionMetricId(null);
+      setRegionMetricAlerts([]);
+      fetchRegionMetrics();
+      if (configurarRegion) setConfigurarRegion(null);
+      MySwal.fire('Listo', 'Métrica por región guardada.', 'success');
+    } catch (error) {
+      console.error('Error saving region metric:', error);
+      MySwal.fire('Error', (error as Error)?.message ?? 'Error al guardar métrica por región', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleClientChange = (e: any) => {
     const { name, value } = e.target;
     if (name.includes("address")) {
@@ -1332,6 +1499,7 @@ export function CustomizationPageV2() {
           centered
         >
           <CustomTab label="Métricas" />
+          <CustomTab label="Métricas por región" />
           <CustomTab label="PuntosVenta" />
           {isAdmin && <CustomTab label="Clientes" />}
           {isAdmin && <CustomTab label="Ciudades" />}
@@ -1449,6 +1617,107 @@ export function CustomizationPageV2() {
                 <Grid container>
                   <Grid item xs={12} sm={9}>
                     <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
+                      Métricas por región
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={3} textAlign='right'>
+                    <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
+                      <Button variant="contained" color="primary" onClick={() => { setRegionMetricFormData({ ...defaultMetric }); setEditingRegionMetricId(null); setRegionMetricAlerts([]); setRegionMetricModalOpen(true); }} fullWidth>
+                        Crear métrica por región
+                      </Button>
+                    </Typography>
+                  </Grid>
+                </Grid>
+                <Box sx={{ px: 2, pb: 1 }}>
+                  <TextField
+                    size="small"
+                    placeholder="Buscar por cliente, región o métrica…"
+                    value={searchRegionMetrics}
+                    onChange={(e) => { setSearchRegionMetrics(e.target.value); setPageRegionMetrics(0); }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Iconify icon="eva:search-fill" width={20} />
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={{ maxWidth: 400 }}
+                  />
+                </Box>
+              </Box>
+              <StyledTableContainer>
+                <Paper elevation={3}>
+                  <Box sx={{ overflowX: 'auto' }}>
+                    <Table>
+                      <TableHead>
+                        <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
+                          <StyledTableCellHeader>Cliente</StyledTableCellHeader>
+                          <StyledTableCellHeader>Región</StyledTableCellHeader>
+                          <StyledTableCellHeader>Métricas</StyledTableCellHeader>
+                          <StyledTableCellHeader>Estado</StyledTableCellHeader>
+                          <StyledTableCellHeader>Acciones</StyledTableCellHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {loadingRegionMetrics ? (
+                          <TableRow><StyledTableCell colSpan={5} align="center"><CircularProgress size={24} /></StyledTableCell></TableRow>
+                        ) : paginatedRegionMetricsByCr.map((row) => (
+                          <StyledTableRow key={`${row.clientId}|${row.regionId}`}>
+                            <StyledTableCell>{row.client_name || '-'}</StyledTableCell>
+                            <StyledTableCell>{row.region_name || '-'}</StyledTableCell>
+                            <StyledTableCell>
+                              {row.metrics.length === 0 ? '-' : row.metrics.map((m) => m.metric_name || m.metric_type || 'Legacy').join(', ')}
+                            </StyledTableCell>
+                            <StyledTableCell>
+                              <Chip
+                                label={row.metrics.some((m) => m.enabled !== false) ? 'Activo' : 'Inactivo'}
+                                color={row.metrics.some((m) => m.enabled !== false) ? 'success' : 'default'}
+                                size="small"
+                              />
+                            </StyledTableCell>
+                            <StyledTableCell>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<SvgColor src="./assets/icons/actions/edit.svg" />}
+                                onClick={() => setConfigurarRegion({
+                                  clientId: row.clientId,
+                                  regionId: row.regionId,
+                                  client_name: row.client_name,
+                                  region_name: row.region_name
+                                })}
+                              >
+                                Configurar métricas
+                              </Button>
+                            </StyledTableCell>
+                          </StyledTableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </Box>
+                  <TablePagination
+                    component="div"
+                    count={filteredRegionMetricsByCr.length}
+                    page={pageRegionMetrics}
+                    onPageChange={(_, newPage) => setPageRegionMetrics(newPage)}
+                    rowsPerPage={rowsPerPageRegionMetrics}
+                    onRowsPerPageChange={(e) => { setRowsPerPageRegionMetrics(parseInt(e.target.value, 10)); setPageRegionMetrics(0); }}
+                    rowsPerPageOptions={ROWS_PER_PAGE_OPTIONS}
+                    labelRowsPerPage="Filas por página"
+                  />
+                </Paper>
+              </StyledTableContainer>
+            </Grid>
+          </Grid>
+        )}
+
+        {tabIndex === 2 && (
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <Box sx={{ overflowX: 'auto' }}>
+                <Grid container>
+                  <Grid item xs={12} sm={9}>
+                    <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
                       Lista de Puntos de venta 
                     </Typography>
                   </Grid>
@@ -1546,14 +1815,14 @@ export function CustomizationPageV2() {
           </Grid>
         )}
 
-        {isAdmin && tabIndex === 2 && (
-          <Grid container spacing={2}>
+{isAdmin && tabIndex === 3 && (
+            <Grid container spacing={2}>
             <Grid item xs={12}>
               <Box sx={{ overflowX: 'auto' }}>
                 <Grid container>
                   <Grid item xs={12} sm={9}>
                     <Typography variant="h5" gutterBottom sx={{ p: 2 }}>
-                      Lista de clientes 
+                      Lista de clientes
                     </Typography>
                   </Grid>
                   <Grid item xs={12} sm={3} textAlign='right'>
@@ -1628,7 +1897,7 @@ export function CustomizationPageV2() {
           </Grid>
         )}
         
-        {isAdmin && tabIndex === 4 && (
+        {isAdmin && tabIndex === 5 && (
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <Box sx={{ overflowX: 'auto' }}>
@@ -1718,7 +1987,7 @@ export function CustomizationPageV2() {
           </Grid>
         )}
 
-        {isAdmin && tabIndex === 5 && (
+        {isAdmin && tabIndex === 6 && (
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <Paper elevation={3} sx={{ p: 3 }}>
@@ -1840,7 +2109,7 @@ export function CustomizationPageV2() {
           </Grid>
         )}
 
-        {isAdmin && tabIndex === 3 && (
+        {isAdmin && tabIndex === 4 && (
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <Box sx={{ overflowX: 'auto' }}>
@@ -2009,6 +2278,79 @@ export function CustomizationPageV2() {
             <Button onClick={() => setConfigurarPv(null)} color="secondary">
               Cerrar
             </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Dialog: Métricas por región (one client+region → list of region metrics) */}
+        <Dialog open={configurarRegion !== null} onClose={() => setConfigurarRegion(null)} fullWidth maxWidth="md">
+          <DialogTitle>Métricas por región — {configurarRegion?.region_name ?? 'Región'}</DialogTitle>
+          <DialogContent>
+            {configurarRegion && (
+              <Box sx={{ pt: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {configurarRegion.client_name} · {configurarRegion.region_name}
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    size="small"
+                    onClick={() => {
+                      setRegionMetricFormData({
+                        ...defaultMetric,
+                        cliente: configurarRegion.clientId,
+                        clientId: configurarRegion.clientId,
+                        regionId: configurarRegion.regionId,
+                        client_name: configurarRegion.client_name,
+                        region_name: configurarRegion.region_name
+                      });
+                      setEditingRegionMetricId(null);
+                      setRegionMetricAlerts([]);
+                      setRegionMetricModalOpen(true);
+                    }}
+                  >
+                    Nueva métrica por región
+                  </Button>
+                </Box>
+                {(() => {
+                  const rowMetrics = regionMetricsByClientRegion.find(
+                    (r) => String(r.clientId) === String(configurarRegion.clientId) && String(r.regionId) === String(configurarRegion.regionId)
+                  )?.metrics ?? [];
+                  if (rowMetrics.length === 0) {
+                    return (
+                      <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
+                        No hay métricas por región. Usa &quot;Nueva métrica por región&quot; para agregar.
+                      </Typography>
+                    );
+                  }
+                  return (
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
+                          <StyledTableCellHeader>Tipo de Métrica</StyledTableCellHeader>
+                          <StyledTableCellHeader>Sensor</StyledTableCellHeader>
+                          <StyledTableCellHeader>Estado</StyledTableCellHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {rowMetrics.map((metric) => (
+                          <TableRow key={metric._id || metric.id}>
+                            <StyledTableCell>{metric.metric_name || metric.metric_type || 'Legacy'}</StyledTableCell>
+                            <StyledTableCell>{metric.sensor_type ? `${metric.sensor_type} (${metric.sensor_unit || ''})` : '-'}</StyledTableCell>
+                            <StyledTableCell>
+                              <Chip label={metric.enabled !== false ? 'Activo' : 'Inactivo'} color={metric.enabled !== false ? 'success' : 'default'} size="small" />
+                            </StyledTableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  );
+                })()}
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setConfigurarRegion(null)} color="secondary">Cerrar</Button>
           </DialogActions>
         </Dialog>
 
@@ -2497,6 +2839,141 @@ export function CustomizationPageV2() {
               <Button onClick={handleCloseModal} color="secondary">Cancelar</Button>
               <Button onClick={handleSubmit} variant="contained" color="primary" disabled={loading}>
                 {loading ? <CircularProgress size={24} /> : editingId ? "Actualizar" : "Guardar"}
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Region Metric Modal (Métricas por región) */}
+          <Dialog open={regionMetricModalOpen} onClose={() => { setRegionMetricModalOpen(false); setRegionMetricFormData({ ...defaultMetric }); setEditingRegionMetricId(null); setRegionMetricAlerts([]); }} fullWidth maxWidth="md">
+            <DialogTitle>{editingRegionMetricId ? 'Editar métrica por región' : 'Crear métrica por región'}</DialogTitle>
+            <DialogContent>
+              <Box display="flex" flexDirection="column" gap={2} mt={1} sx={{ maxHeight: '65vh', overflowY: 'auto' }}>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth>
+                      <InputLabel>Cliente</InputLabel>
+                      <Select
+                        label="Cliente"
+                        value={regionMetricFormData.cliente ?? regionMetricFormData.clientId ?? ''}
+                        name="cliente"
+                        onChange={handleRegionMetricChange}
+                        displayEmpty
+                      >
+                        <MenuItem value=""><em>Seleccionar cliente</em></MenuItem>
+                        {clients.map((c) => (
+                          <MenuItem key={c._id || c.id} value={String(c._id ?? c.id)}>{c.name}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth>
+                      <InputLabel>Región</InputLabel>
+                      <Select
+                        label="Región"
+                        value={regionMetricFormData.regionId ?? ''}
+                        name="regionId"
+                        onChange={handleRegionMetricChange}
+                        displayEmpty
+                      >
+                        <MenuItem value=""><em>Seleccionar región</em></MenuItem>
+                        {regions.map((r) => (
+                          <MenuItem key={r.id} value={String(r.id)}>{r.name || r.code}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth>
+                      <InputLabel>Tipo de métrica</InputLabel>
+                      <Select
+                        value={regionMetricFormData.metric_type ?? ''}
+                        name="metric_type"
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          const t = METRIC_TYPES.find(x => x.value === v);
+                          if (t) setRegionMetricFormData((prev) => ({ ...prev, metric_type: v, metric_name: t.label, sensor_type: t.sensorTypes[0] ?? '', sensor_unit: t.unit, read_only: t.readOnly ?? false }));
+                        }}
+                        displayEmpty
+                      >
+                        <MenuItem value=""><em>Seleccionar tipo</em></MenuItem>
+                        {METRIC_TYPES.map((t) => (
+                          <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth>
+                      <InputLabel>Tipo de sensor</InputLabel>
+                      <Select
+                        value={regionMetricFormData.sensor_type ?? ''}
+                        name="sensor_type"
+                        onChange={handleRegionMetricChange}
+                        disabled={!regionMetricFormData.metric_type}
+                      >
+                        {regionMetricFormData.metric_type && METRIC_TYPES.find(t => t.value === regionMetricFormData.metric_type)?.sensorTypes?.map((st) => {
+                          const s = SENSOR_TYPES.find(x => x.value === st);
+                          return s ? <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem> : null;
+                        })}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField label="Unidad" name="sensor_unit" value={regionMetricFormData.sensor_unit ?? ''} fullWidth disabled />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <FormControlLabel control={<Switch checked={regionMetricFormData.enabled !== false} onChange={(e) => setRegionMetricFormData((p) => ({ ...p, enabled: e.target.checked }))} />} label="Habilitado" />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <FormControlLabel control={<Switch checked={regionMetricFormData.read_only || false} onChange={(e) => setRegionMetricFormData((p) => ({ ...p, read_only: e.target.checked }))} />} label="Solo lectura" />
+                  </Grid>
+                </Grid>
+                <Divider />
+                <Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                    <Typography variant="subtitle1">Alertas</Typography>
+                    <Button variant="outlined" size="small" startIcon={<Iconify icon="solar:add-circle-bold-duotone" width={20} />} onClick={handleAddRegionMetricAlert}>
+                      Agregar alerta
+                    </Button>
+                  </Box>
+                  {regionMetricAlerts.length > 0 && (
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <StyledTableCellHeader>Usuario</StyledTableCellHeader>
+                          <StyledTableCellHeader>Correo</StyledTableCellHeader>
+                          <StyledTableCellHeader>Celular</StyledTableCellHeader>
+                          <StyledTableCellHeader>Dashboard</StyledTableCellHeader>
+                          <StyledTableCellHeader>Email</StyledTableCellHeader>
+                          <StyledTableCellHeader>Preventivo</StyledTableCellHeader>
+                          <StyledTableCellHeader>Correctivo</StyledTableCellHeader>
+                          <StyledTableCellHeader>Acciones</StyledTableCellHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {regionMetricAlerts.map((alert, idx) => (
+                          <TableRow key={idx}>
+                            <StyledTableCell><TextField size="small" value={alert.usuario || ''} onChange={(e) => handleUpdateRegionMetricAlert(idx, 'usuario', e.target.value)} placeholder="Nombre" fullWidth /></StyledTableCell>
+                            <StyledTableCell><TextField size="small" type="email" value={alert.correo || ''} onChange={(e) => handleUpdateRegionMetricAlert(idx, 'correo', e.target.value)} placeholder="email" fullWidth /></StyledTableCell>
+                            <StyledTableCell><TextField size="small" value={alert.celular || ''} onChange={(e) => handleUpdateRegionMetricAlert(idx, 'celular', e.target.value)} placeholder="Celular" fullWidth /></StyledTableCell>
+                            <StyledTableCell><Switch size="small" checked={alert.dashboardAlert ?? alert.dashboard_alert ?? false} onChange={(e) => handleUpdateRegionMetricAlert(idx, 'dashboardAlert', e.target.checked)} /></StyledTableCell>
+                            <StyledTableCell><Switch size="small" checked={alert.emailAlert ?? alert.email_alert ?? false} onChange={(e) => handleUpdateRegionMetricAlert(idx, 'emailAlert', e.target.checked)} /></StyledTableCell>
+                            <StyledTableCell><Switch size="small" checked={alert.preventivo ?? false} onChange={(e) => handleUpdateRegionMetricAlert(idx, 'preventivo', e.target.checked)} /></StyledTableCell>
+                            <StyledTableCell><Switch size="small" checked={alert.correctivo ?? false} onChange={(e) => handleUpdateRegionMetricAlert(idx, 'correctivo', e.target.checked)} /></StyledTableCell>
+                            <StyledTableCell><IconButton size="small" onClick={() => handleRemoveRegionMetricAlert(idx)}><Iconify icon="solar:trash-bin-trash-bold-duotone" width={20} /></IconButton></StyledTableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </Box>
+              </Box>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => { setRegionMetricModalOpen(false); setRegionMetricAlerts([]); }} color="secondary">Cancelar</Button>
+              <Button onClick={handleRegionMetricSubmit} variant="contained" color="primary" disabled={loading}>
+                {loading ? <CircularProgress size={24} /> : (editingRegionMetricId ? 'Actualizar' : 'Guardar')}
               </Button>
             </DialogActions>
           </Dialog>
