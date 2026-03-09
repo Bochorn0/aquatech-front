@@ -26,12 +26,12 @@ import {
   FormControl,
   DialogActions,
   DialogContent,
+  InputAdornment,
+  TablePagination,
   AccordionDetails,
   AccordionSummary,
   CircularProgress,
-  InputAdornment,
-  FormControlLabel,
-  TablePagination
+  FormControlLabel
 } from "@mui/material";
 
 import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
@@ -544,7 +544,7 @@ export function CustomizationPageV2() {
       fetchRegionMetrics();
       if (regions.length === 0) fetchRegions();
     }
-  }, [tabIndex]);
+  }, [tabIndex, regions.length]);
 
   useEffect(() => {
     if (regionEditModal?.id) {
@@ -1305,28 +1305,28 @@ export function CustomizationPageV2() {
       if (savedId && regionMetricAlerts.length > 0) {
         const existing = await apiV2Call(`/region-metrics/${savedId}/alerts`);
         const existingIds = (Array.isArray(existing) ? existing : []).map((a: any) => a.id || a._id);
-        for (let i = 0; i < regionMetricAlerts.length; i++) {
-          const alert = regionMetricAlerts[i];
-          if (!alert.usuario || !alert.correo) continue;
-          const alertData = {
-            usuario: alert.usuario,
-            correo: alert.correo,
-            celular: alert.celular ?? '',
-            celularAlert: alert.celularAlert ?? alert.celular_alert ?? false,
-            dashboardAlert: alert.dashboardAlert ?? alert.dashboard_alert ?? false,
-            emailAlert: alert.emailAlert ?? alert.email_alert ?? false,
-            preventivo: alert.preventivo ?? false,
-            correctivo: alert.correctivo ?? false,
-            emailCooldownMinutes: alert.emailCooldownMinutes ?? 10,
-            emailMaxPerDay: alert.emailMaxPerDay ?? 5
-          };
-          const alertId = alert.id || alert._id;
-          if (alertId && existingIds.includes(alertId)) {
-            await apiV2Call(`/region-metrics/${savedId}/alerts/${alertId}`, 'PATCH', alertData);
-          } else {
-            await apiV2Call(`/region-metrics/${savedId}/alerts`, 'POST', alertData);
-          }
-        }
+        const alertPromises = regionMetricAlerts
+          .filter((alert) => alert.usuario && alert.correo)
+          .map((alert) => {
+            const alertData = {
+              usuario: alert.usuario,
+              correo: alert.correo,
+              celular: alert.celular ?? '',
+              celularAlert: alert.celularAlert ?? alert.celular_alert ?? false,
+              dashboardAlert: alert.dashboardAlert ?? alert.dashboard_alert ?? false,
+              emailAlert: alert.emailAlert ?? alert.email_alert ?? false,
+              preventivo: alert.preventivo ?? false,
+              correctivo: alert.correctivo ?? false,
+              emailCooldownMinutes: alert.emailCooldownMinutes ?? 10,
+              emailMaxPerDay: alert.emailMaxPerDay ?? 5
+            };
+            const alertId = alert.id || alert._id;
+            if (alertId && existingIds.includes(alertId)) {
+              return apiV2Call(`/region-metrics/${savedId}/alerts/${alertId}`, 'PATCH', alertData);
+            }
+            return apiV2Call(`/region-metrics/${savedId}/alerts`, 'POST', alertData);
+          });
+        await Promise.all(alertPromises);
       }
       setRegionMetricModalOpen(false);
       setRegionMetricFormData({ ...defaultMetric });
