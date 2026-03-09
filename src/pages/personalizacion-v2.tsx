@@ -2330,6 +2330,7 @@ export function CustomizationPageV2() {
                           <StyledTableCellHeader>Tipo de Métrica</StyledTableCellHeader>
                           <StyledTableCellHeader>Sensor</StyledTableCellHeader>
                           <StyledTableCellHeader>Estado</StyledTableCellHeader>
+                          <StyledTableCellHeader align="right">Acciones</StyledTableCellHeader>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -2339,6 +2340,83 @@ export function CustomizationPageV2() {
                             <StyledTableCell>{metric.sensor_type ? `${metric.sensor_type} (${metric.sensor_unit || ''})` : '-'}</StyledTableCell>
                             <StyledTableCell>
                               <Chip label={metric.enabled !== false ? 'Activo' : 'Inactivo'} color={metric.enabled !== false ? 'success' : 'default'} size="small" />
+                            </StyledTableCell>
+                            <StyledTableCell align="right">
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={async () => {
+                                  const id = metric.id || metric._id;
+                                  if (!id) return;
+                                  setLoading(true);
+                                  try {
+                                    const [metricRes, alertsRes] = await Promise.all([
+                                      apiV2Call(`/region-metrics/${id}`),
+                                      apiV2Call(`/region-metrics/${id}/alerts`).catch(() => [])
+                                    ]);
+                                    const m = metricRes as any;
+                                    const rules = Array.isArray(m?.rules) ? m.rules : (m?.rules != null ? [m.rules] : []);
+                                    setRegionMetricFormData({
+                                      ...defaultMetric,
+                                      ...m,
+                                      cliente: m?.cliente ?? m?.clientId ?? configurarRegion?.clientId,
+                                      clientId: m?.clientId ?? m?.cliente ?? configurarRegion?.clientId,
+                                      regionId: m?.regionId ?? configurarRegion?.regionId,
+                                      metric_name: m?.metric_name,
+                                      metric_type: m?.metric_type,
+                                      sensor_type: m?.sensor_type,
+                                      sensor_unit: m?.sensor_unit,
+                                      rules,
+                                      conditions: m?.conditions,
+                                      enabled: m?.enabled !== false,
+                                      read_only: m?.read_only === true,
+                                      display_order: m?.display_order ?? 0
+                                    });
+                                    setRegionMetricAlerts(Array.isArray(alertsRes) ? alertsRes : []);
+                                    setEditingRegionMetricId(String(id));
+                                    setRegionMetricModalOpen(true);
+                                  } catch (err) {
+                                    console.error('Error loading region metric:', err);
+                                    MySwal.fire('Error', 'No se pudo cargar la métrica para editar.', 'error');
+                                  } finally {
+                                    setLoading(false);
+                                  }
+                                }}
+                              >
+                                <Iconify icon="solar:pen-bold-duotone" width={20} />
+                              </IconButton>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => {
+                                  MySwal.fire({
+                                    title: '¿Eliminar métrica por región?',
+                                    text: `Se eliminará la métrica "${metric.metric_name || metric.metric_type || 'Legacy'}" y sus alertas.`,
+                                    icon: 'warning',
+                                    showCancelButton: true,
+                                    confirmButtonColor: '#d33',
+                                    cancelButtonText: 'Cancelar',
+                                    confirmButtonText: 'Sí, eliminar'
+                                  }).then(async (result) => {
+                                    if (result.isConfirmed) {
+                                      const id = metric.id || metric._id;
+                                      if (!id) return;
+                                      setLoading(true);
+                                      try {
+                                        await apiV2Call(`/region-metrics/${id}`, 'DELETE');
+                                        MySwal.fire('Eliminado', 'Métrica por región eliminada.', 'success');
+                                        fetchRegionMetrics();
+                                      } catch (err) {
+                                        MySwal.fire('Error', (err as Error)?.message ?? 'No se pudo eliminar.', 'error');
+                                      } finally {
+                                        setLoading(false);
+                                      }
+                                    }
+                                  });
+                                }}
+                              >
+                                <Iconify icon="solar:trash-bin-trash-bold-duotone" width={20} />
+                              </IconButton>
                             </StyledTableCell>
                           </TableRow>
                         ))}
@@ -2933,6 +3011,122 @@ export function CustomizationPageV2() {
                     <FormControlLabel control={<Switch checked={regionMetricFormData.read_only || false} onChange={(e) => setRegionMetricFormData((p) => ({ ...p, read_only: e.target.checked }))} />} label="Solo lectura" />
                   </Grid>
                 </Grid>
+                {/* Range values (rules) for region metric - same as punto-venta metrics */}
+                <Box sx={{ mt: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                    <Typography variant="subtitle1">Rangos y colores (valores de referencia)</Typography>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<Iconify icon="solar:add-circle-bold-duotone" width={20} />}
+                      onClick={() => {
+                        const newRules = [...(regionMetricFormData.rules || []), { min: null, max: null, color: SEVERITY_TO_COLOR.normal, label: '', message: '', severity: 'normal' as const }];
+                        setRegionMetricFormData((p) => ({ ...p, rules: newRules }));
+                      }}
+                    >
+                      Agregar Regla
+                    </Button>
+                  </Box>
+                  {(regionMetricFormData.rules || []).map((rule: any, index: number) => (
+                    <Box key={index} sx={{ mb: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
+                      <Grid container spacing={2} alignItems="center">
+                        <Grid item xs={12} sm={3}>
+                          <TextField
+                            label="Mínimo"
+                            type="number"
+                            value={rule.min ?? ''}
+                            onChange={(e) => {
+                              const newRules = [...(regionMetricFormData.rules || [])];
+                              newRules[index] = { ...newRules[index], min: e.target.value === '' ? null : parseFloat(e.target.value) };
+                              setRegionMetricFormData((p) => ({ ...p, rules: newRules }));
+                            }}
+                            fullWidth
+                            placeholder="Sin límite"
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={3}>
+                          <TextField
+                            label="Máximo"
+                            type="number"
+                            value={rule.max ?? ''}
+                            onChange={(e) => {
+                              const newRules = [...(regionMetricFormData.rules || [])];
+                              newRules[index] = { ...newRules[index], max: e.target.value === '' ? null : parseFloat(e.target.value) };
+                              setRegionMetricFormData((p) => ({ ...p, rules: newRules }));
+                            }}
+                            fullWidth
+                            placeholder="Sin límite"
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={3}>
+                          <FormControl fullWidth>
+                            <InputLabel shrink>Severidad</InputLabel>
+                            <Select
+                              value={rule.severity ?? (inferSeverityFromColor(rule.color) ?? 'normal')}
+                              onChange={(e) => {
+                                const newRules = [...(regionMetricFormData.rules || [])];
+                                const severity = e.target.value as 'normal' | 'preventivo' | 'critico';
+                                newRules[index] = { ...newRules[index], severity, color: SEVERITY_TO_COLOR[severity] };
+                                setRegionMetricFormData((p) => ({ ...p, rules: newRules }));
+                              }}
+                            >
+                              {SEVERITY_OPTIONS.map((opt) => (
+                                <MenuItem key={opt.value} value={opt.value}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Box sx={{ width: 20, height: 20, backgroundColor: SEVERITY_TO_COLOR[opt.value], border: '1px solid #ccc', borderRadius: 1 }} />
+                                    {opt.label}
+                                  </Box>
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                        <Grid item xs={12} sm={2}>
+                          <TextField
+                            label="Etiqueta"
+                            value={rule.label || ''}
+                            onChange={(e) => {
+                              const newRules = [...(regionMetricFormData.rules || [])];
+                              newRules[index] = { ...newRules[index], label: e.target.value };
+                              setRegionMetricFormData((p) => ({ ...p, rules: newRules }));
+                            }}
+                            fullWidth
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={1}>
+                          <IconButton
+                            color="error"
+                            onClick={() => {
+                              const newRules = (regionMetricFormData.rules || []).filter((_: any, i: number) => i !== index);
+                              setRegionMetricFormData((p) => ({ ...p, rules: newRules }));
+                            }}
+                          >
+                            <SvgColor src='./assets/icons/actions/delete.svg' />
+                          </IconButton>
+                        </Grid>
+                        <Grid item xs={12}>
+                          <TextField
+                            label="Mensaje de alerta (texto en dashboard)"
+                            placeholder="Ej: Revisar suministro. Verificar tubería de entrada."
+                            value={rule.message ?? ''}
+                            onChange={(e) => {
+                              const newRules = [...(regionMetricFormData.rules || [])];
+                              newRules[index] = { ...newRules[index], message: e.target.value };
+                              setRegionMetricFormData((p) => ({ ...p, rules: newRules }));
+                            }}
+                            fullWidth
+                            size="small"
+                          />
+                        </Grid>
+                      </Grid>
+                    </Box>
+                  ))}
+                  {(!regionMetricFormData.rules || regionMetricFormData.rules.length === 0) && (
+                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                      No hay reglas de rango. Agrega una regla para definir mín/máx y severidad (normal, preventivo, crítico).
+                    </Typography>
+                  )}
+                </Box>
                 <Divider />
                 <Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>

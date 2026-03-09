@@ -94,17 +94,20 @@ export function getLevelForValue(value: number | null, rules: MetricRuleWithLeve
 
 /**
  * Classify all sensors with levels per metric and worst level.
+ * When getConfigForSensor is provided and returns a config for a sensor, that config is used
+ * with higher hierarchy (e.g. region metric over punto-venta metric).
  */
 export function classifySensorsWithLevels(
   sensors: SensorRecord[],
-  metrics: MetricConfig[]
+  metrics: MetricConfig[],
+  getConfigForSensor?: (sensor: SensorRecord) => MetricConfig | null
 ): SensorWithLevel[] {
-  const metricMap = new Map<string, MetricConfig>();
-  metrics.forEach((m) => metricMap.set(String(m.id), m));
-
   return sensors.map((sensor) => {
     const levelByMetric: Record<string, MetricLevel> = {};
-    const worstLevel = metrics.reduce<MetricLevel>((acc, metric) => {
+    const preferredConfig = getConfigForSensor?.(sensor) ?? null;
+    const configsToUse = preferredConfig ? [preferredConfig] : metrics;
+
+    const worstLevel = configsToUse.reduce<MetricLevel>((acc, metric) => {
       const metricId = String(metric.id);
       const matchesSensor =
         (metric.sensor_type && sensor.sensorType && metric.sensor_type.toLowerCase() === sensor.sensorType.toLowerCase()) ||

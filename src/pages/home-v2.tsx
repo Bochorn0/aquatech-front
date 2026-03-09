@@ -51,12 +51,14 @@ import { NivelHistoricoChart } from 'src/pages/charts/nivel-historico-chart';
 // ----------------------------------------------------------------------
 
 type ClienteV2 = { id?: string; _id?: string; name: string };
+type RegionV2 = { id: string; code?: string; name?: string };
 type PuntoVentaV2 = {
   id: string;
   _id?: string;
   name: string;
   clientId?: string;
   cliente?: ClienteV2 | string;
+  region?: RegionV2 | null;
   online?: boolean;
   lat?: number | null;
   long?: number | null;
@@ -77,6 +79,7 @@ type MetricV2 = {
   clientId?: string | number;
   punto_venta_id?: string | number;
 };
+type RegionMetricV2 = MetricV2 & { regionId?: string };
 type PuntoVentaSensor = {
   id: string | number;
   sensorName?: string;
@@ -236,12 +239,14 @@ export function HomeV2Page() {
   const [clients, setClients] = useState<ClienteV2[]>([]);
   const [puntosVenta, setPuntosVenta] = useState<PuntoVentaV2[]>([]);
   const [metrics, setMetrics] = useState<MetricV2[]>([]);
+  const [regionMetrics, setRegionMetrics] = useState<RegionMetricV2[]>([]);
   const [sensorsWithLevels, setSensorsWithLevels] = useState<SensorWithLevel[]>([]);
   const [metricCharts, setMetricCharts] = useState<DashboardMetricChart[]>([]);
   const [nivelCrudaChart, setNivelCrudaChart] = useState<{ categories: string[]; series: any[]; currentValue: number; metricRules: any[] } | null>(null);
   const [nivelPurificadaChart, setNivelPurificadaChart] = useState<{ categories: string[]; series: any[]; currentValue: number; metricRules: any[] } | null>(null);
 
   const [selectedClientId, setSelectedClientId] = useState<string>('All');
+  const [selectedRegionId, setSelectedRegionId] = useState<string>('All');
   const [selectedPuntoVentaId, setSelectedPuntoVentaId] = useState<string>('All');
   const [selectedTimeRange, setSelectedTimeRange] = useState<'today' | 'week' | 'month'>('today');
   const [selectedSegment, setSelectedSegment] = useState<{
@@ -283,11 +288,40 @@ export function HomeV2Page() {
         return cid === selectedClientId;
       });
     }
+    if (selectedRegionId && selectedRegionId !== 'All') {
+      list = list.filter((pv) => {
+        const rid = (pv as PuntoVentaV2)?.region?.id;
+        return rid != null && String(rid) === selectedRegionId;
+      });
+    }
     if (selectedPuntoVentaId && selectedPuntoVentaId !== 'All') {
       list = list.filter((pv) => String(pv.id ?? pv._id) === selectedPuntoVentaId);
     }
     return list;
-  }, [puntosVenta, selectedClientId, selectedPuntoVentaId]);
+  }, [puntosVenta, selectedClientId, selectedRegionId, selectedPuntoVentaId]);
+
+  const puntosByClient = useMemo(() => {
+    if (!selectedClientId || selectedClientId === 'All') return puntosVenta;
+    return puntosVenta.filter((pv) => {
+      const cid = typeof pv.cliente === 'object' && pv.cliente != null
+        ? String((pv.cliente as ClienteV2).id ?? (pv.cliente as ClienteV2)._id)
+        : String(pv.clientId);
+      return cid === selectedClientId;
+    });
+  }, [puntosVenta, selectedClientId]);
+
+  const availableRegions = useMemo(() => {
+    const regionIds = new Set<string>();
+    const regionList: { id: string; name: string }[] = [];
+    puntosByClient.forEach((pv) => {
+      const r = (pv as PuntoVentaV2)?.region;
+      if (r?.id && !regionIds.has(String(r.id))) {
+        regionIds.add(String(r.id));
+        regionList.push({ id: String(r.id), name: r.name || r.code || `Región ${r.id}` });
+      }
+    });
+    return regionList;
+  }, [puntosByClient]);
 
   // Get available charts for the filter
   const availableCharts = useMemo(() => {
@@ -324,7 +358,7 @@ export function HomeV2Page() {
   // Reset to first page when segment or filters change (prevents empty table when pagination was on page 2+)
   useEffect(() => {
     setPage(0);
-  }, [selectedSegment, selectedPuntoVentaId, selectedClientId]);
+  }, [selectedSegment, selectedPuntoVentaId, selectedClientId, selectedRegionId]);
 
   const tableRowsFilteredByPunto = useMemo(() => {
     let filtered = tableRows;
@@ -410,8 +444,26 @@ export function HomeV2Page() {
     fetchMetrics();
   }, [selectedClientId, selectedPuntoVentaId]);
 
+  // Fetch region metrics for filter hierarchy (region metrics override punto-venta metrics when present)
+  useEffect(() => {
+    const fetchRegionMetrics = async () => {
+      if (!selectedClientId || selectedClientId === 'All') {
+        setRegionMetrics([]);
+        return;
+      }
+      try {
+        const response = await getV2<RegionMetricV2[]>('/region-metrics', { clientId: selectedClientId });
+        setRegionMetrics(Array.isArray(response) ? response : []);
+      } catch {
+        setRegionMetrics([]);
+      }
+    };
+    fetchRegionMetrics();
+  }, [selectedClientId]);
+
   const depPuntoIds = useMemo(() => filteredPuntos.map((p) => p.id).join(','), [filteredPuntos]);
   const depMetricIds = useMemo(() => JSON.stringify(metrics.map((m) => m.id)), [metrics]);
+  const depRegionMetricIds = useMemo(() => JSON.stringify(regionMetrics.map((m) => m.id)), [regionMetrics]);
 
   useEffect(() => {
     if (filteredPuntos.length === 0) {
@@ -492,6 +544,44 @@ export function HomeV2Page() {
         sensor_unit: m.sensor_unit,
         rules: enhanceRulesWithLevels((m.rules || []) as MetricRuleWithLevel[]),
       }));
+
+      // Region metrics have higher hierarchy: map (regionId, sensor_type) -> config for per-sensor override
+      const regionConfigByKey = new Map<string, MetricConfig>();
+      regionMetrics.forEach((rm) => {
+        const regionId = rm.regionId != null ? String(rm.regionId) : '';
+        if (!regionId || !rm.sensor_type) return;
+        const sensorType = (rm.sensor_type || '').toLowerCase();
+        const normType = sensorType.replace(/^electronivel_/, 'nivel_').replace(/^level_/, 'nivel_');
+        const rules = (rm.rules || []).map((r: any) => ({
+          ...r,
+          level: r.level ?? (r.severity === 'critico' ? 'correctivo' : r.severity === 'preventivo' ? 'preventivo' : 'normal'),
+        })) as MetricRuleWithLevel[];
+        regionConfigByKey.set(`${regionId}:${normType}`, {
+          id: rm.id ?? rm._id,
+          metric_name: rm.metric_name,
+          sensor_type: rm.sensor_type,
+          sensor_unit: rm.sensor_unit,
+          rules: enhanceRulesWithLevels(rules),
+        });
+        if (/^corriente_ch[234]$/.test(normType)) {
+          regionConfigByKey.set(`${regionId}:corriente_ch1`, {
+            id: rm.id ?? rm._id,
+            metric_name: rm.metric_name,
+            sensor_type: 'corriente_ch1',
+            sensor_unit: rm.sensor_unit,
+            rules: enhanceRulesWithLevels(rules),
+          });
+        }
+      });
+
+      const getConfigForSensor = (sensor: SensorRecord): MetricConfig | null => {
+        const pv = filteredPuntos.find((p) => String(p.id ?? p._id) === String(sensor.puntoVentaId));
+        const regionId = (pv as PuntoVentaV2)?.region?.id;
+        if (!regionId) return null;
+        let normType = normalizeSensorType(sensor.sensorType);
+        if (/^corriente_ch[234]$/i.test(normType)) normType = 'corriente_ch1';
+        return regionConfigByKey.get(`${regionId}:${normType}`) ?? null;
+      };
       
       // Normalize sensor types to match metric configs (handle aliases)
       // We create a temporary normalized version for matching, but keep original in the data
@@ -510,7 +600,7 @@ export function HomeV2Page() {
         };
       });
 
-      const withLevels = classifySensorsWithLevels(normalizedSensors, metricConfigs);
+      const withLevels = classifySensorsWithLevels(normalizedSensors, metricConfigs, getConfigForSensor);
       
       // Restore original sensor types in the result (withLevels has normalized types from normalizedSensors)
       const withOriginalTypes = withLevels.map((sensor, idx) => ({
@@ -627,7 +717,7 @@ export function HomeV2Page() {
     return () => {
       cancelled = true;
     };
-  }, [depMetricIds, depPuntoIds, filteredPuntos, metrics, selectedTimeRange]);
+  }, [depMetricIds, depPuntoIds, depRegionMetricIds, filteredPuntos, metrics, regionMetrics, selectedTimeRange]);
 
   const handleChartSectionClick = (data: { label: string; color?: string; sensors?: SensorWithLevel[]; metricId?: string }) => {
     if (data.sensors) {
@@ -694,6 +784,7 @@ export function HomeV2Page() {
                 value={selectedClientId}
                 onChange={(e) => {
                   setSelectedClientId(e.target.value);
+                  setSelectedRegionId('All');
                   setSelectedPuntoVentaId('All');
                 }}
                 label="Cliente"
@@ -702,6 +793,26 @@ export function HomeV2Page() {
                 {clients.map((c) => (
                   <MenuItem key={String(c.id ?? c._id)} value={String(c.id ?? c._id)}>
                     {c.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid xs={12} md={6} lg={3}>
+            <FormControl fullWidth>
+              <InputLabel shrink>Región</InputLabel>
+              <Select
+                value={selectedRegionId}
+                onChange={(e) => {
+                  setSelectedRegionId(e.target.value);
+                  setSelectedPuntoVentaId('All');
+                }}
+                label="Región"
+              >
+                <MenuItem value="All">Todas</MenuItem>
+                {availableRegions.map((r) => (
+                  <MenuItem key={r.id} value={r.id}>
+                    {r.name}
                   </MenuItem>
                 ))}
               </Select>
