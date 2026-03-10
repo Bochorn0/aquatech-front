@@ -31,7 +31,7 @@ function sensorTypeDisplayName(sensorType: string | null | undefined): string {
   return map[s] || s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** Build tooltip title for the status color label. */
+/** Build tooltip title for the status color label (includes current value and min/max to expect from punto or region metrics). */
 function getStatusTooltipTitle(pv: PuntosVenta): string {
   const status = pv.metric_status ?? 'normal';
   if (status === 'normal') {
@@ -42,11 +42,18 @@ function getStatusTooltipTitle(pv: PuntosVenta): string {
     ? (detail.metric_name || sensorTypeDisplayName(detail.sensor_type))
     : 'Métrica';
   const valueStr = detail && detail.value != null ? String(Number(detail.value)) : '—';
-  const hintStr = detail?.hint ? ` ${detail.hint}` : '';
-  if (status === 'critico') {
-    return `${metricLabel}: ${valueStr}.${hintStr ? ` ${hintStr}` : ''}`;
+  const normalMin = detail?.normal_min;
+  const normalMax = detail?.normal_max;
+  let compareStr = '';
+  if (normalMin != null && normalMax != null) {
+    compareStr = ` Valor para normal: entre ${normalMin} y ${normalMax}.`;
+  } else if (normalMin != null) {
+    compareStr = ` Valor mínimo para normal: ${normalMin}.`;
+  } else if (normalMax != null) {
+    compareStr = ` Valor máximo para normal: ${normalMax}.`;
   }
-  return `${metricLabel}: ${valueStr}.${hintStr ? ` ${hintStr}` : ''}`;
+  const hintStr = detail?.hint ? ` ${detail.hint}` : '';
+  return `${metricLabel}: ${valueStr}.${compareStr}${hintStr ? ` ${hintStr}` : ''}`;
 }
 
 // ---------------------------------------------
