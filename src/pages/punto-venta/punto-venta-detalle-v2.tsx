@@ -135,11 +135,44 @@ export default function PuntoVentaDetalleV2() {
       }
     };
 
-    const fetchPuntoVentaDetails = async (opts: { light?: boolean; bustCache?: boolean; background?: boolean } = {}) => {
-      const { light = false, bustCache = false, background = false } = opts;
+    const fetchHistoricoForCharts = async (puntoData: any) => {
+      const tiwaterProducts = (puntoData?.productos || []).filter((p: any) => p.product_type === 'TIWater');
+      if (tiwaterProducts.length === 0) {
+        setChartsLoading(false);
+        return;
+      }
+      try {
+        const types = ['purificada', 'cruda', 'recuperada'] as const;
+        const results = await Promise.all(
+          types.map((t) =>
+            fetch(`${CONFIG.API_BASE_URL_V2}/puntoVentas/${id}/historico?type=${t}`, {
+              headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+            }).then((r) => r.ok ? r.json() : null).catch(() => null)
+          )
+        );
+        const merged = { ...puntoData };
+        merged.productos = (merged.productos || []).map((p: any) => {
+          if (p.product_type !== 'TIWater') return p;
+          const prod = { ...p };
+          if (results[0]?.data?.historico) prod.historico = results[0].data.historico;
+          if (results[1]?.data?.historico) prod.historico_cruda = results[1].data.historico;
+          if (results[2]?.data?.historico) prod.historico_recuperada = results[2].data.historico;
+          return prod;
+        });
+        setPunto(merged);
+        prepareChartDataNiveles(merged, setChartDataNiveles);
+      } catch (e) {
+        console.warn('Error fetching historico for charts:', e);
+      } finally {
+        setChartsLoading(false);
+      }
+    };
+
+    const fetchPuntoVentaDetails = async (opts: { bustCache?: boolean } = {}) => {
+      const { bustCache = false } = opts;
       try {
         const params = new URLSearchParams();
-        if (light) params.set('light', '1');
+        params.set('light', '1'); // Always light: no historico in main response
         if (bustCache) params.set('_t', String(Date.now()));
         const qs = params.toString();
         const url = `${CONFIG.API_BASE_URL_V2}/puntoVentas/${id}${qs ? `?${qs}` : ''}`;
@@ -160,27 +193,20 @@ export default function PuntoVentaDetalleV2() {
         setPunto(puntoData);
         prepareChartDataNiveles(puntoData, setChartDataNiveles);
 
-        if (!background) {
-          const codigoTienda = puntoData.codigo_tienda || id;
-          if (codigoTienda) {
-            fetchTiwaterData(codigoTienda);
-            fetchLatestSensorData(codigoTienda);
-          }
-          const puntoVentaId = puntoData.id || puntoData._id;
-          const clienteId = puntoData.cliente?.id || puntoData.cliente?._id || puntoData.cliente;
-          if (puntoVentaId || clienteId) {
-            fetchMetricsConfig(puntoVentaId, clienteId);
-          }
+        const codigoTienda = puntoData.codigo_tienda || id;
+        if (codigoTienda) {
+          fetchTiwaterData(codigoTienda);
+          fetchLatestSensorData(codigoTienda);
+        }
+        const puntoVentaId = puntoData.id || puntoData._id;
+        const clienteId = puntoData.cliente?.id || puntoData.cliente?._id || puntoData.cliente;
+        if (puntoVentaId || clienteId) {
+          fetchMetricsConfig(puntoVentaId, clienteId);
         }
 
-        if (light) {
-          setLoading(false);
-          setChartsLoading(true);
-          fetchPuntoVentaDetails({ light: false, background: true });
-        } else {
-          setChartsLoading(false);
-          if (!background) setLoading(false);
-        }
+        setLoading(false);
+        setChartsLoading(true);
+        fetchHistoricoForCharts(puntoData);
       } catch (error) {
         console.error('Error fetching punto venta details:', error);
         setLoading(false);
@@ -189,7 +215,7 @@ export default function PuntoVentaDetalleV2() {
     };
 
     if (id) {
-      fetchPuntoVentaDetails({ light: true });
+      fetchPuntoVentaDetails();
       const interval = setInterval(() => {
         fetchPuntoVentaDetails({ bustCache: true });
       }, 30000);
