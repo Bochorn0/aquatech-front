@@ -573,7 +573,7 @@ export function CustomizationPageV2() {
       });
       // Sync region–punto relation: set exactly the puntos currently shown in the modal
       await apiV2Call(`/regions/${regionEditModal.id}/puntos`, 'PUT', {
-        punto_venta_ids: regionPuntos.map((p) => (typeof p.id === 'number' ? p.id : parseInt(String(p.id), 10))).filter((n) => !isNaN(n)),
+        punto_venta_ids: regionPuntos.map((p) => (typeof p.id === 'number' ? p.id : parseInt(String(p.id), 10))).filter((n) => !Number.isNaN(n)),
       });
       setRegionEditModal((r) => r ? { ...r, code: regionFormData.code, name: regionFormData.name, color: regionFormData.color.trim() || null } : null);
       fetchRegions();

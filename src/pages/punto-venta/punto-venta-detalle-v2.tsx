@@ -1050,7 +1050,6 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
       // Agua Cruda panel: use only historico_cruda chart (do not use recuperada as fallback)
       const matchesProduct = (cd: any) => (cd.nivelId === tiwaterProduct._id || cd.nivelId === tiwaterProduct.id) || cd.productType === 'TIWater';
       const chartDataCruda = chartDataNiveles.find((cd: any) => matchesProduct(cd) && cd.isHistoricoCruda);
-      const chartDataRecuperada = chartDataNiveles.find((cd: any) => matchesProduct(cd) && cd.isCruda && !cd.isHistoricoCruda);
 
       const nivelCrudaValue = nivelCruda != null ? Number(nivelCruda.value) : null;
       const nivelRecuperadaValue = nivelRecuperada != null ? Number(nivelRecuperada.value) : null;
