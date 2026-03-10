@@ -751,17 +751,17 @@ function prepareChartDataNiveles(puntoData: any, setChartDataNiveles: any) {
         const timeA = a.hora || '00:00';
         const timeB = b.hora || '00:00';
         
-        // Convert to 24-hour format for proper sorting
+        // Convert to 24-hour format for proper sorting (handles "10:00 p.m.", "10:00 p. m.", "22:00")
         const to24Hour = (time: string): number => {
-          const match = time.match(/(\d{1,2}):(\d{2})(?:\s*)?(a\.?m\.?|p\.?m\.?)?/i);
+          const normalized = (time || '').trim();
+          const match = normalized.match(/(\d{1,2}):(\d{2})(?:\s*(a\.?\s*m\.?|p\.?\s*m\.?))?/i);
           if (!match) return 0;
           
           let hours = parseInt(match[1], 10);
           const minutes = parseInt(match[2], 10);
-          const period = match[3]?.toLowerCase().replace(/\./g, '');
+          const period = (match[3] || '').toLowerCase().replace(/\s|\./g, '');
           
           if (period) {
-            // 12-hour format with AM/PM
             if (period.includes('p') && hours !== 12) {
               hours += 12;
             } else if (period.includes('a') && hours === 12) {
@@ -769,7 +769,7 @@ function prepareChartDataNiveles(puntoData: any, setChartDataNiveles: any) {
             }
           }
           
-          return hours * 60 + minutes; // Return total minutes for comparison
+          return hours * 60 + minutes;
         };
         
         return to24Hour(timeA) - to24Hour(timeB);
