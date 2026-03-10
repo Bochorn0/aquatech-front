@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import TableSortLabel from '@mui/material/TableSortLabel';
+import Tooltip from '@mui/material/Tooltip';
 import { Box, Grid, Paper, Table, Button, Select, MenuItem, TableRow, TableBody, TableCell, TableHead, TextField, InputLabel, Typography, FormControl, ToggleButton, TablePagination, CircularProgress, ToggleButtonGroup } from '@mui/material';
 
 import { StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
@@ -11,6 +12,42 @@ import { StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellH
 import { CONFIG } from 'src/config-global';
 
 import type  { PuntosVenta } from './types';
+
+/** Human-readable label for sensor_type (e.g. nivel_cruda → Nivel cruda). */
+function sensorTypeDisplayName(sensorType: string | null | undefined): string {
+  if (!sensorType || typeof sensorType !== 'string') return 'Métrica';
+  const s = sensorType.toLowerCase().replace(/^electronivel_/, 'nivel_').replace(/^level_/, 'nivel_');
+  const map: Record<string, string> = {
+    nivel_cruda: 'Nivel cruda',
+    nivel_purificada: 'Nivel purificada',
+    nivel_recuperada: 'Nivel recuperada',
+    electronivel_cruda: 'Nivel cruda',
+    electronivel_purificada: 'Nivel purificada',
+    flujo_produccion: 'Flujo producción',
+    flujo_rechazo: 'Flujo rechazo',
+    eficiencia: 'Eficiencia',
+    tds: 'TDS',
+  };
+  return map[s] || s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Build tooltip title for the status color label. */
+function getStatusTooltipTitle(pv: PuntosVenta): string {
+  const status = pv.metric_status ?? 'normal';
+  if (status === 'normal') {
+    return 'Estado normal. Las métricas están dentro del rango configurado.';
+  }
+  const detail = pv.metric_status_detail;
+  const metricLabel = detail
+    ? (detail.metric_name || sensorTypeDisplayName(detail.sensor_type))
+    : 'Métrica';
+  const valueStr = detail && detail.value != null ? String(Number(detail.value)) : '—';
+  const hintStr = detail?.hint ? ` ${detail.hint}` : '';
+  if (status === 'critico') {
+    return `${metricLabel}: ${valueStr}.${hintStr ? ` ${hintStr}` : ''}`;
+  }
+  return `${metricLabel}: ${valueStr}.${hintStr ? ` ${hintStr}` : ''}`;
+}
 
 // ---------------------------------------------
 // 📦 COMPONENTE PRINCIPAL (v2.0 - PostgreSQL)
@@ -301,7 +338,9 @@ export default function PuntoVentaTableListV2() {
                       return (
                         <StyledTableRow key={puntoId}>
                           <TableCell sx={{ width: 6, minWidth: 6, p: 0, verticalAlign: 'middle' }}>
-                            <Box sx={{ width: 6, minHeight: 36, height: 40, backgroundColor: statusColor, borderRadius: 0 }} />
+                            <Tooltip title={getStatusTooltipTitle(pv)} placement="right" arrow>
+                              <Box sx={{ width: 6, minHeight: 36, height: 40, backgroundColor: statusColor, borderRadius: 0 }} />
+                            </Tooltip>
                           </TableCell>
                           <StyledTableCell>{pv.name}</StyledTableCell>
                           <StyledTableCell>{typeof pv.cliente === 'object' && pv.cliente !== null ? pv.cliente.name : 'N/A'}</StyledTableCell>

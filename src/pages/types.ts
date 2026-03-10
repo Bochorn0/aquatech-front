@@ -308,4 +308,11 @@ export interface PuntosVenta {
     last_reading_at?: string | null;
     /** From API: worst metric level — 'critico' | 'preventivo' | 'normal' */
     metric_status?: 'critico' | 'preventivo' | 'normal';
+    /** From API: when metric_status is critico/preventivo, brief detail for tooltip */
+    metric_status_detail?: {
+      metric_name?: string | null;
+      sensor_type?: string | null;
+      value: number;
+      hint?: string | null;
+    } | null;
 }
