@@ -1055,14 +1055,15 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
       const nivelRecuperadaValue = nivelRecuperada != null ? Number(nivelRecuperada.value) : null;
       const statusValueForCruda = nivelCrudaValue ?? nivelRecuperadaValue;
 
-      if (chartDataCruda && statusValueForCruda != null) {
+      // Show cruda section when we have historico chart and/or live nivel (don't require both)
+      if (chartDataCruda) {
         const ultimoValorHistorico = getUltimoValorHistorico(chartDataCruda);
         aguaCrudaData = {
           nivel: statusValueForCruda ?? ultimoValorHistorico,
           chartData: chartDataCruda,
           name: 'Nivel Cruda'
         };
-        console.log('[AlmacenamientoCard] Asignado chartData cruda a aguaCrudaData (historico_cruda)');
+        console.log('[AlmacenamientoCard] Asignado chartData cruda a aguaCrudaData (historico_cruda)', { statusValueForCruda, ultimoValorHistorico });
       } else if (statusValueForCruda != null && !aguaCrudaData?.chartData) {
         aguaCrudaData = {
           nivel: statusValueForCruda,
