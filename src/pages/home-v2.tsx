@@ -444,16 +444,15 @@ export function HomeV2Page() {
     fetchMetrics();
   }, [selectedClientId, selectedPuntoVentaId]);
 
-  // Fetch region metrics for filter hierarchy (region metrics override punto-venta metrics when present)
+  // Fetch region metrics for hierarchy (region metrics override punto-venta metrics; fetch all so "All" client view has them)
   useEffect(() => {
     const fetchRegionMetrics = async () => {
-      if (!selectedClientId || selectedClientId === 'All') {
-        setRegionMetrics([]);
-        return;
-      }
       try {
-        const response = await getV2<RegionMetricV2[]>('/region-metrics', { clientId: selectedClientId });
-        setRegionMetrics(Array.isArray(response) ? response : []);
+        const params: Record<string, string> = {};
+        if (selectedClientId && selectedClientId !== 'All') params.clientId = selectedClientId;
+        const response = await getV2<RegionMetricV2[] | { data?: RegionMetricV2[] }>('/region-metrics', Object.keys(params).length ? params : undefined);
+        const list = Array.isArray(response) ? response : (response?.data ?? []);
+        setRegionMetrics(Array.isArray(list) ? list : []);
       } catch {
         setRegionMetrics([]);
       }
@@ -618,16 +617,22 @@ export function HomeV2Page() {
         s.sensorType.toLowerCase().includes('nivel') && s.sensorType.toLowerCase().includes('purificada')
       );
 
-      // Get metric rules for nivel_cruda
-      const nivelCrudaMetric = metricConfigs.find(m => 
-        m.sensor_type?.toLowerCase() === 'nivel_cruda'
-      );
+      // Get metric rules for nivel_cruda (region metrics have higher hierarchy)
+      const nivelCrudaRegionIds = [...new Set(nivelCrudaSensors.map(s => {
+        const pv = filteredPuntos.find((p) => String(p.id ?? p._id) === String(s.puntoVentaId));
+        return (pv as PuntoVentaV2)?.region?.id;
+      }).filter(Boolean))] as string[];
+      const nivelCrudaRegionConfig = nivelCrudaRegionIds.map(rid => regionConfigByKey.get(`${rid}:nivel_cruda`)).find(Boolean);
+      const nivelCrudaMetric = nivelCrudaRegionConfig ?? metricConfigs.find(m => m.sensor_type?.toLowerCase() === 'nivel_cruda');
       const nivelCrudaRules = nivelCrudaMetric?.rules || [];
 
-      // Get metric rules for nivel_purificada
-      const nivelPurificadaMetric = metricConfigs.find(m => 
-        m.sensor_type?.toLowerCase() === 'nivel_purificada'
-      );
+      // Get metric rules for nivel_purificada (region metrics have higher hierarchy)
+      const nivelPurificadaRegionIds = [...new Set(nivelPurificadaSensors.map(s => {
+        const pv = filteredPuntos.find((p) => String(p.id ?? p._id) === String(s.puntoVentaId));
+        return (pv as PuntoVentaV2)?.region?.id;
+      }).filter(Boolean))] as string[];
+      const nivelPurificadaRegionConfig = nivelPurificadaRegionIds.map(rid => regionConfigByKey.get(`${rid}:nivel_purificada`)).find(Boolean);
+      const nivelPurificadaMetric = nivelPurificadaRegionConfig ?? metricConfigs.find(m => m.sensor_type?.toLowerCase() === 'nivel_purificada');
       const nivelPurificadaRules = nivelPurificadaMetric?.rules || [];
 
       if (nivelCrudaSensors.length > 0) {
