@@ -136,12 +136,14 @@ export default function PuntoVentaDetalleV2() {
           }
         }
 
-        // No metrics for this punto: fallback to region metrics (client + region, or client only)
-        if (clienteId) {
-          const tryRegionMetrics = async (clientIdParam: string, regionIdParam?: string): Promise<any[]> => {
-            const qs = regionIdParam
-              ? `?clientId=${encodeURIComponent(clientIdParam)}&regionId=${encodeURIComponent(regionIdParam)}`
-              : `?clientId=${encodeURIComponent(clientIdParam)}`;
+        // No metrics for this punto: fallback to region metrics (client+region, then client only, then region only)
+        if (clienteId || regionId) {
+          const tryRegionMetrics = async (params: { clientId?: string; regionId?: string }): Promise<any[]> => {
+            const search = new URLSearchParams();
+            if (params.clientId) search.set('clientId', params.clientId);
+            if (params.regionId) search.set('regionId', params.regionId);
+            const qs = search.toString() ? `?${search.toString()}` : '';
+            if (!qs) return [];
             const regionRes = await fetch(`${CONFIG.API_BASE_URL_V2}/region-metrics${qs}`, {
               headers: {
                 'Content-Type': 'application/json',
@@ -154,11 +156,14 @@ export default function PuntoVentaDetalleV2() {
           };
           try {
             let regionList: any[] = [];
-            if (regionId) {
-              regionList = await tryRegionMetrics(String(clienteId), String(regionId));
+            if (clienteId && regionId) {
+              regionList = await tryRegionMetrics({ clientId: String(clienteId), regionId: String(regionId) });
             }
-            if (regionList.length === 0) {
-              regionList = await tryRegionMetrics(String(clienteId));
+            if (regionList.length === 0 && clienteId) {
+              regionList = await tryRegionMetrics({ clientId: String(clienteId) });
+            }
+            if (regionList.length === 0 && regionId) {
+              regionList = await tryRegionMetrics({ regionId: String(regionId) });
             }
             if (Array.isArray(regionList) && regionList.length > 0) {
               setMetricsConfig(regionList);
