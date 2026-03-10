@@ -138,10 +138,10 @@ export default function PuntoVentaDetalleV2() {
 
         // No metrics for this punto: fallback to region metrics (client+region, then client only, then region only)
         if (clienteId || regionId) {
-          const tryRegionMetrics = async (params: { clientId?: string; regionId?: string }): Promise<any[]> => {
+          const tryRegionMetrics = async (filters: { clientId?: string; regionId?: string }): Promise<any[]> => {
             const search = new URLSearchParams();
-            if (params.clientId) search.set('clientId', params.clientId);
-            if (params.regionId) search.set('regionId', params.regionId);
+            if (filters.clientId) search.set('clientId', filters.clientId);
+            if (filters.regionId) search.set('regionId', filters.regionId);
             const qs = search.toString() ? `?${search.toString()}` : '';
             if (!qs) return [];
             const regionRes = await fetch(`${CONFIG.API_BASE_URL_V2}/region-metrics${qs}`, {
