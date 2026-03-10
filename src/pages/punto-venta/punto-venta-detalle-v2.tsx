@@ -99,7 +99,7 @@ export default function PuntoVentaDetalleV2() {
       }
     };
 
-    const fetchMetricsConfig = async (puntoVentaId: string, clienteId?: string) => {
+    const fetchMetricsConfig = async (puntoVentaId: string, clienteId?: string, regionId?: string) => {
       try {
         // Fetch metrics for this punto venta or cliente
         let url = `${CONFIG.API_BASE_URL_V2}/metrics`;
@@ -122,13 +122,39 @@ export default function PuntoVentaDetalleV2() {
           }
         });
 
+        let list: any[] = [];
         if (response.ok) {
           const result = await response.json();
-          // API may return array directly or wrapped in { data } / { success, data }
-          const list = Array.isArray(result) ? result : (result?.data ?? []);
-          if (Array.isArray(list) && list.length > 0) {
-            setMetricsConfig(list);
+          list = Array.isArray(result) ? result : (result?.data ?? []);
+          // Use only metrics that belong to THIS punto
+          const forThisPunto = list.filter(
+            (m: any) => m.punto_venta_id != null && String(m.punto_venta_id) === String(puntoVentaId)
+          );
+          if (forThisPunto.length > 0) {
+            setMetricsConfig(forThisPunto);
+            return;
           }
+        }
+
+        // No metrics for this punto: fallback to region metrics (same client + region)
+        if (regionId && clienteId) {
+          try {
+            const regionUrl = `${CONFIG.API_BASE_URL_V2}/region-metrics?clientId=${clienteId}&regionId=${regionId}`;
+            const regionRes = await fetch(regionUrl, {
+              headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (regionRes.ok) {
+              const regionResult = await regionRes.json();
+              const regionList = Array.isArray(regionResult) ? regionResult : (regionResult?.data ?? []);
+              if (Array.isArray(regionList) && regionList.length > 0) {
+                setMetricsConfig(regionList);
+              }
+            }
+          } catch (e) {
+            console.warn('Error fetching region metrics fallback:', e);
+          }
+        } else if (Array.isArray(list) && list.length > 0) {
+          setMetricsConfig(list);
         }
       } catch (error) {
         console.error('Error fetching metrics config:', error);
@@ -136,8 +162,10 @@ export default function PuntoVentaDetalleV2() {
     };
 
     const fetchHistoricoForCharts = async (puntoData: any) => {
-      const tiwaterProducts = (puntoData?.productos || []).filter((p: any) => p.product_type === 'TIWater');
-      if (tiwaterProducts.length === 0) {
+      // V2: TIWater comes from osmosisSystems (sensors), not productos
+      const osmosisSystems = puntoData?.osmosisSystems || [];
+      const tiwaterSystems = osmosisSystems.filter((s: any) => (s.resourceType || '').toString().toLowerCase() === 'tiwater');
+      if (tiwaterSystems.length === 0) {
         setChartsLoading(false);
         return;
       }
@@ -151,13 +179,13 @@ export default function PuntoVentaDetalleV2() {
           )
         );
         const merged = { ...puntoData };
-        merged.productos = (merged.productos || []).map((p: any) => {
-          if (p.product_type !== 'TIWater') return p;
-          const prod = { ...p };
-          if (results[0]?.data?.historico) prod.historico = results[0].data.historico;
-          if (results[1]?.data?.historico) prod.historico_cruda = results[1].data.historico;
-          if (results[2]?.data?.historico) prod.historico_recuperada = results[2].data.historico;
-          return prod;
+        merged.osmosisSystems = (merged.osmosisSystems || []).map((sys: any) => {
+          if ((sys.resourceType || '').toString().toLowerCase() !== 'tiwater') return sys;
+          const next = { ...sys };
+          if (results[0]?.data?.historico) next.historico = results[0].data.historico;
+          if (results[1]?.data?.historico) next.historico_cruda = results[1].data.historico;
+          if (results[2]?.data?.historico) next.historico_recuperada = results[2].data.historico;
+          return next;
         });
         setPunto(merged);
         prepareChartDataNiveles(merged, setChartDataNiveles);
@@ -194,19 +222,76 @@ export default function PuntoVentaDetalleV2() {
         prepareChartDataNiveles(puntoData, setChartDataNiveles);
 
         const codigoTienda = puntoData.codigo_tienda || id;
+        const hasTiwaterSystems = (puntoData?.osmosisSystems || []).some((s: any) => (s.resourceType || '').toString().toLowerCase() === 'tiwater');
         if (codigoTienda) {
-          fetchTiwaterData(codigoTienda);
+          if (hasTiwaterSystems) fetchTiwaterData(codigoTienda);
           fetchLatestSensorData(codigoTienda);
         }
         const puntoVentaId = puntoData.id || puntoData._id;
         const clienteId = puntoData.cliente?.id || puntoData.cliente?._id || puntoData.cliente;
+        const regionId = puntoData.region?.id ?? '';
         if (puntoVentaId || clienteId) {
-          fetchMetricsConfig(puntoVentaId, clienteId);
+          fetchMetricsConfig(puntoVentaId, clienteId, regionId);
         }
 
         setLoading(false);
         setChartsLoading(true);
-        fetchHistoricoForCharts(puntoData);
+
+        // If detalle has no TIWater in osmosisSystems (e.g. sensor_latest empty), build synthetic from sensors/tiwater endpoint so historico can load. V2 = sensors (osmosisSystems), not productos.
+        let dataForHistorico = puntoData;
+        const tiwaterSystems = (puntoData?.osmosisSystems || []).filter((s: any) => (s.resourceType || '').toString().toLowerCase() === 'tiwater');
+        if (tiwaterSystems.length === 0 && codigoTienda) {
+          try {
+            const tiwRes = await fetch(`${CONFIG.API_BASE_URL_V2}/sensors/tiwater?codigoTienda=${codigoTienda}`, {
+              headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (tiwRes.ok) {
+              const tiwResult = await tiwRes.json();
+              const tw = tiwResult?.data;
+              if (tw?.raw && Object.keys(tw.raw).length > 0) {
+                setTiwaterData(tw);
+                if (tw.timestamp) setLatestSensorTimestamp(new Date(tw.timestamp));
+                const rawToCode: Record<string, string> = {
+                  'Nivel Purificada': 'electronivel_purificada',
+                  'Nivel Purificada (absoluto)': 'nivel_purificada',
+                  'Nivel Cruda (%)': 'electronivel_cruda',
+                  'Nivel Cruda (absoluto)': 'nivel_cruda',
+                  'Nivel Recuperada': 'electronivel_recuperada',
+                  'Flujo Producción': 'flujo_produccion',
+                  'Flujo Rechazo': 'flujo_rechazo',
+                  'Flujo Recuperación': 'flujo_recuperacion',
+                  'Caudal Cruda': 'caudal_cruda',
+                  'Caudal Cruda (L/min)': 'caudal_cruda_lmin'
+                };
+                const status = Object.entries(tw.raw).map(([name, value]) => ({
+                  code: rawToCode[name] || name,
+                  value: Number(value) ?? 0,
+                  label: name,
+                  unit: '%',
+                  timestamp: tw.timestamp || new Date().toISOString()
+                }));
+                const syntheticSystem = {
+                  _id: 'tiwater-system',
+                  id: 'tiwater-system',
+                  resourceId: 'tiwater-system',
+                  resourceType: 'tiwater',
+                  name: 'Sistema TIWater',
+                  status,
+                  online: !!tw.timestamp
+                };
+                const merged = {
+                  ...puntoData,
+                  osmosisSystems: puntoData.osmosisSystems?.length ? puntoData.osmosisSystems : [syntheticSystem]
+                };
+                setPunto(merged);
+                dataForHistorico = merged;
+              }
+            }
+          } catch (e) {
+            console.warn('Fallback tiwater fetch for historico:', e);
+          }
+        }
+        fetchHistoricoForCharts(dataForHistorico);
       } catch (error) {
         console.error('Error fetching punto venta details:', error);
         setLoading(false);
@@ -232,16 +317,12 @@ export default function PuntoVentaDetalleV2() {
     );
   }
 
-  const osmosis = punto.productos?.filter((p: any) => p.product_type === 'Osmosis') || [];
-  const niveles = punto.productos?.filter((p: any) => p.product_type === 'Nivel') || [];
-  const metricas = punto.productos?.filter((p: any) => p.product_type === 'Metrica') || [];
-  const tiwaterProduct = punto.productos?.find((p: any) => p.product_type === 'TIWater') || null;
-  
-  // Debug: Verificar que el producto TIWater se encontró
-  if (tiwaterProduct) {
-    console.log('[PuntoVentaDetalleV2] Producto TIWater encontrado:', tiwaterProduct);
-    console.log('[PuntoVentaDetalleV2] Status del producto:', tiwaterProduct.status);
-  }
+  // V2: sensor data from osmosisSystems (sensors), not productos. Niveles/metricas still come from API in productos (sensor-derived).
+  const osmosisSystems = punto?.osmosisSystems || [];
+  const osmosis = osmosisSystems.filter((s: any) => (s.resourceType || '').toString().toLowerCase() === 'osmosis');
+  const tiwaterProduct = osmosisSystems.find((s: any) => (s.resourceType || '').toString().toLowerCase() === 'tiwater') || null;
+  const niveles = punto?.productos?.filter((p: any) => p.product_type === 'Nivel') || [];
+  const metricas = punto?.productos?.filter((p: any) => p.product_type === 'Metrica') || [];
 
   // Dev mode: only boolean column from API
   const userStr = localStorage.getItem('user');
@@ -619,23 +700,18 @@ export default function PuntoVentaDetalleV2() {
 /* -------------------------------------------------------------------------- */
 
 function prepareChartDataNiveles(puntoData: any, setChartDataNiveles: any) {
-  // Incluir tanto productos Nivel como TIWater
+  // V2: Nivel from productos (sensor-derived), TIWater from osmosisSystems (sensors)
   const niveles = puntoData?.productos?.filter((p: any) => p.product_type === 'Nivel') || [];
-  const tiwaterProducts = puntoData?.productos?.filter((p: any) => p.product_type === 'TIWater') || [];
-  const allProducts = [...niveles, ...tiwaterProducts];
-  
-  console.log('[prepareChartDataNiveles] Productos encontrados:', {
-    nivelesCount: niveles.length,
-    tiwaterCount: tiwaterProducts.length,
-    totalCount: allProducts.length
-  });
+  const osmosisSystems = puntoData?.osmosisSystems || [];
+  const tiwaterSystems = osmosisSystems.filter((s: any) => (s.resourceType || '').toString().toLowerCase() === 'tiwater');
+  const tiwaterForCharts = tiwaterSystems.map((s: any) => ({ ...s, product_type: 'TIWater' }));
+  const allProducts = [...niveles, ...tiwaterForCharts];
   
   if (allProducts.length === 0) {
     setChartDataNiveles(null);
     return;
   }
 
-  // Procesar productos que tengan histórico (purificada, recuperada o cruda)
   const chartDataArray: any[] = [];
   
   allProducts.forEach((product: any) => {
@@ -643,7 +719,7 @@ function prepareChartDataNiveles(puntoData: any, setChartDataNiveles: any) {
     const hasHistoricoRecuperada = product.historico_recuperada?.hours_with_data && Array.isArray(product.historico_recuperada.hours_with_data) && product.historico_recuperada.hours_with_data.length > 0;
     const hasHistoricoCruda = product.historico_cruda?.hours_with_data && Array.isArray(product.historico_cruda.hours_with_data) && product.historico_cruda.hours_with_data.length > 0;
     
-    console.log(`[prepareChartDataNiveles] Producto ${product.id} (${product.product_type}):`, {
+    console.log(`[prepareChartDataNiveles] ${product.id} (${product.product_type || 'Nivel'}):`, {
       hasHistoricoPurificada: !!product.historico,
       hasHistoricoRecuperada: !!product.historico_recuperada,
       hasHistoricoCruda: !!product.historico_cruda,
