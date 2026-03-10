@@ -238,7 +238,7 @@ const apiV2Call = async (endpoint: string, method: string = 'GET', data?: any) =
     }
   };
   
-  if (data && (method === 'POST' || method === 'PATCH')) {
+  if (data && (method === 'POST' || method === 'PATCH' || method === 'PUT')) {
     options.body = JSON.stringify(data);
   }
   
@@ -536,7 +536,10 @@ export function CustomizationPageV2() {
   };
 
   useEffect(() => {
-    if (isAdmin && tabIndex === 5) fetchRegions();
+    if (isAdmin && tabIndex === 5) {
+      fetchRegions();
+      fetchPuntosVenta();
+    }
   }, [tabIndex, isAdmin]);
 
   useEffect(() => {
@@ -568,8 +571,14 @@ export function CustomizationPageV2() {
         name: regionFormData.name.trim(),
         color: regionFormData.color.trim() || null,
       });
+      // Sync region–punto relation: set exactly the puntos currently shown in the modal
+      await apiV2Call(`/regions/${regionEditModal.id}/puntos`, 'PUT', {
+        punto_venta_ids: regionPuntos.map((p) => (typeof p.id === 'number' ? p.id : parseInt(String(p.id), 10))).filter((n) => !isNaN(n)),
+      });
       setRegionEditModal((r) => r ? { ...r, code: regionFormData.code, name: regionFormData.name, color: regionFormData.color.trim() || null } : null);
       fetchRegions();
+      fetchRegionPuntos(regionEditModal.id);
+      fetchPuntosVenta();
     } catch (e) {
       console.error('Error saving region:', e);
       MySwal.fire('Error', 'Error al guardar región', 'error');

@@ -141,7 +141,10 @@ export default function PuntoVentaDetalleV2() {
           try {
             const regionUrl = `${CONFIG.API_BASE_URL_V2}/region-metrics?clientId=${clienteId}&regionId=${regionId}`;
             const regionRes = await fetch(regionUrl, {
-              headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${localStorage.getItem('token')}`
+              }
             });
             if (regionRes.ok) {
               const regionResult = await regionRes.json();
@@ -149,6 +152,8 @@ export default function PuntoVentaDetalleV2() {
               if (Array.isArray(regionList) && regionList.length > 0) {
                 setMetricsConfig(regionList);
               }
+            } else {
+              console.warn('[fetchMetricsConfig] region-metrics non-OK:', regionRes.status);
             }
           } catch (e) {
             console.warn('Error fetching region metrics fallback:', e);
@@ -1042,29 +1047,23 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
         });
       }
 
-      // Prefer chart from historico_cruda (Nivel Cruda %); fallback to historico_recuperada
+      // Agua Cruda panel: use only historico_cruda chart (do not use recuperada as fallback)
       const matchesProduct = (cd: any) => (cd.nivelId === tiwaterProduct._id || cd.nivelId === tiwaterProduct.id) || cd.productType === 'TIWater';
       const chartDataCruda = chartDataNiveles.find((cd: any) => matchesProduct(cd) && cd.isHistoricoCruda);
-      const chartDataRecuperada = chartDataCruda ?? chartDataNiveles.find((cd: any) => matchesProduct(cd) && cd.isCruda);
-      const chartDataForCruda = chartDataCruda ?? chartDataRecuperada;
+      const chartDataRecuperada = chartDataNiveles.find((cd: any) => matchesProduct(cd) && cd.isCruda && !cd.isHistoricoCruda);
 
       const nivelCrudaValue = nivelCruda != null ? Number(nivelCruda.value) : null;
       const nivelRecuperadaValue = nivelRecuperada != null ? Number(nivelRecuperada.value) : null;
       const statusValueForCruda = nivelCrudaValue ?? nivelRecuperadaValue;
 
-      if (chartDataForCruda && statusValueForCruda != null) {
-        const ultimoValorHistorico = getUltimoValorHistorico(chartDataForCruda);
+      if (chartDataCruda && statusValueForCruda != null) {
+        const ultimoValorHistorico = getUltimoValorHistorico(chartDataCruda);
         aguaCrudaData = {
           nivel: statusValueForCruda ?? ultimoValorHistorico,
-          chartData: chartDataForCruda,
-          name: chartDataCruda ? 'Nivel Cruda' : (nivelCruda ? 'Nivel Cruda' : 'Nivel Recuperada')
+          chartData: chartDataCruda,
+          name: 'Nivel Cruda'
         };
-        console.log('[AlmacenamientoCard] Asignado chartData a aguaCrudaData', {
-          fromHistoricoCruda: !!chartDataCruda,
-          statusValue: statusValueForCruda,
-          ultimoValorHistorico,
-          nivelFinal: aguaCrudaData.nivel
-        });
+        console.log('[AlmacenamientoCard] Asignado chartData cruda a aguaCrudaData (historico_cruda)');
       } else if (statusValueForCruda != null && !aguaCrudaData?.chartData) {
         aguaCrudaData = {
           nivel: statusValueForCruda,
