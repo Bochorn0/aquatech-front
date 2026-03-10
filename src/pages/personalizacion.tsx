@@ -414,10 +414,17 @@ const handlePvChange = (e: any) => {
   const { name, value } = e.target;
   setPvFormData((prevData) => ({
     ...prevData,
-    [name]: name === "productos" 
-      ? (Array.isArray(value) ? value : (typeof value === "string" ? value.split(",") : []))
-      : value
+    [name]: name === "productos"
+      ? (Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [])
+      : value,
   }));
+};
+
+/** Dedicated handler so multi-select value is always set (MUI can pass value in event.target.value). */
+const handlePvProductosChange = (e: any) => {
+  const value = e?.target?.value;
+  const next = Array.isArray(value) ? value : value != null && value !== "" ? [value] : [];
+  setPvFormData((prev) => ({ ...prev, productos: next }));
 };
 
 
@@ -441,17 +448,24 @@ const handlePvChange = (e: any) => {
   };
   
   const handleCitySubmit = async () => {
+    const state = (cityFormData.state ?? "").toString().trim();
+    const city = (cityFormData.city ?? "").toString().trim();
+    if (!state || !city) {
+      Swal.fire("Campos requeridos", "Estado y ciudad son obligatorios.", "warning");
+      return;
+    }
     setLoading(true);
     try {
       if (cityFormData._id) {
-        await patch<City>(`/cities/${cityFormData._id}`, cityFormData);
+        await patch<City>(`/cities/${cityFormData._id}`, { ...cityFormData, state, city });
       } else {
-        await post<City>(`/cities`, cityFormData);
+        await post<City>(`/cities`, { ...cityFormData, state, city, lat: cityFormData.lat, lon: cityFormData.lon });
       }
       handleCloseCityModal();
       fetchCities();
     } catch (error) {
       console.error("Error submitting city:", error);
+      Swal.fire("Error", (error as any)?.response?.data?.message ?? "Error al guardar ciudad", "error");
     } finally {
       setLoading(false);
     }
@@ -552,19 +566,34 @@ const handlePvChange = (e: any) => {
   const productFormCityId = cities.find((c) => c.city === productFormData.city && c.state === productFormData.state)?._id ?? '';
 
   const handleProductSubmit = async () => {
-    if (!productFormData._id) return;
+    const name = (productFormData.name ?? '').toString().trim();
+    if (!name && !productFormData._id) {
+      Swal.fire("Campo requerido", "El nombre del producto es obligatorio.", "warning");
+      return;
+    }
     setLoading(true);
     try {
-      await patch<Product>(`/products/${productFormData._id}`, {
-        cliente: productFormData.cliente,
-        city: productFormData.city,
-        state: productFormData.state,
-        product_type: productFormData.product_type,
-      });
+      if (productFormData._id) {
+        await patch<Product>(`/products/${productFormData._id}`, {
+          cliente: productFormData.cliente,
+          city: productFormData.city,
+          state: productFormData.state,
+          product_type: productFormData.product_type,
+        });
+      } else {
+        await post<Product>(`/products`, {
+          name: name || 'Sin nombre',
+          cliente: productFormData.cliente || '',
+          city: productFormData.city || '',
+          state: productFormData.state || '',
+          product_type: productFormData.product_type || 'Osmosis',
+        });
+      }
       handleCloseProductModal();
       fetchProducts();
     } catch (error) {
       console.error('Error updating product:', error);
+      Swal.fire("Error", (error as any)?.response?.data?.message ?? "Error al guardar producto", "error");
     } finally {
       setLoading(false);
     }
@@ -572,7 +601,12 @@ const handlePvChange = (e: any) => {
 
   const handleCloseProductModal = () => {
     setProductModalOpen(false);
-    setProductFormData({ cliente: '', city: '', state: '', product_type: 'Osmosis' });
+    setProductFormData({ _id: undefined, name: '', cliente: '', city: '', state: '', product_type: 'Osmosis' });
+  };
+
+  const handleOpenNewProductModal = () => {
+    setProductFormData({ _id: undefined, name: '', cliente: '', city: '', state: '', product_type: 'Osmosis' });
+    setProductModalOpen(true);
   };
 
   const handleProductDelete = async (product: Product & { _id?: string }) => {
@@ -964,7 +998,10 @@ const handlePvChange = (e: any) => {
                       {selectedProductIds.size > 0 && ` · ${selectedProductIds.size} seleccionado(s)`}
                     </Typography>
                   </Grid>
-                  <Grid item xs={12} sm={3} textAlign="right">
+                  <Grid item xs={12} sm={3} textAlign="right" sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                    <Button variant="contained" color="primary" onClick={handleOpenNewProductModal}>
+                      Nuevo producto
+                    </Button>
                     <Button
                       variant="contained"
                       color="primary"
@@ -1232,7 +1269,7 @@ const handlePvChange = (e: any) => {
                   multiple
                   name="productos"
                   value={Array.isArray(pvFormData.productos) ? pvFormData.productos.map((id) => String(id)) : []}
-                  onChange={handlePvChange}
+                  onChange={handlePvProductosChange}
                   renderValue={(selected) =>
                     products
                       .filter((p) => selected.includes(String((p as any)._id ?? (p as any).id ?? '')))
@@ -1305,12 +1342,18 @@ const handlePvChange = (e: any) => {
         </Dialog>
 
         <Dialog open={productModalOpen} onClose={handleCloseProductModal} fullWidth maxWidth="sm">
-          <DialogTitle>Editar equipo (producto)</DialogTitle>
+          <DialogTitle>{productFormData._id ? "Editar equipo (producto)" : "Nuevo producto"}</DialogTitle>
           <DialogContent>
             <Box display="flex" flexDirection="column" gap={2} mt={1}>
-              {productFormData.name && (
-                <TextField label="Nombre" value={productFormData.name} fullWidth disabled />
-              )}
+              <TextField
+                label="Nombre"
+                name="name"
+                value={productFormData.name ?? ""}
+                onChange={handleProductChange}
+                fullWidth
+                disabled={!!productFormData._id}
+                required={!productFormData._id}
+              />
               <FormControl fullWidth>
                 <InputLabel shrink>Cliente</InputLabel>
                 <Select
@@ -1368,7 +1411,7 @@ const handlePvChange = (e: any) => {
               color="primary"
               disabled={loading}
             >
-              {loading ? <CircularProgress size={24} /> : 'Actualizar'}
+              {loading ? <CircularProgress size={24} /> : (productFormData._id ? 'Actualizar' : 'Guardar')}
             </Button>
           </DialogActions>
         </Dialog>
