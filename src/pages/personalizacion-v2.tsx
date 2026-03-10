@@ -526,7 +526,8 @@ export function CustomizationPageV2() {
     setLoadingRegionMetrics(true);
     try {
       const response = await apiV2Call('/region-metrics');
-      setRegionMetricsList(Array.isArray(response) ? response : []);
+      const list = response?.data ?? response;
+      setRegionMetricsList(Array.isArray(list) ? list : []);
     } catch (error) {
       console.error('Error fetching region metrics:', error);
       setRegionMetricsList([]);

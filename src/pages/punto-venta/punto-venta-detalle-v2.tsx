@@ -136,29 +136,39 @@ export default function PuntoVentaDetalleV2() {
           }
         }
 
-        // No metrics for this punto: fallback to region metrics (same client + region)
-        if (regionId && clienteId) {
-          try {
-            const regionUrl = `${CONFIG.API_BASE_URL_V2}/region-metrics?clientId=${clienteId}&regionId=${regionId}`;
-            const regionRes = await fetch(regionUrl, {
+        // No metrics for this punto: fallback to region metrics (client + region, or client only)
+        if (clienteId) {
+          const tryRegionMetrics = async (clientIdParam: string, regionIdParam?: string): Promise<any[]> => {
+            const qs = regionIdParam
+              ? `?clientId=${encodeURIComponent(clientIdParam)}&regionId=${encodeURIComponent(regionIdParam)}`
+              : `?clientId=${encodeURIComponent(clientIdParam)}`;
+            const regionRes = await fetch(`${CONFIG.API_BASE_URL_V2}/region-metrics${qs}`, {
               headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${localStorage.getItem('token')}`
               }
             });
-            if (regionRes.ok) {
-              const regionResult = await regionRes.json();
-              const regionList = Array.isArray(regionResult) ? regionResult : (regionResult?.data ?? []);
-              if (Array.isArray(regionList) && regionList.length > 0) {
-                setMetricsConfig(regionList);
-              }
-            } else {
-              console.warn('[fetchMetricsConfig] region-metrics non-OK:', regionRes.status);
+            if (!regionRes.ok) return [];
+            const regionResult = await regionRes.json();
+            return Array.isArray(regionResult) ? regionResult : (regionResult?.data ?? []);
+          };
+          try {
+            let regionList: any[] = [];
+            if (regionId) {
+              regionList = await tryRegionMetrics(String(clienteId), String(regionId));
+            }
+            if (regionList.length === 0) {
+              regionList = await tryRegionMetrics(String(clienteId));
+            }
+            if (Array.isArray(regionList) && regionList.length > 0) {
+              setMetricsConfig(regionList);
+              return;
             }
           } catch (e) {
             console.warn('Error fetching region metrics fallback:', e);
           }
-        } else if (Array.isArray(list) && list.length > 0) {
+        }
+        if (Array.isArray(list) && list.length > 0) {
           setMetricsConfig(list);
         }
       } catch (error) {
@@ -233,10 +243,10 @@ export default function PuntoVentaDetalleV2() {
           fetchLatestSensorData(codigoTienda);
         }
         const puntoVentaId = puntoData.id || puntoData._id;
-        const clienteId = puntoData.cliente?.id || puntoData.cliente?._id || puntoData.cliente;
-        const regionId = puntoData.region?.id ?? '';
+        const clienteId = puntoData.cliente?.id ?? puntoData.cliente?._id ?? puntoData.cliente ?? puntoData.clientId;
+        const regionId = puntoData.region?.id ?? puntoData.region_id ?? puntoData.ciudad?.regionId ?? '';
         if (puntoVentaId || clienteId) {
-          fetchMetricsConfig(puntoVentaId, clienteId, regionId);
+          fetchMetricsConfig(puntoVentaId, clienteId ? String(clienteId) : undefined, regionId ? String(regionId) : undefined);
         }
 
         setLoading(false);
