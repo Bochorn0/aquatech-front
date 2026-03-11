@@ -282,12 +282,10 @@ export default function PuntoVentaDetalleV2() {
         setLoading(false);
         setChartsLoading(true);
 
-        // If detalle has no TIWater in osmosisSystems (e.g. sensor_latest empty), build synthetic so historico can load.
-        // We always want to attempt historico when we have codigoTienda (sensores has historico; sensor_latest does not).
+        // If detalle has no TIWater in osmosisSystems (e.g. sensor_latest empty), try sensors/tiwater fallback only; then fetch historico if we have TIWater data.
         let dataForHistorico = puntoData;
         const tiwaterSystems = (puntoData?.osmosisSystems || []).filter((s: any) => (s.resourceType || '').toString().toLowerCase() === 'tiwater');
         if (tiwaterSystems.length === 0 && codigoTienda) {
-          let syntheticSystem: any = null;
           try {
             const tiwRes = await fetch(`${CONFIG.API_BASE_URL_V2}/sensors/tiwater?codigoTienda=${encodeURIComponent(codigoTienda)}`, {
               headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
@@ -317,7 +315,7 @@ export default function PuntoVentaDetalleV2() {
                   unit: '%',
                   timestamp: tw.timestamp || new Date().toISOString()
                 }));
-                syntheticSystem = {
+                const syntheticSystem = {
                   _id: 'tiwater-system',
                   id: 'tiwater-system',
                   resourceId: 'tiwater-system',
@@ -326,28 +324,17 @@ export default function PuntoVentaDetalleV2() {
                   status,
                   online: !!tw.timestamp
                 };
+                const merged = {
+                  ...puntoData,
+                  osmosisSystems: puntoData.osmosisSystems?.length ? puntoData.osmosisSystems : [syntheticSystem]
+                };
+                setPunto(merged);
+                dataForHistorico = merged;
               }
             }
           } catch (e) {
             console.warn('Fallback tiwater fetch for historico:', e);
           }
-          if (!syntheticSystem) {
-            syntheticSystem = {
-              _id: 'tiwater-system',
-              id: 'tiwater-system',
-              resourceId: 'tiwater-system',
-              resourceType: 'tiwater',
-              name: 'Sistema TIWater',
-              status: [],
-              online: false
-            };
-          }
-          const merged = {
-            ...puntoData,
-            osmosisSystems: puntoData.osmosisSystems?.length ? puntoData.osmosisSystems : [syntheticSystem]
-          };
-          setPunto(merged);
-          dataForHistorico = merged;
         }
         fetchHistoricoForCharts(dataForHistorico);
       } catch (error) {
