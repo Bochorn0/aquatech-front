@@ -204,11 +204,12 @@ export default function PuntoVentaDetalleV2() {
         setChartsLoading(false);
         return;
       }
+      const resourceId = (tiwaterSystems[0]?.resourceId || tiwaterSystems[0]?.id || 'tiwater-system').toString().trim() || 'tiwater-system';
       try {
         const types = ['purificada', 'cruda', 'recuperada'] as const;
         const results = await Promise.all(
           types.map((t) =>
-            fetch(`${CONFIG.API_BASE_URL_V2}/puntoVentas/${id}/historico?type=${t}`, {
+            fetch(`${CONFIG.API_BASE_URL_V2}/puntoVentas/${id}/historico?type=${t}&resourceId=${encodeURIComponent(resourceId)}`, {
               headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
             }).then((r) => r.ok ? r.json() : null).catch(() => null)
           )
@@ -217,6 +218,8 @@ export default function PuntoVentaDetalleV2() {
         merged.osmosisSystems = (merged.osmosisSystems || []).map((sys: any) => {
           if ((sys.resourceType || '').toString().toLowerCase() !== 'tiwater') return sys;
           const next = { ...sys };
+          next._id = next._id ?? next.resourceId ?? 'tiwater-system';
+          next.id = next.id ?? next.resourceId ?? 'tiwater-system';
           if (results[0]?.data?.historico) next.historico = results[0].data.historico;
           if (results[1]?.data?.historico) next.historico_cruda = results[1].data.historico;
           if (results[2]?.data?.historico) next.historico_recuperada = results[2].data.historico;
@@ -253,6 +256,13 @@ export default function PuntoVentaDetalleV2() {
 
         const result = await response.json();
         const puntoData = result.data || result;
+        // Ensure osmosis systems have _id/id so chart lookup and historico merge work (API may return only resourceId)
+        if (puntoData?.osmosisSystems?.length) {
+          puntoData.osmosisSystems = puntoData.osmosisSystems.map((s: any) => {
+            const rid = (s.resourceId || s.id || 'tiwater-system').toString().trim() || 'tiwater-system';
+            return { ...s, _id: s._id ?? rid, id: s.id ?? rid };
+          });
+        }
         setPunto(puntoData);
         prepareChartDataNiveles(puntoData, setChartDataNiveles);
 
