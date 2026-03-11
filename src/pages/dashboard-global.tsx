@@ -54,10 +54,11 @@ export function DashboardGlobal() {
       try {
         const [puntosRes, regionsRes] = await Promise.all([
           getV2<PuntoVentaV2[]>('/puntoVentas/all'),
-          getV2<RegionV2[]>('/regions').catch(() => []),
+          getV2<RegionV2[] | { data?: RegionV2[] }>('/regions').catch(() => []),
         ]);
         setPuntosVenta(Array.isArray(puntosRes) ? puntosRes : []);
-        setRegions(Array.isArray(regionsRes) ? regionsRes : []);
+        const regionsList = Array.isArray(regionsRes) ? regionsRes : (regionsRes?.data ?? []);
+        setRegions(Array.isArray(regionsList) ? regionsList : []);
       } catch {
         setPuntosVenta([]);
         setRegions([]);

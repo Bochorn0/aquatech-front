@@ -15,6 +15,7 @@ import {
   Dialog,
   Select,
   Divider,
+  Tooltip,
   MenuItem,
   TextField,
   IconButton,
@@ -33,6 +34,20 @@ import { getDashboardVersion } from 'src/utils/permissions';
 import { CONFIG } from 'src/config-global';
 
 import { Chart, useChart } from 'src/components/chart';
+
+/** Fallback palette when region has no color (match dashboard map). */
+const DEFAULT_REGION_COLORS = [
+  '#1976d2', '#2e7d32', '#ed6c02', '#9c27b0', '#00838f', '#c62828', '#558b2f', '#6a1b9a', '#5d4037', '#0277bd',
+];
+
+function getRegionColor(region: { id?: string; code?: string; name?: string; color?: string | null } | null): string {
+  if (!region) return '#9e9e9e';
+  const hex = (region.color ?? '').trim();
+  if (/^#[\da-fA-F]{3,8}$/.test(hex)) return hex;
+  if (/^[\da-fA-F]{3,8}$/.test(hex)) return `#${hex}`;
+  const seed = String(region.id ?? region.code ?? '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return DEFAULT_REGION_COLORS[Math.abs(seed) % DEFAULT_REGION_COLORS.length];
+}
 
 export default function PuntoVentaDetalleV2() {
   const { id } = useParams<{ id: string }>();
@@ -1779,6 +1794,32 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
             {punto.city?.city || punto.ciudad?.name || 'Hermosillo'}, {punto.city?.state || 'Sonora'}
             {punto.cliente?.name && ` • ${punto.cliente.name}`}
           </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0.75, mt: 1 }}>
+            <Tooltip title="Región asignada al punto de venta. Se usa para métricas por región, reportes y agrupación en el dashboard." arrow placement="top">
+              <Chip
+                size="small"
+                label={punto.region?.name ?? 'Sin región'}
+                sx={{
+                  bgcolor: getRegionColor(punto.region ?? null),
+                  color: '#fff',
+                  fontWeight: 600,
+                  '& .MuiChip-label': { px: 0.75 }
+                }}
+              />
+            </Tooltip>
+            <Tooltip title="Estado (entidad federativa) de la ubicación del punto de venta." arrow placement="top">
+              <Chip
+                size="small"
+                variant="outlined"
+                label={`Estado: ${punto.city?.state || '—'}`}
+                sx={{
+                  borderColor: 'divider',
+                  color: 'text.secondary',
+                  '& .MuiChip-label': { px: 0.75 }
+                }}
+              />
+            </Tooltip>
+          </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
             {(punto.lat != null || punto.long != null) && (
               <Typography variant="caption" color="text.secondary">

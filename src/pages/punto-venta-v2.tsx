@@ -3,8 +3,8 @@ import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import TableSortLabel from '@mui/material/TableSortLabel';
 import Tooltip from '@mui/material/Tooltip';
+import TableSortLabel from '@mui/material/TableSortLabel';
 import { Box, Grid, Paper, Table, Button, Select, MenuItem, TableRow, TableBody, TableCell, TableHead, TextField, InputLabel, Typography, FormControl, ToggleButton, TablePagination, CircularProgress, ToggleButtonGroup } from '@mui/material';
 
 import { StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
@@ -31,29 +31,24 @@ function sensorTypeDisplayName(sensorType: string | null | undefined): string {
   return map[s] || s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** Build tooltip title for the status color label (includes current value and min/max to expect from punto or region metrics). */
+/** Build tooltip for status. Normal = valor por encima del rango de alerta; Preventivo/Crítico = valor dentro del rango de esa severidad. */
 function getStatusTooltipTitle(pv: PuntosVenta): string {
   const status = pv.metric_status ?? 'normal';
-  if (status === 'normal') {
-    return 'Estado normal. Las métricas están dentro del rango configurado.';
-  }
   const detail = pv.metric_status_detail;
   const metricLabel = detail
     ? (detail.metric_name || sensorTypeDisplayName(detail.sensor_type))
     : 'Métrica';
   const valueStr = detail && detail.value != null ? String(Number(detail.value)) : '—';
-  const normalMin = detail?.normal_min;
-  const normalMax = detail?.normal_max;
-  let compareStr = '';
-  if (normalMin != null && normalMax != null) {
-    compareStr = ` Valor para normal: entre ${normalMin} y ${normalMax}.`;
-  } else if (normalMin != null) {
-    compareStr = ` Valor mínimo para normal: ${normalMin}.`;
-  } else if (normalMax != null) {
-    compareStr = ` Valor máximo para normal: ${normalMax}.`;
-  }
+  const min = detail?.normal_min;
+  const max = detail?.normal_max;
+  const rangeStr =
+    min != null && max != null ? ` Rango de esta alerta: ${min}–${max}.` : min != null ? ` Mín. rango: ${min}.` : max != null ? ` Máx. rango: ${max}.` : '';
   const hintStr = detail?.hint ? ` ${detail.hint}` : '';
-  return `${metricLabel}: ${valueStr}.${compareStr}${hintStr ? ` ${hintStr}` : ''}`;
+
+  if (status === 'normal') {
+    return 'Estado normal. El valor está por encima del rango de alerta (operación en rango seguro).';
+  }
+  return `${metricLabel}: valor ${valueStr}.${rangeStr}${hintStr}`;
 }
 
 // ---------------------------------------------

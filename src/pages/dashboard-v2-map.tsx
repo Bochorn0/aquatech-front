@@ -189,6 +189,9 @@ export type PuntoVentaMapItem = {
   clientId?: string;
   cliente?: { id?: string; _id?: string; name: string } | string;
   region?: RegionMapItem | null;
+  ciudad?: { id?: string; name?: string; regionId?: string } | null;
+  metric_status?: 'normal' | 'preventivo' | 'critico' | null;
+  metric_status_detail?: { metric_name?: string; value?: number; normal_min?: number; normal_max?: number } | null;
   online?: boolean;
   lat?: number | null;
   long?: number | null;
@@ -223,6 +226,36 @@ const DEFAULT_REGION_COLORS = [
   '#1976d2', '#2e7d32', '#ed6c02', '#9c27b0', '#00838f', '#c62828', '#558b2f', '#6a1b9a', '#5d4037', '#0277bd',
 ];
 
+/** Status color and labels. Normal = valor por encima del rango de alerta; Preventivo/Crítico = valor dentro del rango de esa severidad. */
+const METRIC_STATUS_CONFIG: Record<string, { color: string; label: string; tooltip: string }> = {
+  normal: {
+    color: '#2e7d32',
+    label: 'Normal',
+    tooltip: 'Estado normal. El valor está por encima del rango de alerta (operación en rango seguro).',
+  },
+  preventivo: {
+    color: '#ed6c02',
+    label: 'Preventivo',
+    tooltip: 'Valor dentro del rango preventivo. Revisar métricas para evitar pasar a crítico.',
+  },
+  critico: {
+    color: '#d32f2f',
+    label: 'Crítico',
+    tooltip: 'Valor dentro del rango crítico. Atención requerida.',
+  },
+};
+
+function getMetricStatusStyle(punto: PuntoVentaMapItem): { color: string; label: string; tooltip: string } {
+  const status = (punto.metric_status ?? '').toLowerCase();
+  const conf = METRIC_STATUS_CONFIG[status];
+  if (conf) return conf;
+  return {
+    color: '#9e9e9e',
+    label: 'Sin estado',
+    tooltip: 'No hay información de estado de métricas para este punto.',
+  };
+}
+
 /** Derive display metrics from sensor_latest array (match by type/name conventions). */
 function latestMetricsFromSensors(sensors: SensorLatestItem[]): LatestMetrics {
   const out: LatestMetrics = { eficiencia: null, rechazo: null, nivelCruda: null, nivelPurificada: null };
@@ -247,12 +280,16 @@ function latestMetricsFromSensors(sensors: SensorLatestItem[]): LatestMetrics {
   return out;
 }
 
-const redMarkerIcon = L.divIcon({
-  className: 'custom-marker',
-  html: '<div style="background:#d32f2f;width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>',
-  iconSize: [14, 14],
-  iconAnchor: [7, 7],
-});
+/** Returns a Leaflet divIcon with the given fill color (for status: normal=green, preventivo=amber, critico=red). */
+function getStatusMarkerIcon(fillColor: string): L.DivIcon {
+  const safe = fillColor.replace(/"/g, "'");
+  return L.divIcon({
+    className: 'custom-marker',
+    html: `<div style="background:${safe};width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>`,
+    iconSize: [14, 14],
+    iconAnchor: [7, 7],
+  });
+}
 
 function LeafletFitBounds({ positions }: { positions: [number, number][] }) {
   const map = useMap();
@@ -324,6 +361,13 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
     return counts;
   }, [puntos]);
 
+  // Effective region id per punto: prefer ciudad.regionId (geographic) so map colors match geography even when API returns link-table region
+  const getEffectiveRegionId = useCallback((pv: PuntoVentaMapItem): string => {
+    const fromCiudad = pv.ciudad?.regionId != null ? String(pv.ciudad.regionId).trim() : '';
+    const fromRegion = (pv.region?.id ?? '').trim();
+    return fromCiudad || fromRegion || '_sin_region';
+  }, []);
+
   // Per-state counts by region (stateName -> regionId -> count) then dominant region per state
   const stateToDominantRegion = useMemo(() => {
     const byState: Record<string, Record<string, number>> = {};
@@ -338,11 +382,15 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
         }
       }
       const stateName = normalizeStateToGeo(rawState) || (rawState || 'Sin estado');
-      const regionId = (pv.region?.id ?? '').trim() || '_sin_region';
+      const regionId = getEffectiveRegionId(pv);
       if (!byState[stateName]) byState[stateName] = {};
       byState[stateName][regionId] = (byState[stateName][regionId] ?? 0) + 1;
     });
-    const regionById = Object.fromEntries(regions.map((r) => [r.id, r]));
+    const regionById: Record<string, RegionMapItem> = {};
+    regions.forEach((r) => {
+      const key = r.id != null ? String(r.id) : '';
+      if (key) regionById[key] = r;
+    });
     const result: Record<string, RegionMapItem | null> = {};
     Object.keys(byState).forEach((stateName) => {
       const regionCounts = byState[stateName];
@@ -354,37 +402,55 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
           dominantId = rid;
         }
       });
-      result[stateName] = dominantId ? (regionById[dominantId] ?? null) : null;
+      result[stateName] = dominantId ? (regionById[String(dominantId)] ?? null) : null;
     });
     return result;
-  }, [puntos, regions]);
+  }, [puntos, regions, getEffectiveRegionId]);
 
-  // Totals by region for sidebar (all regions with count; "Sin región" if any punto has no region)
+  // Region color from puntos (API often embeds region.color in each punto; use when regions list has no color)
+  const regionColorFromPuntos = useMemo(() => {
+    const map: Record<string, string> = {};
+    const hexRe = /^#?[\da-fA-F]{3,8}$/;
+    puntos.forEach((pv) => {
+      const r = pv.region as { id?: string; color?: string | null } | undefined;
+      if (!r?.id || map[r.id]) return;
+      const raw = (r.color ?? '').trim();
+      if (!raw) return;
+      const hex = raw.startsWith('#') ? raw : `#${raw}`;
+      if (hexRe.test(hex)) map[String(r.id)] = hex;
+    });
+    return map;
+  }, [puntos]);
+
+  // Totals by region for sidebar (use effective region id so counts match map coloring)
   const totalsByRegion = useMemo(() => {
     const counts: Record<string, { region: RegionMapItem; count: number }> = {};
     regions.forEach((r) => {
-      counts[r.id] = { region: r, count: 0 };
+      const key = r.id != null ? String(r.id) : '';
+      if (key) counts[key] = { region: r, count: 0 };
     });
     let sinRegionCount = 0;
     puntos.forEach((pv) => {
-      const id = pv.region?.id;
-      if (id && counts[id]) counts[id].count += 1;
-      else if (!id) sinRegionCount += 1;
+      const id = getEffectiveRegionId(pv);
+      if (id === '_sin_region') sinRegionCount += 1;
+      else if (id && counts[id]) counts[id].count += 1;
     });
     const list = Object.values(counts);
     if (sinRegionCount > 0) {
       list.push({ region: { id: '_sin_region', code: 'SIN_REGION', name: 'Sin región' }, count: sinRegionCount });
     }
     return list;
-  }, [puntos, regions]);
+  }, [puntos, regions, getEffectiveRegionId]);
 
   const getRegionColor = useCallback(
-    (region: RegionMapItem | null, fallbackIndex: number): string => {
+    (region: RegionMapItem | null, fallbackIndex: number, colorFromPuntos?: Record<string, string>): string => {
       if (!region) return '#e0e0e0';
-      const hex = (region.color ?? '').trim();
+      let hex = (region.color ?? '').trim();
+      if (!hex && colorFromPuntos) hex = (colorFromPuntos[String(region.id)] ?? '').trim();
       if (/^#[\da-fA-F]{3,8}$/.test(hex)) return hex;
       if (/^[\da-fA-F]{3,8}$/.test(hex)) return `#${hex}`;
-      return DEFAULT_REGION_COLORS[fallbackIndex % DEFAULT_REGION_COLORS.length];
+      const seed = String(region.id ?? region.code ?? '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+      return DEFAULT_REGION_COLORS[Math.abs(seed) % DEFAULT_REGION_COLORS.length];
     },
     []
   );
@@ -394,9 +460,9 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
       if (stateCount === 0) return '#e0e0e0';
       const region = stateToDominantRegion[stateName] ?? null;
       const regionIndex = region ? regions.findIndex((r) => r.id === region.id) : -1;
-      return getRegionColor(region, Math.max(0, regionIndex));
+      return getRegionColor(region, Math.max(0, regionIndex), regionColorFromPuntos);
     },
-    [stateToDominantRegion, regions, getRegionColor]
+    [stateToDominantRegion, regions, getRegionColor, regionColorFromPuntos]
   );
 
   // Build markers from geo features so every state with count > 0 gets a marker (avoids name-matching issues)
@@ -687,21 +753,73 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
               <LeafletFitBounds
                 positions={puntoPinCoords.map(({ coordinates }) => [coordinates[1], coordinates[0]] as [number, number])}
               />
-              {puntoPinCoords.map(({ punto, coordinates }, index) => (
-                <Marker
-                  key={punto.id ?? punto._id ?? index}
-                  position={[coordinates[1], coordinates[0]]}
-                  icon={redMarkerIcon}
-                >
-                  <Popup>
-                    <Typography variant="body2" fontWeight={600}>{punto.name || 'Sin nombre'}</Typography>
-                    <Typography variant="caption" display="block">
-                      {punto.city?.city ?? ''}
-                      {punto.city?.state ? `, ${punto.city.state}` : ''}
-                    </Typography>
-                  </Popup>
-                </Marker>
-              ))}
+              {puntoPinCoords.map(({ punto, coordinates }, index) => {
+                const statusStyle = getMetricStatusStyle(punto);
+                const latest = getLatestMetricsForPunto(punto);
+                const mock = getMockMetrics(punto);
+                const hasLatest = latest && (latest.eficiencia != null || latest.rechazo != null || latest.nivelCruda != null || latest.nivelPurificada != null);
+                const ef = hasLatest && latest!.eficiencia != null ? latest!.eficiencia : mock.eficiencia;
+                const re = hasLatest && latest!.rechazo != null ? latest!.rechazo : mock.rechazo;
+                const nc = hasLatest && latest!.nivelCruda != null ? latest!.nivelCruda : mock.nivelCruda;
+                const np = hasLatest && latest!.nivelPurificada != null ? latest!.nivelPurificada : mock.nivelPurificada;
+                const detail = punto.metric_status_detail;
+                const id = String(punto.id ?? punto._id ?? '');
+                return (
+                  <Marker
+                    key={punto.id ?? punto._id ?? index}
+                    position={[coordinates[1], coordinates[0]]}
+                    icon={getStatusMarkerIcon(statusStyle.color)}
+                  >
+                    <Popup minWidth={220} maxWidth={280}>
+                      <Box sx={{ p: 0.5 }}>
+                        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                          {punto.name || 'Sin nombre'}
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.75 }}>
+                          <Box
+                            sx={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: '50%',
+                              bgcolor: statusStyle.color,
+                              flexShrink: 0,
+                            }}
+                          />
+                          <Typography variant="caption" fontWeight={600} sx={{ color: statusStyle.color }}>
+                            Estado: {statusStyle.label}
+                          </Typography>
+                        </Box>
+                        {(punto.metric_status === 'preventivo' || punto.metric_status === 'critico') && detail?.metric_name && (
+                          <Typography variant="caption" display="block" sx={{ mb: 0.5 }} color="text.secondary">
+                            Alerta: {detail.metric_name}
+                            {detail.value != null && ` — valor ${detail.value}`}
+                            {(detail.normal_min != null || detail.normal_max != null) &&
+                              ` (rango de esta alerta: ${detail.normal_min ?? '?'}–${detail.normal_max ?? '?'})`}
+                          </Typography>
+                        )}
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          Eficiencia: {ef != null ? `${ef}%` : '—'} · Rechazo: {re != null ? re.toFixed(1) : '—'}
+                        </Typography>
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          Nivel cruda: {nc != null ? `${nc}%` : '—'} · Nivel purif.: {np != null ? `${np}%` : '—'}
+                        </Typography>
+                        <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                          {punto.city?.city ?? ''}
+                          {punto.city?.state ? `, ${punto.city.state}` : ''}
+                        </Typography>
+                        <Link
+                          component={RouterLink}
+                          to={`/dashboard/v2/detalle/${id}`}
+                          variant="caption"
+                          sx={{ mt: 0.75, display: 'inline-block', fontWeight: 600 }}
+                        >
+                          Ver detalle →
+                        </Link>
+                      </Box>
+                    </Popup>
+                  </Marker>
+                );
+              })}
             </MapContainer>
           </Box>
         ) : (
@@ -792,10 +910,11 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
               );
             })}
 
-          {/* State view: one pin per punto de venta */}
+          {/* State view: one pin per punto de venta (color = metric_status) */}
           {selectedState &&
             puntoPinCoords.map(({ punto, coordinates }, index) => {
               const latest = getLatestMetricsForPunto(punto);
+              const statusStyle = getMetricStatusStyle(punto);
               const parts: string[] = [];
               if (latest?.eficiencia != null) parts.push(`Eficiencia ${latest.eficiencia}%`);
               if (latest?.rechazo != null) parts.push(`Rechazo ${latest.rechazo.toFixed(1)}`);
@@ -804,12 +923,15 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
               const latestLine = parts.length > 0 ? parts.join(' · ') : null;
               return (
                 <SimpleMapMarker key={punto.id ?? punto._id ?? index} coordinates={coordinates}>
-                  <circle r={4} fill="#d32f2f" stroke="#fff" strokeWidth={2} />
+                  <circle r={4} fill={statusStyle.color} stroke="#fff" strokeWidth={2} />
                   <Tooltip
                     title={
                       <Box component="span">
                         <Typography variant="caption" display="block" fontWeight="bold">
                           {punto.name}
+                        </Typography>
+                        <Typography variant="caption" display="block" sx={{ color: statusStyle.color, fontWeight: 600 }}>
+                          Estado: {statusStyle.label}
                         </Typography>
                         <Typography variant="caption" display="block">
                           {punto.city?.city ?? ''}
@@ -855,14 +977,39 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
                     const latest = getLatestMetricsForPunto(punto);
                     const mock = getMockMetrics(punto);
                     const regionName = punto.region?.name;
+                    const statusStyle = getMetricStatusStyle(punto);
                     const hasLatest = latest && (latest.eficiencia != null || latest.rechazo != null || latest.nivelCruda != null || latest.nivelPurificada != null);
                     const ef = hasLatest && latest!.eficiencia != null ? latest!.eficiencia : mock.eficiencia;
                     const re = hasLatest && latest!.rechazo != null ? latest!.rechazo : mock.rechazo;
                     const nc = hasLatest && latest!.nivelCruda != null ? latest!.nivelCruda : mock.nivelCruda;
                     const np = hasLatest && latest!.nivelPurificada != null ? latest!.nivelPurificada : mock.nivelPurificada;
+                    const d = punto.metric_status_detail;
+                    const statusTooltip = d?.metric_name
+                      ? `${statusStyle.tooltip} ${d.metric_name}${d.value != null ? ` — valor ${d.value}` : ''}${(d.normal_min != null || d.normal_max != null) ? ` (rango de esta alerta: ${d.normal_min ?? '?'}–${d.normal_max ?? '?'})` : ''}`
+                      : statusStyle.tooltip;
                     return (
                       <ListItem key={id || `pv-${index}`} disablePadding sx={{ flexDirection: 'column', alignItems: 'stretch', py: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}>
-                        <Typography variant="body2" fontWeight={500}>{punto.name || 'Sin nombre'}</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                          <Tooltip title={statusTooltip} arrow placement="top">
+                            <Box
+                              sx={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: '50%',
+                                bgcolor: statusStyle.color,
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                flexShrink: 0,
+                              }}
+                            />
+                          </Tooltip>
+                          <Typography variant="body2" fontWeight={500}>{punto.name || 'Sin nombre'}</Typography>
+                          <Tooltip title={statusStyle.label} arrow placement="top">
+                            <Typography variant="caption" sx={{ color: statusStyle.color, fontWeight: 600 }}>
+                              {statusStyle.label}
+                            </Typography>
+                          </Tooltip>
+                        </Box>
                         {regionName && (
                           <Typography variant="caption" color="text.secondary" sx={{ mb: 0.25 }}>
                             {regionName}
@@ -894,7 +1041,7 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
                 ) : (
                   totalsByRegion.map(({ region, count }) => {
                     const fallbackIndex = region.code === 'SIN_REGION' ? -1 : regions.findIndex((r) => r.id === region.id);
-                    const color = getRegionColor(region.code === 'SIN_REGION' ? null : region, Math.max(0, fallbackIndex));
+                    const color = getRegionColor(region.code === 'SIN_REGION' ? null : region, Math.max(0, fallbackIndex), regionColorFromPuntos);
                     return (
                       <ListItem key={region.id} disablePadding sx={{ py: 0.25 }}>
                         <Box
