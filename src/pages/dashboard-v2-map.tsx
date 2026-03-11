@@ -1,7 +1,7 @@
 import 'leaflet/dist/leaflet.css';
 
 import L from 'leaflet';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { Popup, Marker, useMap, TileLayer, MapContainer } from 'react-leaflet';
 import React, { useRef, useMemo, useState, useEffect, useCallback } from 'react';
 import { Geography, Geographies, ComposableMap, Marker as SimpleMapMarker } from 'react-simple-maps';
@@ -311,6 +311,7 @@ type DashboardV2MapProps = {
 };
 
 export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
+  const navigate = useNavigate();
   const [selectedState, setSelectedState] = useState<number | null>(null);
   const [selectedStateName, setSelectedStateName] = useState<string | null>(null);
   const [stateGeoJson, setStateGeoJson] = useState<typeof geoData | null>(null);
@@ -809,7 +810,7 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
                         </Typography>
                         <Link
                           component={RouterLink}
-                          to={`/dashboard/v2/detalle/${id}`}
+                          to={`/PuntoVenta/${id}`}
                           variant="caption"
                           sx={{ mt: 0.75, display: 'inline-block', fontWeight: 600 }}
                         >
@@ -915,6 +916,7 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
             puntoPinCoords.map(({ punto, coordinates }, index) => {
               const latest = getLatestMetricsForPunto(punto);
               const statusStyle = getMetricStatusStyle(punto);
+              const puntoId = String(punto.id ?? punto._id ?? '');
               const parts: string[] = [];
               if (latest?.eficiencia != null) parts.push(`Eficiencia ${latest.eficiencia}%`);
               if (latest?.rechazo != null) parts.push(`Rechazo ${latest.rechazo.toFixed(1)}`);
@@ -922,7 +924,12 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
               if (latest?.nivelPurificada != null) parts.push(`Nivel purif. ${latest.nivelPurificada}%`);
               const latestLine = parts.length > 0 ? parts.join(' · ') : null;
               return (
-                <SimpleMapMarker key={punto.id ?? punto._id ?? index} coordinates={coordinates}>
+                <SimpleMapMarker
+                  key={punto.id ?? punto._id ?? index}
+                  coordinates={coordinates}
+                  onClick={puntoId ? () => navigate(`/PuntoVenta/${puntoId}`) : undefined}
+                  style={puntoId ? { default: { cursor: 'pointer' } } : undefined}
+                >
                   <circle r={4} fill={statusStyle.color} stroke="#fff" strokeWidth={2} />
                   <Tooltip
                     title={
@@ -1019,7 +1026,7 @@ export function DashboardV2Map({ puntos, regions = [] }: DashboardV2MapProps) {
                           Eficiencia: {ef != null ? `${ef}%` : '—'}, Rechazo: {re != null ? re.toFixed(1) : '—'}, Nivel Cruda: {nc != null ? `${nc}%` : '—'}, Nivel purificada: {np != null ? `${np}%` : '—'}
                           {hasLatest ? '' : ' (ejemplo)'}
                         </Typography>
-                        <Link component={RouterLink} to={`/dashboard/v2/detalle/${id}`} variant="caption" sx={{ mt: 0.25, display: 'inline-block' }}>
+                        <Link component={RouterLink} to={`/PuntoVenta/${id}`} variant="caption" sx={{ mt: 0.25, display: 'inline-block' }}>
                           Ver detalle
                         </Link>
                       </ListItem>
