@@ -197,13 +197,9 @@ export default function PuntoVentaDetalleV2() {
     };
 
     const fetchHistoricoForCharts = async (puntoData: any) => {
-      // V2: TIWater comes from osmosisSystems (sensors), not productos
+      // Always run the additional historico consult (GET /historico?type=...) so charts can show when the API has data.
       const osmosisSystems = puntoData?.osmosisSystems || [];
       const tiwaterSystems = osmosisSystems.filter((s: any) => (s.resourceType || '').toString().toLowerCase() === 'tiwater');
-      if (tiwaterSystems.length === 0) {
-        setChartsLoading(false);
-        return;
-      }
       const resourceId = (tiwaterSystems[0]?.resourceId || tiwaterSystems[0]?.id || 'tiwater-system').toString().trim() || 'tiwater-system';
       try {
         const types = ['purificada', 'cruda', 'recuperada'] as const;
@@ -214,19 +210,46 @@ export default function PuntoVentaDetalleV2() {
             }).then((r) => r.ok ? r.json() : null).catch(() => null)
           )
         );
-        const merged = { ...puntoData };
-        merged.osmosisSystems = (merged.osmosisSystems || []).map((sys: any) => {
-          if ((sys.resourceType || '').toString().toLowerCase() !== 'tiwater') return sys;
-          const next = { ...sys };
-          next._id = next._id ?? next.resourceId ?? 'tiwater-system';
-          next.id = next.id ?? next.resourceId ?? 'tiwater-system';
-          if (results[0]?.data?.historico) next.historico = results[0].data.historico;
-          if (results[1]?.data?.historico) next.historico_cruda = results[1].data.historico;
-          if (results[2]?.data?.historico) next.historico_recuperada = results[2].data.historico;
-          return next;
-        });
-        setPunto(merged);
-        prepareChartDataNiveles(merged, setChartDataNiveles);
+        const hasHistorico = results.some((r) => r?.data?.historico?.hours_with_data?.length > 0);
+        if (!hasHistorico && tiwaterSystems.length === 0) {
+          setChartsLoading(false);
+          return;
+        }
+        let merged = { ...puntoData };
+        if (tiwaterSystems.length > 0) {
+          merged.osmosisSystems = (merged.osmosisSystems || []).map((sys: any) => {
+            if ((sys.resourceType || '').toString().toLowerCase() !== 'tiwater') return sys;
+            const next = { ...sys };
+            next._id = next._id ?? next.resourceId ?? 'tiwater-system';
+            next.id = next.id ?? next.resourceId ?? 'tiwater-system';
+            if (results[0]?.data?.historico) next.historico = results[0].data.historico;
+            if (results[1]?.data?.historico) next.historico_cruda = results[1].data.historico;
+            if (results[2]?.data?.historico) next.historico_recuperada = results[2].data.historico;
+            return next;
+          });
+        } else if (hasHistorico) {
+          const syntheticWithHistorico = {
+            _id: 'tiwater-system',
+            id: 'tiwater-system',
+            resourceId: 'tiwater-system',
+            resourceType: 'tiwater',
+            name: 'Sistema TIWater',
+            status: [] as any[],
+            online: false,
+            historico: results[0]?.data?.historico ?? null,
+            historico_cruda: results[1]?.data?.historico ?? null,
+            historico_recuperada: results[2]?.data?.historico ?? null,
+          };
+          merged = {
+            ...puntoData,
+            osmosisSystems: [...(puntoData?.osmosisSystems || []), syntheticWithHistorico],
+          };
+          setPunto(merged);
+        }
+        if (tiwaterSystems.length > 0 || hasHistorico) {
+          if (tiwaterSystems.length > 0) setPunto(merged);
+          prepareChartDataNiveles(merged, setChartDataNiveles);
+        }
       } catch (e) {
         console.warn('Error fetching historico for charts:', e);
       } finally {
