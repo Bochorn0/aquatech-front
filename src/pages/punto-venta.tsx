@@ -3,7 +3,7 @@ import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { Box, Grid, Table, Paper, Button, Select, MenuItem, TableRow, TableBody, TextField, TableHead, InputLabel, Typography, FormControl, TablePagination, CircularProgress } from '@mui/material';
+import { Box, Grid, Table, Paper, Button, Select, MenuItem, TableRow, TableBody, TextField, TableHead, InputLabel, Typography, FormControl, TablePagination, CircularProgress, Chip } from '@mui/material';
 
 import { StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
@@ -203,6 +203,7 @@ export default function PuntoVentaTableList() {
                     <StyledTableCellHeader>Cliente</StyledTableCellHeader>
                     <StyledTableCellHeader>Ciudad</StyledTableCellHeader>
                     <StyledTableCellHeader>Estado</StyledTableCellHeader>
+                    <StyledTableCellHeader>En línea</StyledTableCellHeader>
                     <StyledTableCellHeader>Productos</StyledTableCellHeader>
                     <StyledTableCellHeader>Actions</StyledTableCellHeader>
                   </TableRow>
@@ -216,6 +217,14 @@ export default function PuntoVentaTableList() {
                         <StyledTableCell>{typeof pv.cliente === 'object' && pv.cliente !== null ? pv.cliente.name : 'N/A'}</StyledTableCell>
                         <StyledTableCell>{typeof pv.city === 'object' && pv.city !== null ? pv.city.city : 'N/A'}</StyledTableCell>
                         <StyledTableCell>{typeof pv.city === 'object' && pv.city !== null ? pv.city.state : 'N/A'}</StyledTableCell>
+                        <StyledTableCell>
+                          <Chip
+                            label={pv.online ? 'En línea' : 'Desconectado'}
+                            size="small"
+                            color={pv.online ? 'success' : 'default'}
+                            variant="outlined"
+                          />
+                        </StyledTableCell>
                         <StyledTableCell>
                           {pv.productos?.length ?? 0}
                         </StyledTableCell>
