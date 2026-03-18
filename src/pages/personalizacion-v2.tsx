@@ -226,7 +226,7 @@ interface SensorConfig {
   };
 }
 
-const defaultPv = { _id: '', name: '' , codigo_tienda: '', client_name:'', cliente: defaultclient, city: defaultCity, city_name: '', productos: []}
+const defaultPv = { _id: '', name: '' , codigo_tienda: '', client_name:'', cliente: defaultclient, city: defaultCity, city_name: '', productos: [], lat: '' as any, long: '' as any }
 
 // Helper function to make v2.0 API calls
 const apiV2Call = async (endpoint: string, method: string = 'GET', data?: any) => {
@@ -1384,7 +1384,7 @@ export function CustomizationPageV2() {
     const { name, value } = e.target;
     setPvFormData((prevData) => ({
       ...prevData,
-      [name]: value
+      [name]: name === 'lat' || name === 'long' ? (value === '' ? '' : value) : value,
     }));
   };
 
@@ -1431,7 +1431,15 @@ export function CustomizationPageV2() {
   const handlePvSubmit = async () => {
     setLoading(true);
     try {
-      const payload = { ...pvFormData, devMode: devModeEnabled };
+      const latStr = pvFormData.lat != null && pvFormData.lat !== '' ? String(pvFormData.lat).trim() : '';
+      const longStr = pvFormData.long != null && pvFormData.long !== '' ? String(pvFormData.long).trim() : '';
+      const latNum = latStr === '' ? undefined : parseFloat(latStr);
+      const longNum = longStr === '' ? undefined : parseFloat(longStr);
+      const payload: Record<string, unknown> = { ...pvFormData, devMode: devModeEnabled };
+      if (latNum !== undefined && !Number.isNaN(latNum)) payload.lat = latNum;
+      else delete payload.lat;
+      if (longNum !== undefined && !Number.isNaN(longNum)) payload.long = longNum;
+      else delete payload.long;
       if (pvFormData._id || pvFormData.id) {
         const id = pvFormData._id || pvFormData.id;
         await apiV2Call(`/puntoVentas/${id}`, 'PATCH', payload);
@@ -3489,7 +3497,33 @@ export function CustomizationPageV2() {
                     })}
                   </Select>
                 </FormControl>
-                
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Latitud"
+                      name="lat"
+                      type="number"
+                      inputProps={{ step: 'any' }}
+                      value={pvFormData.lat != null && pvFormData.lat !== '' ? pvFormData.lat : ''}
+                      onChange={handlePvChange}
+                      fullWidth
+                      helperText="Coordenada para mapa y dashboard. Si está vacía, se usan las de la ciudad."
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Longitud"
+                      name="long"
+                      type="number"
+                      inputProps={{ step: 'any' }}
+                      value={pvFormData.long != null && pvFormData.long !== '' ? pvFormData.long : ''}
+                      onChange={handlePvChange}
+                      fullWidth
+                      helperText="Coordenada para mapa y dashboard. Si está vacía, se usan las de la ciudad."
+                    />
+                  </Grid>
+                </Grid>
+
                 {/* Dev Mode Toggle - Only show when editing existing puntoVenta */}
                 {editPvId && (
                   <FormControlLabel

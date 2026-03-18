@@ -296,6 +296,9 @@ export interface PuntosVenta {
     city_name: String;
     name: String;
     productos: Product[] | string[];
+    /** Punto coordinates (puntoventa V2); form may use string while editing */
+    lat?: number | string | null;
+    long?: number | string | null;
     /** When true, cron generates random sensor data for this punto. Source: puntoventa.dev_mode column only. */
     dev_mode?: boolean;
     /** Form/edit: used for PATCH body (API accepts camelCase) */
