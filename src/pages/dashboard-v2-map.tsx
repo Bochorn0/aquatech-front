@@ -1,7 +1,7 @@
 import 'leaflet/dist/leaflet.css';
 
 import L from 'leaflet';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { Popup, Marker, useMap, TileLayer, MapContainer } from 'react-leaflet';
 import React, { useRef, useMemo, useState, useEffect, useCallback } from 'react';
 import { Geography, Geographies, ComposableMap, Marker as SimpleMapMarker } from 'react-simple-maps';

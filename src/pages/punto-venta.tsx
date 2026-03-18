@@ -3,7 +3,7 @@ import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { Box, Grid, Table, Paper, Button, Select, MenuItem, TableRow, TableBody, TextField, TableHead, InputLabel, Typography, FormControl, TablePagination, CircularProgress, Chip } from '@mui/material';
+import { Box, Grid, Chip, Table, Paper, Button, Select, MenuItem, TableRow, TableBody, TextField, TableHead, InputLabel, Typography, FormControl, TablePagination, CircularProgress } from '@mui/material';
 
 import { StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 

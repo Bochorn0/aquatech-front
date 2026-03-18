@@ -1,6 +1,6 @@
 import { Helmet } from 'react-helmet-async';
-import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { useMemo, useState, useEffect } from 'react';
 
 import EditIcon from '@mui/icons-material/Edit';
 import { useTheme } from '@mui/material/styles';
@@ -1562,6 +1562,22 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
 /* 🧱 Card: Unified Overview (Estado + Osmosis in one card) */
 /* -------------------------------------------------------------------------- */
 
+/** Little map: use puntoventa lat+long together when both valid; else city pair. Avoid mixing punto lat with city lon. */
+function getPuntoVentaMapCoords(punto: any): { lat: number; lng: number } {
+  const parse = (v: unknown): number | null => {
+    if (v == null || v === '') return null;
+    const n = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.'));
+    return Number.isFinite(n) ? n : null;
+  };
+  const plat = parse(punto?.lat);
+  const plng = parse(punto?.long ?? punto?.lon);
+  if (plat != null && plng != null) return { lat: plat, lng: plng };
+  const clat = parse(punto?.city?.lat);
+  const clng = parse(punto?.city?.lon ?? punto?.city?.long);
+  if (clat != null && clng != null) return { lat: clat, lng: clng };
+  return { lat: 29.0729, lng: -110.9559 };
+}
+
 function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, metricas, tiwaterData, tiwaterProduct, metricsConfig, onLocationUpdated }: any) {
   // State to force re-render every minute
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -1570,6 +1586,9 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
   const [ciudades, setCiudades] = useState<{ id: string; name: string; regionId: string }[]>([]);
   const [editForm, setEditForm] = useState({ region_id: '', ciudad_id: '', lat: '', long: '' });
   const [savingLocation, setSavingLocation] = useState(false);
+
+  const mapCoords = useMemo(() => getPuntoVentaMapCoords(punto), [punto]);
+  const mapEmbedSrc = `https://www.google.com/maps?q=${mapCoords.lat},${mapCoords.lng}&z=14&output=embed`;
 
   const fetchRegions = async () => {
     try {
@@ -2000,12 +2019,13 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
           </Typography>
           <Box sx={{ width: '100%', height: 'calc(100% - 28px)', minHeight: 200, borderRadius: 1, overflow: 'hidden', border: '1px solid', borderColor: 'divider' }}>
             <iframe
+              key={`pv-map-${mapCoords.lat}-${mapCoords.lng}`}
               title="Ubicación en Google Maps"
               width="100%"
               height="100%"
               style={{ border: 0 }}
               loading="lazy"
-              src={`https://www.google.com/maps?q=${punto.lat ?? punto.city?.lat ?? 29.0729},${punto.long ?? punto.city?.lon ?? -110.9559}&z=14&output=embed`}
+              src={mapEmbedSrc}
             />
           </Box>
         </Grid>
