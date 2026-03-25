@@ -2,33 +2,34 @@ import type { SelectChangeEvent } from "@mui/material/Select";
 
 import Swal from "sweetalert2";
 import { Helmet } from "react-helmet-async";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 
 import {
   Box,
+  Button,
   Chip,
+  Checkbox,
+  Dialog,
+  CircularProgress,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
   Grid,
+  IconButton,
+  InputLabel,
+  ListItemText,
+  MenuItem,
   Paper,
-  Table,
   Select,
   Switch,
-  Button,
-  Dialog,
-  Checkbox,
-  MenuItem,
-  TableRow,
+  Table,
   TableBody,
+  TableCell,
   TableHead,
+  TableRow,
   TextField,
-  InputLabel,
-  IconButton,
   Typography,
-  FormControl,
-  DialogTitle,
-  ListItemText,
-  DialogContent,
-  DialogActions,
-  CircularProgress
 } from "@mui/material";
 
 import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
@@ -146,13 +147,62 @@ export function CustomizationPage() {
   });
   const [bulkProductModalOpen, setBulkProductModalOpen] = useState(false);
 
+  type MergedProductsListItem = {
+    liveDeviceId: string;
+    oldDeviceId: string;
+    switchedDate: number | null;
+  };
+
+  type MergedStatusFields = {
+    flowrate_total_1: any;
+    flowrate_total_2: any;
+    tds_out: any;
+    flowrate_speed_1: any;
+    flowrate_speed_2: any;
+    temperature: any;
+    filter_element_1: any;
+    filter_element_2: any;
+    filter_element_3: any;
+    filter_element_4: any;
+  };
+
+  type MergedProductDetailResponse = {
+    liveDeviceId: string;
+    oldDeviceId: string;
+    switchedDate: number | null;
+    old: { device_id: string; product_logs_count: number } & MergedStatusFields;
+    new: { device_id: string; product_logs_count: number } & MergedStatusFields;
+  };
+
+  const [mergedProducts, setMergedProducts] = useState<MergedProductsListItem[]>([]);
+  const [mergedProductsLoading, setMergedProductsLoading] = useState(false);
+  const [mergedDetailOpen, setMergedDetailOpen] = useState(false);
+  const [mergedDetailLoading, setMergedDetailLoading] = useState(false);
+  const [mergedDetail, setMergedDetail] = useState<MergedProductDetailResponse | null>(null);
+
+  const fetchMergedProducts = useCallback(async () => {
+    setMergedProductsLoading(true);
+    try {
+      const response = await get<MergedProductsListItem[]>(`/products/merged`);
+      setMergedProducts(Array.isArray(response) ? response : []);
+    } catch (error) {
+      console.error('Error fetching merged products:', error);
+      Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo cargar productos mezclados.' });
+    } finally {
+      setMergedProductsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchMetrics();
     fetchClients();
     fetchCities();
     fetchPuntosVenta();
     fetchProducts();
-  }, []);
+    if (isAdmin) {
+      fetchMergedProducts();
+    }
+  }, [isAdmin, fetchMergedProducts]);
 
   const fetchMetrics = async () => {
     try {
@@ -200,6 +250,29 @@ export function CustomizationPage() {
       setProducts(response);
     } catch (error) {
       console.error("Error fetching products:", error);
+    }
+  };
+
+  const formatSwitchedDate = (switchedDate: number | null) => {
+    if (!switchedDate) return 'N/A';
+    const ms = switchedDate > 1e12 ? switchedDate : switchedDate * 1000;
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString();
+  };
+
+  const openMergedProductDetail = async (liveDeviceId: string) => {
+    setMergedDetailOpen(true);
+    setMergedDetailLoading(true);
+    setMergedDetail(null);
+    try {
+      const detail = await get<MergedProductDetailResponse>(`/products/merged/${encodeURIComponent(liveDeviceId)}`);
+      setMergedDetail(detail);
+    } catch (error) {
+      console.error('Error fetching merged product detail:', error);
+      Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo cargar el detalle del merge.' });
+      setMergedDetailOpen(false);
+    } finally {
+      setMergedDetailLoading(false);
     }
   };
 
@@ -796,6 +869,7 @@ const handlePvProductosChange = (e: any) => {
           {isAdmin && <CustomTab label="Ciudades" />}
           <CustomTab label="Equipos" />
           {isAdmin && <CustomTab label="Productos rutina logs" />}
+          {isAdmin && <CustomTab label="Productos mezclados" />}
       </CustomTabs>
         {tabIndex === 0 && (
           <Grid container spacing={2}>
@@ -1205,6 +1279,77 @@ const handlePvProductosChange = (e: any) => {
           </Grid>
         )}
 
+        {isAdmin && tabIndex === 6 && (
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <Box sx={{ overflowX: 'auto' }}>
+                <Grid container alignItems="center" spacing={2} sx={{ p: 2 }}>
+                  <Grid item xs={12} sm={8}>
+                    <Typography variant="h5" gutterBottom>
+                      Productos mezclados
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={4} textAlign="right">
+                    {mergedProductsLoading ? (
+                      <CircularProgress size={24} />
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        {mergedProducts.length} equipo(s) con merge
+                      </Typography>
+                    )}
+                  </Grid>
+                </Grid>
+              </Box>
+
+              <StyledTableContainer>
+                <Paper elevation={3}>
+                  <Box sx={{ overflowX: 'auto' }}>
+                    <Table>
+                      <TableHead>
+                        <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
+                          <StyledTableCellHeader>Equipo (nuevo)</StyledTableCellHeader>
+                          <StyledTableCellHeader>Fecha cambio (old)</StyledTableCellHeader>
+                          <StyledTableCellHeader>Acciones</StyledTableCellHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {mergedProductsLoading ? (
+                          <StyledTableRow>
+                            <StyledTableCell colSpan={3}>
+                              <CircularProgress size={24} />
+                            </StyledTableCell>
+                          </StyledTableRow>
+                        ) : mergedProducts.length === 0 ? (
+                          <StyledTableRow>
+                            <StyledTableCell colSpan={3}>No hay productos mezclados</StyledTableCell>
+                          </StyledTableRow>
+                        ) : (
+                          mergedProducts.map((item) => (
+                            <StyledTableRow key={item.liveDeviceId}>
+                              <StyledTableCell>{item.liveDeviceId}</StyledTableCell>
+                              <StyledTableCell>{formatSwitchedDate(item.switchedDate)}</StyledTableCell>
+                              <StyledTableCell>
+                                <Button
+                                  variant="contained"
+                                  color="primary"
+                                  onClick={() => openMergedProductDetail(item.liveDeviceId)}
+                                  disabled={mergedDetailLoading}
+                                >
+                                  Detalle
+                                </Button>
+                              </StyledTableCell>
+                            </StyledTableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </Box>
+                </Paper>
+              </StyledTableContainer>
+            </Grid>
+          </Grid>
+        )}
+
        {/* Modal for Creating / Editing */}
        <Grid item xs={12}>
         <Dialog open={modalOpen} onClose={handleCloseModal} fullWidth maxWidth="sm">
@@ -1547,6 +1692,142 @@ const handlePvProductosChange = (e: any) => {
               disabled={loading || (!bulkProductFormData.cliente && !bulkProductFormData.city && !bulkProductFormData.product_type)}
             >
               {loading ? <CircularProgress size={24} /> : `Aplicar a ${selectedProductIds.size}`}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={mergedDetailOpen}
+          onClose={() => setMergedDetailOpen(false)}
+          fullWidth
+          maxWidth="lg"
+        >
+          <DialogTitle>
+            Productos mezclados · {mergedDetail?.liveDeviceId ? mergedDetail.liveDeviceId : ''}
+          </DialogTitle>
+          <DialogContent>
+            {mergedDetailLoading || !mergedDetail ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="h6" gutterBottom>
+                    Old ({mergedDetail.old.device_id})
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    Fecha cambio (old): {formatSwitchedDate(mergedDetail.switchedDate)}
+                  </Typography>
+                  <Table size="small">
+                    <TableBody>
+                      <TableRow>
+                        <TableCell>TDS</TableCell>
+                        <TableCell>{mergedDetail.old.tds_out ?? 'N/A'} ppm</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>Volumen total (L)</TableCell>
+                        <TableCell>{mergedDetail.old.flowrate_total_1 ?? 'N/A'} L</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>Volumen rechazo (L)</TableCell>
+                        <TableCell>{mergedDetail.old.flowrate_total_2 ?? 'N/A'} L</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>Flujo caudal (l/min)</TableCell>
+                        <TableCell>{mergedDetail.old.flowrate_speed_1 ?? 'N/A'} l/min</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>Flujo rechazo (l/min)</TableCell>
+                        <TableCell>{mergedDetail.old.flowrate_speed_2 ?? 'N/A'} l/min</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>Temperatura</TableCell>
+                        <TableCell>{mergedDetail.old.temperature ?? 'N/A'} °C</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>F. Sedimentos</TableCell>
+                        <TableCell>{mergedDetail.old.filter_element_1 ?? 'N/A'} H</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>F. Carbon Granular</TableCell>
+                        <TableCell>{mergedDetail.old.filter_element_2 ?? 'N/A'} H</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>F. Carbon Bloque</TableCell>
+                        <TableCell>{mergedDetail.old.filter_element_3 ?? 'N/A'} H</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>Membrana</TableCell>
+                        <TableCell>{mergedDetail.old.filter_element_4 ?? 'N/A'} H</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>product_logs.count</TableCell>
+                        <TableCell>{mergedDetail.old.product_logs_count}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <Typography variant="h6" gutterBottom>
+                    New ({mergedDetail.new.device_id})
+                  </Typography>
+                  <Table size="small">
+                    <TableBody>
+                      <TableRow>
+                        <TableCell>TDS</TableCell>
+                        <TableCell>{mergedDetail.new.tds_out ?? 'N/A'} ppm</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>Volumen total (L)</TableCell>
+                        <TableCell>{mergedDetail.new.flowrate_total_1 ?? 'N/A'} L</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>Volumen rechazo (L)</TableCell>
+                        <TableCell>{mergedDetail.new.flowrate_total_2 ?? 'N/A'} L</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>Flujo caudal (l/min)</TableCell>
+                        <TableCell>{mergedDetail.new.flowrate_speed_1 ?? 'N/A'} l/min</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>Flujo rechazo (l/min)</TableCell>
+                        <TableCell>{mergedDetail.new.flowrate_speed_2 ?? 'N/A'} l/min</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>Temperatura</TableCell>
+                        <TableCell>{mergedDetail.new.temperature ?? 'N/A'} °C</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>F. Sedimentos</TableCell>
+                        <TableCell>{mergedDetail.new.filter_element_1 ?? 'N/A'} H</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>F. Carbon Granular</TableCell>
+                        <TableCell>{mergedDetail.new.filter_element_2 ?? 'N/A'} H</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>F. Carbon Bloque</TableCell>
+                        <TableCell>{mergedDetail.new.filter_element_3 ?? 'N/A'} H</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>Membrana</TableCell>
+                        <TableCell>{mergedDetail.new.filter_element_4 ?? 'N/A'} H</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>product_logs.count</TableCell>
+                        <TableCell>{mergedDetail.new.product_logs_count}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </Grid>
+              </Grid>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button variant="contained" onClick={() => setMergedDetailOpen(false)} color="secondary">
+              Cerrar
             </Button>
           </DialogActions>
         </Dialog>
