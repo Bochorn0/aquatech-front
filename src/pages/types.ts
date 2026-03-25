@@ -231,6 +231,8 @@ interface Status {
     role_name: string;
     cliente?: string;
     client_id?: string; // Client reference (null/ALL = admin sees all)
+    client_ids?: string[]; // Multiple client assignments
+    clients?: Cliente[]; // Expanded assigned clients
     postgresClientId?: string;
     role: Role;
     verified: boolean;

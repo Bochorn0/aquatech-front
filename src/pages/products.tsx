@@ -63,10 +63,9 @@ useEffect(() => {
         setClientFilters(firstClients);
 
         const parsed = JSON.parse(user);
-        const client = parsed.cliente as Cliente;
-        const clientName = parsed.client_name ?? client?.name ?? '';
-        setSelectedClient(clientName || 'All');
-        setCurretRole(parsed.role?.name ?? '');
+        const roleName = parsed.role?.name ?? '';
+        setSelectedClient('All');
+        setCurretRole(roleName);
       }
     } catch (error) {
       console.error('Error fetching clients:', error);
@@ -81,10 +80,10 @@ useEffect(() => {
       let clientId = '' as Cliente['_id'];
       const user = localStorage.getItem('user');
 
-      if (clientFilters.length > 0) {
+      if (clientFilters.length > 0 && selectedClient !== 'All') {
         clientId = clientFilters.find((client) => client.name === selectedClient)?._id ?? '';
       }
-      if (!clientId && user) {
+      if (!clientId && user && currentRole === 'admin') {
         const parsed = JSON.parse(user);
         const id = parsed.postgresClientId ?? parsed.client_id ?? parsed.cliente?._id ?? parsed.cliente;
         if (id != null && id !== '') clientId = String(id);
@@ -118,7 +117,7 @@ useEffect(() => {
   fetchProducts();
   const interval = setInterval(fetchProducts, 300000);
   return () => clearInterval(interval);
-}, [clientFilters, isInitialFetch, selectedCity, selectedClient, selectedDrive, selectedStatus]);
+}, [clientFilters, currentRole, isInitialFetch, selectedCity, selectedClient, selectedDrive, selectedStatus]);
 
   const confirmationAlert = () => Swal.fire({
     icon: 'warning',

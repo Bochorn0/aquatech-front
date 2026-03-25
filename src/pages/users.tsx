@@ -38,7 +38,7 @@ import { SvgColor } from 'src/components/svg-color';
 
 import type { User, Role, Cliente, DashboardVersion } from './types';
 
-const defaultUser = { _id: '', nombre: '', email: '', password:'',  client_name: '', role_name: '', client_id: '', role: { _id: '', name: '' }, verified: false, puesto: '', status: '', mqtt_zip_password: '' };
+const defaultUser = { _id: '', nombre: '', email: '', password:'',  client_name: '', role_name: '', client_id: '', client_ids: [] as string[], role: { _id: '', name: '' }, verified: false, puesto: '', status: '', mqtt_zip_password: '' };
 const CLIENT_ALL = 'ALL';
 const DASHBOARD_VERSION_OPTIONS: { value: DashboardVersion; label: string }[] = [
   { value: 'v1', label: 'Dashboard v1 (métricas por producto + mapa)' },
@@ -116,9 +116,13 @@ export default function UserRoleManagement() {
   
   const handleUserEdit = (user: User) => {
     const clientId = user.client_id ?? user.postgresClientId ?? user.cliente;
+    const clientIds = Array.isArray(user.client_ids) && user.client_ids.length > 0
+      ? user.client_ids.map(String)
+      : (clientId ? [String(clientId)] : []);
     setUserForm({
       ...user,
       client_id: clientId ? String(clientId) : CLIENT_ALL,
+      client_ids: clientIds,
       // Ensure role dropdown shows current role (API may send role_id but not role)
       role: (user.role ?? user.role_id ?? '') as User['role'],
     });
@@ -137,7 +141,10 @@ export default function UserRoleManagement() {
   const handleUserSubmit = async () => {
     setLoading(true);
     try {
-      const clientId = userForm.client_id === CLIENT_ALL || !userForm.client_id ? null : userForm.client_id;
+      const selectedClientIds = Array.isArray(userForm.client_ids) ? userForm.client_ids.filter(Boolean) : [];
+      const clientId = selectedClientIds.length > 0
+        ? selectedClientIds[0]
+        : (userForm.client_id === CLIENT_ALL || !userForm.client_id ? null : userForm.client_id);
       // Prefer current dropdown selection over stale role_id so role change is persisted
       const roleFromDropdown = typeof userForm.role === 'object' && userForm.role != null && userForm.role._id != null
         ? userForm.role._id
@@ -146,6 +153,7 @@ export default function UserRoleManagement() {
       const payload: Record<string, unknown> = {
         ...userForm,
         client_id: clientId,
+        client_ids: selectedClientIds,
         postgres_client_id: clientId,
         cliente: clientId,
         role_id: selectedRoleId,
@@ -208,7 +216,7 @@ export default function UserRoleManagement() {
   };
 
   const handleOpenUserModal = () => {
-    setUserForm({ ...defaultUser, client_id: CLIENT_ALL });
+    setUserForm({ ...defaultUser, client_id: CLIENT_ALL, client_ids: [] });
     setUserModalOpen(true);
   };
 
@@ -403,12 +411,33 @@ export default function UserRoleManagement() {
             <TextField label="Email" name="email" value={userForm.email} onChange={handleUserChange} fullWidth />
             <FormControl fullWidth>
                 <InputLabel shrink>Cliente</InputLabel>
-                <Select value={userForm.client_id || ''} name="client_id" onChange={handleUserChange} fullWidth>
-                  <MenuItem value={CLIENT_ALL}>
-                    <em>Todos (Admin)</em>
-                  </MenuItem>
+                <Select
+                  multiple
+                  value={userForm.client_ids || []}
+                  name="client_ids"
+                  onChange={(e) => {
+                    const value = e.target.value as string[];
+                    setUserForm((prev) => ({
+                      ...prev,
+                      client_ids: value,
+                      client_id: value.length > 0 ? value[0] : CLIENT_ALL,
+                    }));
+                  }}
+                  fullWidth
+                  renderValue={(selected) => {
+                    const ids = selected as string[];
+                    if (ids.length === 0) return 'Todos (Admin)';
+                    return clients
+                      .filter((cliente) => ids.includes(String(cliente.id || cliente._id)))
+                      .map((cliente) => cliente.name)
+                      .join(', ');
+                  }}
+                >
                   {clients.map((cliente) => (
-                    <MenuItem key={cliente.id || cliente._id} value={String(cliente.id || cliente._id)}>{cliente.name}</MenuItem>
+                    <MenuItem key={cliente.id || cliente._id} value={String(cliente.id || cliente._id)}>
+                      <Checkbox checked={(userForm.client_ids || []).includes(String(cliente.id || cliente._id))} />
+                      {cliente.name}
+                    </MenuItem>
                   ))}
                 </Select>
               </FormControl>
