@@ -705,6 +705,50 @@ const handlePvProductosChange = (e: any) => {
   };
 
   /** Toggle Tuya logs routine for a product (admin only). Used in Productos rutina logs tab. */
+  const handleLockSelectedProducts = async () => {
+    if (selectedProductIds.size === 0) return;
+    const deviceIds = [...selectedProductIds].filter((pid) => pid && !String(pid).startsWith('_'));
+    if (deviceIds.length === 0) {
+      Swal.fire({ icon: 'info', title: 'Nada que bloquear', text: 'Los equipos ya bloqueados empiezan con _.' });
+      return;
+    }
+    const ok = await Swal.fire({
+      icon: 'warning',
+      title: '¿Bloquear equipos seleccionados?',
+      html: `Se archivarán los logs actuales (prefijo <code>_</code> en <code>product_device_id</code>) y el equipo pasará a un id de fila con <code>_</code> + id, enlazando el id vivo de Tuya en <code>merged_from_device_ids</code>. Los nuevos datos de Tuya seguirán bajo el id original del dispositivo.<br/><br/><strong>${deviceIds.length}</strong> equipo(s).`,
+      showCancelButton: true,
+      confirmButtonText: 'Sí, bloquear',
+      cancelButtonText: 'Cancelar',
+    });
+    if (!ok.isConfirmed) return;
+    setLoading(true);
+    try {
+      const res = await post<{ success: boolean; results?: { locked: unknown[]; skipped: unknown[]; errors: { deviceId: string; error: string }[] } }>(
+        '/products/lock',
+        { deviceIds }
+      );
+      const r = res?.results;
+      const errCount = r?.errors?.length ?? 0;
+      const lockedCount = r?.locked?.length ?? 0;
+      if (errCount > 0) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Bloqueo parcial',
+          text: `Bloqueados: ${lockedCount}. Errores: ${errCount}. Revise la consola o respuesta API.`,
+        });
+      } else {
+        Swal.fire({ icon: 'success', title: 'Listo', text: `Se bloquearon ${lockedCount} equipo(s).` });
+      }
+      setSelectedProductIds(new Set());
+      await fetchProducts();
+    } catch (error) {
+      console.error('Error locking products:', error);
+      Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo completar el bloqueo (¿permiso admin?).' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleTuyaLogsRoutineToggle = async (product: Product & { _id?: string }, enabled: boolean) => {
     const productId = product._id ?? product.id;
     if (!productId) return;
@@ -1010,6 +1054,17 @@ const handlePvProductosChange = (e: any) => {
                     >
                       Actualizar seleccionados
                     </Button>
+                    {isAdmin && (
+                      <Button
+                        variant="contained"
+                        color="warning"
+                        onClick={handleLockSelectedProducts}
+                        disabled={selectedProductIds.size === 0 || loading}
+                        title="Solo administradores: archivar logs y enlazar id Tuya en merged_from_device_ids"
+                      >
+                        Bloquear seleccionados
+                      </Button>
+                    )}
                   </Grid>
                 </Grid>
               </Box>
