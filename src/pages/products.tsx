@@ -274,7 +274,7 @@ useEffect(() => {
               </Select>
             </FormControl>
           </Grid>
-          {currentRole === 'admin' && (
+          {(currentRole === 'admin' || clientFilters.length > 1) && (
             <Grid item xs={12} sm={2}>
               <FormControl fullWidth>
                 <InputLabel shrink>Cliente</InputLabel>

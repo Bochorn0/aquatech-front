@@ -10,7 +10,31 @@ import { StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellH
 import { get } from "src/api/axiosHelper";
 import { CONFIG } from 'src/config-global';
 
-import type  { PuntosVenta } from './types';
+import type  { Cliente, PuntosVenta } from './types';
+
+function mergeClientFilterNames(data: PuntosVenta[], apiClients: Cliente[]): string[] {
+  const fromRows = data
+    .map((pv) => (typeof pv.cliente === 'object' && pv.cliente !== null ? pv.cliente.name : ''))
+    .filter(Boolean) as string[];
+  const fromApi = (apiClients || [])
+    .filter((c) => c.name && c.name !== 'All')
+    .map((c) => c.name);
+  let fromUser: string[] = [];
+  try {
+    const raw = localStorage.getItem('user');
+    if (raw) {
+      const u = JSON.parse(raw) as { client_names?: string[]; clients?: { name?: string }[] };
+      if (Array.isArray(u.client_names) && u.client_names.length > 0) {
+        fromUser = u.client_names.filter(Boolean);
+      } else if (Array.isArray(u.clients)) {
+        fromUser = u.clients.map((c) => c.name).filter(Boolean) as string[];
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return Array.from(new Set([...fromApi, ...fromRows, ...fromUser])).sort((a, b) => a.localeCompare(b));
+}
 
 // ---------------------------------------------
 // 📦 COMPONENTE PRINCIPAL (v1.0 - MongoDB)
@@ -40,13 +64,18 @@ export default function PuntoVentaTableList() {
         setPuntosVenta(data);
         setFiltered(data);
 
-        // Generar filtros únicos
+        let apiClients: Cliente[] = [];
+        try {
+          apiClients = (await get<Cliente[]>('/clients/')) || [];
+        } catch {
+          apiClients = [];
+        }
+
+        // Generar filtros únicos (ciudad desde datos; cliente = API permitida + filas + usuario en localStorage)
         const uniqueCities = Array.from(
           new Set(data.map((pv) => typeof pv.city === 'object' && pv.city !== null ? pv.city.city : '').filter(Boolean))
         );
-        const uniqueClients = Array.from(
-          new Set(data.map((pv) => typeof pv.cliente === 'object' && pv.cliente !== null ? pv.cliente.name : '').filter(Boolean))
-        );
+        const uniqueClients = mergeClientFilterNames(data, apiClients);
 
         setCityFilters(uniqueCities as string[]);
         setClientFilters(uniqueClients as string[]);

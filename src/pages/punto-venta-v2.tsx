@@ -10,8 +10,33 @@ import { Box, Grid, Paper, Table, Button, Select, MenuItem, TableRow, TableBody,
 import { StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
 import { CONFIG } from 'src/config-global';
+import { get } from 'src/api/axiosHelper';
 
-import type  { PuntosVenta } from './types';
+import type  { Cliente, PuntosVenta } from './types';
+
+function mergeClientFilterNames(data: PuntosVenta[], apiClients: Cliente[]): string[] {
+  const fromRows = data
+    .map((pv) => (typeof pv.cliente === 'object' && pv.cliente !== null ? pv.cliente.name : ''))
+    .filter(Boolean) as string[];
+  const fromApi = (apiClients || [])
+    .filter((c) => c.name && c.name !== 'All')
+    .map((c) => c.name);
+  let fromUser: string[] = [];
+  try {
+    const raw = localStorage.getItem('user');
+    if (raw) {
+      const u = JSON.parse(raw) as { client_names?: string[]; clients?: { name?: string }[] };
+      if (Array.isArray(u.client_names) && u.client_names.length > 0) {
+        fromUser = u.client_names.filter(Boolean);
+      } else if (Array.isArray(u.clients)) {
+        fromUser = u.clients.map((c) => c.name).filter(Boolean) as string[];
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return Array.from(new Set([...fromApi, ...fromRows, ...fromUser])).sort((a, b) => a.localeCompare(b));
+}
 
 /** Human-readable label for sensor_type (e.g. nivel_cruda → Nivel cruda). */
 function sensorTypeDisplayName(sensorType: string | null | undefined): string {
@@ -93,12 +118,17 @@ export default function PuntoVentaTableListV2() {
         setPuntosVenta(data);
         setFiltered(data);
 
+        let apiClients: Cliente[] = [];
+        try {
+          apiClients = (await get<Cliente[]>('/clients/')) || [];
+        } catch {
+          apiClients = [];
+        }
+
         const uniqueCities = Array.from(
           new Set(data.map((pv: PuntosVenta) => typeof pv.city === 'object' && pv.city !== null ? pv.city.city : '').filter(Boolean) as string[])
         );
-        const uniqueClients = Array.from(
-          new Set(data.map((pv: PuntosVenta) => typeof pv.cliente === 'object' && pv.cliente !== null ? pv.cliente.name : '').filter(Boolean) as string[])
-        );
+        const uniqueClients = mergeClientFilterNames(data, apiClients);
         setCityFilters(uniqueCities);
         setClientFilters(uniqueClients);
       } catch (error) {
