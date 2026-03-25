@@ -88,6 +88,14 @@ const defaultclient = { _id: '', name: '' , email:'', address: {city: '', state:
 const defaultMetric = { _id: '', cliente: '', client_name: '', product_type: '', tds_range: 0, production_volume_range: 0, temperature_range: 0, rejected_volume_range: 0, flow_rate_speed_range: 0, active_time: 0, metrics_description: '', filter_only_online: true }
 
 const defaultPv = { _id: '', name: '' , client_name:'', cliente: defaultclient, city: defaultCity, city_name: '', productos: []}
+
+/** Tuya / API device_id for routes; avoid Postgres numeric _id so lock & PATCH target the real device. */
+function getProductDeviceKey(p: Product & { _id?: string; device_id?: string }) {
+  const id = (p as { device_id?: string }).device_id ?? p.id;
+  if (id != null && String(id)) return String(id);
+  return p._id != null ? String(p._id) : '';
+}
+
 export function CustomizationPage() {
   // Check if user is admin
   const isAdmin = useMemo(() => {
@@ -539,7 +547,7 @@ const handlePvProductosChange = (e: any) => {
   const handleProductEdit = (product: Product) => {
     const prod = product as Product & { _id?: string };
     setProductFormData({
-      _id: prod._id ?? prod.id,
+      _id: getProductDeviceKey(prod),
       name: prod.name,
       cliente: typeof prod.cliente === 'object' && prod.cliente !== null && prod.cliente._id
         ? prod.cliente._id
@@ -610,7 +618,7 @@ const handlePvProductosChange = (e: any) => {
   };
 
   const handleProductDelete = async (product: Product & { _id?: string }) => {
-    const productId = product._id ?? product.id;
+    const productId = getProductDeviceKey(product);
     if (!productId) return;
     try {
       const result = await confirmationAlert();
@@ -637,7 +645,7 @@ const handlePvProductosChange = (e: any) => {
 
   const handleSelectAllProducts = (checked: boolean) => {
     if (checked) {
-      const ids = new Set(filteredProducts.map((p) => (p as Product & { _id?: string })._id ?? (p as Product).id));
+      const ids = new Set(filteredProducts.map((p) => getProductDeviceKey(p as Product & { _id?: string })));
       setSelectedProductIds(ids);
     } else {
       setSelectedProductIds(new Set());
@@ -750,14 +758,14 @@ const handlePvProductosChange = (e: any) => {
   };
 
   const handleTuyaLogsRoutineToggle = async (product: Product & { _id?: string }, enabled: boolean) => {
-    const productId = product._id ?? product.id;
+    const productId = getProductDeviceKey(product);
     if (!productId) return;
     setLoading(true);
     try {
       await patch<Product>(`/products/${productId}`, { tuya_logs_routine_enabled: enabled });
       setProducts((prev) =>
         prev.map((p) => {
-          const pid = (p as Product & { _id?: string })._id ?? p.id;
+          const pid = getProductDeviceKey(p as Product & { _id?: string });
           if (pid === productId) return { ...p, tuya_logs_routine_enabled: enabled };
           return p;
         })
@@ -1091,7 +1099,7 @@ const handlePvProductosChange = (e: any) => {
                       <TableBody>
                         {filteredProducts.map((product) => {
                           const prod = product as Product & { _id?: string };
-                          const productId = prod._id ?? prod.id;
+                          const productId = getProductDeviceKey(prod);
                           const clientName = typeof prod.cliente === 'object' && prod.cliente !== null ? prod.cliente.name : '-';
                           const isSelected = selectedProductIds.has(productId);
                           return (
@@ -1168,7 +1176,7 @@ const handlePvProductosChange = (e: any) => {
                       <TableBody>
                         {filteredProducts.map((product) => {
                           const prod = product as Product & { _id?: string; tuya_logs_routine_enabled?: boolean };
-                          const productId = prod._id ?? prod.id;
+                          const productId = getProductDeviceKey(prod);
                           const clientName = typeof prod.cliente === 'object' && prod.cliente !== null ? prod.cliente.name : '-';
                           const enabled = Boolean(prod.tuya_logs_routine_enabled);
                           return (
