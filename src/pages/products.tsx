@@ -90,12 +90,12 @@ useEffect(() => {
         if (id != null && id !== '') clientId = String(id);
       }
 
-      const productParams = { 
-        city: selectedCity, 
-        cliente: clientId, 
-        drive: selectedDrive, 
-        status: selectedStatus 
+      const productParams: Record<string, string> = {
+        city: selectedCity,
+        drive: selectedDrive,
+        status: selectedStatus,
       };
+      if (clientId) productParams.cliente = clientId;
       const response = await get<Product[]>(`/products/`, productParams);
       const productos = response || [];
       const ciudades = [...new Set(productos.map((product: Product) => product.city))] as string[];
@@ -446,7 +446,7 @@ useEffect(() => {
                             <Button
                               variant="contained"
                               color="inherit"
-                              onClick={() => navigate(`/Equipos/${product.id}`)}
+                              onClick={() => navigate(`/Equipos/${encodeURIComponent(product.id)}`)}
                             >
                             Detalles
                           </Button>

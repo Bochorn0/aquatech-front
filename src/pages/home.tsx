@@ -75,14 +75,17 @@ export function DashboardPage() {
 
         // Fetch products without date filter so the map shows all products across all cities.
         // Date range is for metrics/charts; product list for map uses all current products.
-        const productParams: Record<string, unknown> = { city: selectedCity, cliente: clientId };
+        const productParams: Record<string, string> = { city: selectedCity };
+        if (clientId) productParams.cliente = clientId;
         const response = await get<Product[]>(`/products/`, productParams);
         const productos = response || [];
         const ciudades = [...new Set(productos.map((product: Product) => product.city))] as string[];
 
         setCurrentProducts(productos);
 
-        const metricsResponse = await get<MetricsData[]>(`/metrics`, { cliente: clientId });
+        const metricsParams: Record<string, string> = {};
+        if (clientId) metricsParams.cliente = clientId;
+        const metricsResponse = await get<MetricsData[]>(`/metrics`, metricsParams);
         const metric = metricsResponse[0];
 
         if (metric) {
