@@ -115,14 +115,9 @@ useEffect(() => {
     }
   };
 
-  if (clientFilters.length > 0 || isInitialFetch) {
-    fetchProducts();
-    const interval = setInterval(fetchProducts, 300000);
-    return () => clearInterval(interval); // ✅ cleanup when needed
-  }
-
-  return () => {}; // ✅ empty cleanup function when condition is false
-
+  fetchProducts();
+  const interval = setInterval(fetchProducts, 300000);
+  return () => clearInterval(interval);
 }, [clientFilters, isInitialFetch, selectedCity, selectedClient, selectedDrive, selectedStatus]);
 
   const confirmationAlert = () => Swal.fire({

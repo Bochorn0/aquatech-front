@@ -19,6 +19,7 @@ import { DashboardContent } from 'src/layouts/dashboard';
 import MexicoMap from './maps';
 import { PieChart } from './charts/pie-chart';
 import { getMetricsByProducts } from '../utils/metrix-filter';
+import { prepareDashboardProducts } from '../utils/dashboard-products';
 
 import type { Cliente, Product, MetricsData, DashboardMetrics } from './types';
 // ---------------------- Interfaces ---------------------- //
@@ -78,7 +79,8 @@ export function DashboardPage() {
         const productParams: Record<string, string> = { city: selectedCity };
         if (clientId) productParams.cliente = clientId;
         const response = await get<Product[]>(`/products/`, productParams);
-        const productos = response || [];
+        const raw = response || [];
+        const productos = prepareDashboardProducts(raw);
         const ciudades = [...new Set(productos.map((product: Product) => product.city))] as string[];
 
         setCurrentProducts(productos);
@@ -220,7 +222,7 @@ export function DashboardPage() {
                     </TableHead>
                     <TableBody>
                       {selectedProducts.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((product) => (
-                        <TableRow key={product.name}>
+                        <TableRow key={String(product.device_id ?? product.id)}>
                           <TableCell>{product.name}</TableCell>
                           <TableCell>{product.city}</TableCell>
                           <TableCell>{product.status.find(s => s.code === 'tds_out')?.value || ''} ppm</TableCell>

@@ -10,8 +10,6 @@ export const getMetricsByProducts = (productosByCliente: Product[], metricsData:
   const rejectedOffRangeProds: Product[] = [];
   const prodOnline: Product[] =  productosByCliente.filter((p) => p.online) as Product[];
   const prodOffline: Product[] =  productosByCliente.filter((p) => !p.online) as Product[];
-  console.log('prodOnline:', prodOnline);
-  console.log('prodOffline:', prodOffline);
   if (metricsData.filter_only_online) {
     productosByCliente = productosByCliente.filter((p) => p.online) as Product[];
   }
