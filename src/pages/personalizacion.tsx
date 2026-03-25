@@ -110,6 +110,9 @@ export function CustomizationPage() {
     }
   }, []);
 
+  /** Tab order: admin has Métricas, PV, Clientes, Ciudades, Equipos, … — non-admin skips 2 admin tabs, so Equipos is index 2 not 4. */
+  const equiposTabIndex = isAdmin ? 4 : 2;
+
   const [metrics, setMetrics] = useState<Metric[]>([]);
   const [puntosVenta, setPuntosVenta] = useState<PuntosVenta[]>([]);
 
@@ -231,11 +234,19 @@ export function CustomizationPage() {
     const user = localStorage.getItem('user');
     if (user) {
       try {
-        const client_ = JSON.parse(user).cliente as Cliente;
-        if (client_?.name && client_.name !== 'All') {
-          filteredClients = filteredClients.filter(
-            (client) => client?.name && client.name.toLowerCase() === client_.name.toLowerCase()
-          );
+        const parsed = JSON.parse(user) as User & { client_ids?: string[]; clients?: Cliente[] };
+        const multiClient =
+          (Array.isArray(parsed.client_ids) && parsed.client_ids.length > 1) ||
+          (Array.isArray(parsed.clients) && parsed.clients.length > 1);
+        // Multi-client: /clients is already scoped; do not narrow by legacy single cliente.name
+        if (!multiClient) {
+          const client_ = parsed.cliente as unknown as Cliente | string | undefined;
+          const clientObj = typeof client_ === 'object' && client_ !== null ? client_ : null;
+          if (clientObj?.name && clientObj.name !== 'All') {
+            filteredClients = filteredClients.filter(
+              (client) => client?.name && client.name.toLowerCase() === clientObj.name.toLowerCase()
+            );
+          }
         }
       } catch {
         // ignore invalid user
@@ -1104,7 +1115,7 @@ const handlePvProductosChange = (e: any) => {
           </Grid>
         )}
 
-        {tabIndex === 4 && (
+        {tabIndex === equiposTabIndex && (
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <Box sx={{ overflowX: 'auto' }}>
