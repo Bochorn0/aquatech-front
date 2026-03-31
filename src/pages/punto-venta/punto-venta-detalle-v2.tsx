@@ -1,6 +1,6 @@
 import { Helmet } from 'react-helmet-async';
 import { useParams } from 'react-router-dom';
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 
 import EditIcon from '@mui/icons-material/Edit';
 import { useTheme } from '@mui/material/styles';
@@ -63,6 +63,9 @@ function todayYmdHermosillo(): string {
   return `${y}-${mo}-${d}`;
 }
 
+/** Historico is expensive; do not refetch on the 30s detalle poll more often than this. */
+const HISTORICO_REFRESH_MS = 17 * 60 * 1000;
+
 export default function PuntoVentaDetalleV2() {
   const { id } = useParams<{ id: string }>();
   const [punto, setPunto] = useState<any>(null);
@@ -78,8 +81,13 @@ export default function PuntoVentaDetalleV2() {
   const [customSensorValue, setCustomSensorValue] = useState<string>('');
   const [generatingCustom, setGeneratingCustom] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const lastHistoricoFetchAtRef = useRef(0);
 
   const handleLocationUpdated = () => setRefreshTrigger((t) => t + 1);
+
+  useEffect(() => {
+    lastHistoricoFetchAtRef.current = 0;
+  }, [id, refreshTrigger]);
 
   useEffect(() => {
     const fetchTiwaterData = async (codigoTienda: string) => {
@@ -270,6 +278,7 @@ export default function PuntoVentaDetalleV2() {
       } catch (e) {
         console.warn('Error fetching historico for charts:', e);
       } finally {
+        lastHistoricoFetchAtRef.current = Date.now();
         setChartsLoading(false);
       }
     };
@@ -320,7 +329,10 @@ export default function PuntoVentaDetalleV2() {
         }
 
         setLoading(false);
-        setChartsLoading(true);
+
+        const shouldFetchHistorico =
+          lastHistoricoFetchAtRef.current === 0 ||
+          Date.now() - lastHistoricoFetchAtRef.current >= HISTORICO_REFRESH_MS;
 
         // If detalle has no TIWater in osmosisSystems (e.g. sensor_latest empty), try sensors/tiwater fallback only; then fetch historico if we have TIWater data.
         let dataForHistorico = puntoData;
@@ -376,7 +388,10 @@ export default function PuntoVentaDetalleV2() {
             console.warn('Fallback tiwater fetch for historico:', e);
           }
         }
-        fetchHistoricoForCharts(dataForHistorico);
+        if (shouldFetchHistorico) {
+          setChartsLoading(true);
+          fetchHistoricoForCharts(dataForHistorico);
+        }
       } catch (error) {
         console.error('Error fetching punto venta details:', error);
         setLoading(false);
