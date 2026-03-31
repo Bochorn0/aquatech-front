@@ -23,6 +23,17 @@ import { Iconify } from 'src/components/iconify';
 
 // ----------------------------------------------------------------------
 
+/**
+ * Public broker host for docs. Override with `VITE_MQTT_PUBLIC_HOSTNAME` if needed.
+ * Production namespace uses the topic-spaces hostname (same as internal MQTT mocker / App Service).
+ */
+const MQTT_DOC_HOST =
+  (import.meta.env?.VITE_MQTT_PUBLIC_HOSTNAME as string | undefined) ||
+  'tiwatermqtt.eastus-1.ts.eventgrid.azure.net';
+
+/** Example Client authentication name used by Aquatech’s load / mocker publisher (third parties receive their own). */
+const MQTT_EXAMPLE_CLIENT_AUTH = 'lcc-mqtt-mocker';
+
 export default function MQTTDocumentationPage() {
   const [expanded, setExpanded] = useState<string | false>('connection');
   const [downloading, setDownloading] = useState(false);
@@ -71,7 +82,7 @@ export default function MQTTDocumentationPage() {
               API TI Water
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              Documentación para conectar un gateway al servidor MQTT de Aquatech
+              Guía para publicar telemetría TI Water hacia la nube (Azure Event Grid MQTT) y verla en LCC / Aquatech.
             </Typography>
           </Box>
 
@@ -85,9 +96,14 @@ export default function MQTTDocumentationPage() {
                 <Typography variant="h6">Introducción</Typography>
               </Box>
               <Typography variant="body1" color="text.secondary">
-                Las credenciales de autenticación son utilizadas para acreditar todas las llamadas al servicio MQTT.
-                Se requiere solicitar integración a un representante de Aquatech para poder generar credenciales válidas
-                y vigentes para conectarse al servidor MQTT.
+                El broker de producción es <strong>Azure Event Grid: MQTT broker</strong> (puerto <strong>8883</strong>, TLS).
+                Cada sitio publica en un <strong>topic jerárquico</strong> que identifica región, ciudad y código de tienda;
+                el consumidor de Aquatech suscribe esos topics, normaliza el JSON y guarda en PostgreSQL para tableros y alertas.
+              </Typography>
+              <Typography variant="body1" color="text.secondary">
+                Debes completar el <strong>alta del punto de venta</strong> (código de tienda, región y ciudad en catálogo) y
+                recibir un <strong>certificado de cliente X.509</strong> y el <strong>nombre de autenticación MQTT</strong> registrado en Azure.
+                Contacta a un representante de Aquatech para el onboarding y el template de topic space correcto en tu namespace.
               </Typography>
             </Stack>
           </Paper>
@@ -95,39 +111,42 @@ export default function MQTTDocumentationPage() {
           {/* Conexión al Servidor */}
           <Accordion expanded={expanded === 'connection'} onChange={handleChange('connection')}>
             <AccordionSummary expandIcon={<Iconify icon="solar:alt-arrow-down-bold-duotone" width={24} />}>
-              <Typography variant="h6">Conexión al Servidor MQTT</Typography>
+              <Typography variant="h6">Conexión al broker (producción Azure)</Typography>
             </AccordionSummary>
             <AccordionDetails>
               <Stack spacing={3}>
                 <Box>
                   <Typography variant="subtitle2" gutterBottom color="text.secondary">
-                    INFORMACIÓN DEL SERVIDOR
+                    ENDPOINT
                   </Typography>
                   <Card variant="outlined" sx={{ mt: 1 }}>
                     <CardContent>
                       <Stack spacing={2}>
                         <Box>
                           <Typography variant="body2" color="text.secondary" gutterBottom>
-                            Dirección IP
+                            Hostname MQTT (Event Grid Namespace)
                           </Typography>
-                          <Chip label="146.190.143.141" color="primary" />
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                            {MQTT_DOC_HOST}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                            Este host (<code>.ts.eventgrid.azure.net</code>) es el que usa el publicador de pruebas y las
+                            integraciones desplegadas en Azure App Service. Si el host sin <code>.ts.</code> (
+                            <code>tiwatermqtt.eastus-1.eventgrid.azure.net</code>) funciona mejor en tu red, puedes usarlo;
+                            si ves <code>ECONNRESET</code>, prueba el otro. Puedes sobrescribir el texto de esta página con{' '}
+                            <code>VITE_MQTT_PUBLIC_HOSTNAME</code>.
+                          </Typography>
                         </Box>
                         <Box>
                           <Typography variant="body2" color="text.secondary" gutterBottom>
-                            Puerto Libre (Sin Autenticación)
+                            Puerto y protocolo
                           </Typography>
-                          <Chip label="1883" color="info" />
+                          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                            <Chip label="8883" color="success" />
+                            <Chip label="mqtts (TLS)" color="primary" />
+                          </Stack>
                           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                            Conexión sin autenticación ni TLS
-                          </Typography>
-                        </Box>
-                        <Box>
-                          <Typography variant="body2" color="text.secondary" gutterBottom>
-                            Puerto Seguro (TLS + Autenticación)
-                          </Typography>
-                          <Chip label="8883" color="success" />
-                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                            Requiere autenticación y certificado CA para TLS
+                            TLS obligatorio. No uses 1883 ni conexiones sin cifrado hacia Event Grid.
                           </Typography>
                         </Box>
                       </Stack>
@@ -139,40 +158,55 @@ export default function MQTTDocumentationPage() {
 
                 <Box>
                   <Typography variant="subtitle2" gutterBottom color="text.secondary">
-                    CREDENCIALES DE AUTENTICACIÓN
+                    SEGURIDAD (AZURE EVENT GRID MQTT)
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Para generar credenciales son necesarios 3 atributos proporcionados por un representante de Aquatech:
+                    El broker valida al cliente con <strong>mutual TLS (X.509)</strong>: debes presentar un certificado de
+                    cliente cuyo <strong>thumbprint</strong> esté registrado en Azure (MQTT broker → Clients). En el paquete
+                    CONNECT MQTT, el <strong>username</strong> debe coincidir exactamente con el <strong>Client authentication name</strong>
+                    de ese cliente.
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    <strong>No envíes contraseña MQTT</strong> (<code>MQTT_PASSWORD</code>) contra Event Grid: la autenticación
+                    es certificado + nombre de cliente; una contraseña mal configurada puede impedir la conexión.
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    En Azure debes tener un <strong>Topic space</strong> cuyo template permita tus topics (por ejemplo{' '}
+                    <code>tiwater/#</code> o <code>tiwater/+/+/+/data</code>) y un <strong>Permission binding</strong> con
+                    permiso de <strong>Publisher</strong> para el grupo de clientes que use tu certificado.
                   </Typography>
                   <Card variant="outlined">
                     <CardContent>
                       <Stack spacing={2}>
                         <Box>
                           <Typography variant="body2" fontWeight="bold" gutterBottom>
-                            Usuario
+                            Usuario MQTT (CONNECT)
                           </Typography>
-                          <Chip label="Aquatech001" color="info" />
-                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                            Usuario proporcionado por Aquatech
-                          </Typography>
-                        </Box>
-                        <Box>
-                          <Typography variant="body2" fontWeight="bold" gutterBottom>
-                            Contraseña
-                          </Typography>
-                          <Chip label="Aquatech2025*" color="info" />
-                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                            Contraseña proporcionada por Aquatech
+                          <Typography variant="body2" color="text.secondary">
+                            Igual al <strong>Client authentication name</strong> en Azure. Aquatech te asigna un nombre al
+                            registrar tu certificado. El publicador de carga interno usa, a modo de referencia,{' '}
+                            <code>{MQTT_EXAMPLE_CLIENT_AUTH}</code>;{' '}
+                            <strong>no reutilices ese cliente ni sus certificados</strong> — son solo para simulación.
                           </Typography>
                         </Box>
                         <Box>
                           <Typography variant="body2" fontWeight="bold" gutterBottom>
-                            Certificado CA
+                            Certificado de cliente y clave privada
                           </Typography>
-                          <Stack direction="row" spacing={2} alignItems="center" sx={{ mt: 1 }}>
-                            <Typography variant="caption" color="text.secondary">
-                              Se requiere el certificado CA para validar la conexión TLS.
-                            </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Par <code>.pem</code> / <code>.key</code> emitido en el onboarding (p. ej. con <code>step</code> o el flujo que indique Aquatech).
+                            El thumbprint del certificado debe coincidir con el registrado en el cliente del namespace.
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography variant="body2" fontWeight="bold" gutterBottom>
+                            CA del servidor (TLS)
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                            El servidor presenta certificados de la cadena pública de Azure; los clientes suelen validar con
+                            el almacén de CA del sistema. En entornos restringidos, Aquatech puede suministrar material adicional.
+                          </Typography>
+                          <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
                             <Button
                               variant="outlined"
                               size="small"
@@ -181,17 +215,96 @@ export default function MQTTDocumentationPage() {
                               disabled={downloading}
                               sx={{ minWidth: 200 }}
                             >
-                              {downloading ? 'Descargando...' : 'Descargar Certificado'}
+                              {downloading ? 'Descargando...' : 'Descargar material Aquatech (ZIP)'}
                             </Button>
+                            <Typography variant="caption" color="text.secondary">
+                              Si el portal ofrece un paquete CA adicional, úsalo según las instrucciones del ZIP (contraseña
+                              igual a tu sesión cuando aplique).
+                            </Typography>
                           </Stack>
-                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-                            El certificado se descargará en un archivo ZIP protegido con contraseña.
-                            La contraseña es la misma que tu contraseña de inicio de sesión.
-                          </Typography>
                         </Box>
                       </Stack>
                     </CardContent>
                   </Card>
+                </Box>
+
+                <Divider />
+
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom color="text.secondary">
+                    EJEMPLO: MISMA CONFIGURACIÓN QUE EL MOCK / APP SERVICE (NODE.JS)
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Así se configura la conexión en variables de entorno (patrón usado por el publicador de pruebas y
+                    recomendado para servicios en Azure). Sustituye el usuario y los Base64 por los que te entregue Aquatech
+                    para <strong>tu</strong> cliente registrado en el namespace.
+                  </Typography>
+                  <Card variant="outlined" sx={{ bgcolor: 'grey.50' }}>
+                    <CardContent>
+                      <Typography
+                        variant="body2"
+                        component="pre"
+                        sx={{
+                          fontFamily: 'monospace',
+                          fontSize: '0.75rem',
+                          m: 0,
+                          overflow: 'auto',
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-all',
+                        }}
+                      >
+                        {`MQTT_BROKER=${MQTT_DOC_HOST}
+MQTT_PORT=8883
+MQTT_USE_TLS=true
+MQTT_USERNAME=${MQTT_EXAMPLE_CLIENT_AUTH}
+# No definir MQTT_PASSWORD (Event Grid: autenticación X.509, no contraseña MQTT)
+
+# Certificado de cliente y clave en Base64 (sin saltos de línea), típico en Azure App Service:
+#   base64 -i cliente.pem | tr -d '\\n'
+#   base64 -i cliente.key | tr -d '\\n'
+MQTT_CLIENT_CERT_B64=LS0tLS1CRUdJTi4uLg==
+MQTT_CLIENT_KEY_B64=LS0tLS1CRUdJTi4uLg==`}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 2 }}>
+                        Los valores de ejemplo de Base64 son ficticios. El cliente <code>{MQTT_EXAMPLE_CLIENT_AUTH}</code> es el
+                        usado por el simulador interno; tu integración tendrá otro <code>MQTT_USERNAME</code> y otros secretos.
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Box>
+
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom color="text.secondary">
+                    SOLO SIMULADOR DE CARGA (REFERENCIA)
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    El servicio interno de publicación masiva puede usar además (no aplica a gateways de tienda):
+                  </Typography>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Typography variant="body2" component="pre" sx={{ fontFamily: 'monospace', fontSize: '0.8rem', m: 0 }}>
+                        {`MQTT_LOAD_INTERVAL_MINUTES=2
+MQTT_LOAD_PUNTOS_COUNT=135`}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                        Intervalo entre lotes y cantidad de puntos simulados; irrelevante para clientes que publican una sola
+                        tienda real.
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Box>
+
+                <Divider />
+
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom color="text.secondary">
+                    ENTORNOS LEGADOS (SOLO REFERENCIA)
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Instalaciones antiguas con Mosquitto (IP fija, puerto 1883 sin TLS o 8883 con usuario/contraseña) no
+                    deben usarse para nuevas integraciones en producción. Si aún tienes uno, migra al namespace de Event Grid
+                    con el mismo formato de topics y payload descrito en esta página.
+                  </Typography>
                 </Box>
               </Stack>
             </AccordionDetails>
@@ -200,37 +313,70 @@ export default function MQTTDocumentationPage() {
           {/* Envío de Mensajes */}
           <Accordion expanded={expanded === 'messages'} onChange={handleChange('messages')}>
             <AccordionSummary expandIcon={<Iconify icon="solar:alt-arrow-down-bold-duotone" width={24} />}>
-              <Typography variant="h6">Envío de Mensajes</Typography>
+              <Typography variant="h6">Topics y payload JSON</Typography>
             </AccordionSummary>
             <AccordionDetails>
               <Stack spacing={3}>
                 <Box>
                   <Typography variant="subtitle2" gutterBottom color="text.secondary">
-                    ESTRUCTURA DE TOPICS
+                    ESTRUCTURA DE TOPICS (RECOMENDADA)
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Los mensajes deben publicarse en topics con la siguiente estructura:
+                    Cinco segmentos, terminando en <code>/data</code>. Coincide con el mismo patrón que usa el publicador de
+                    pruebas (lcc_mqtt_mocker) y el consumidor de la API:
                   </Typography>
                   <Card variant="outlined">
                     <CardContent>
-                      <Typography variant="body1" component="pre" sx={{ fontFamily: 'monospace' }}>
-                        tiwater/&#123;codigo_tienda&#125;/data
+                      <Typography variant="body1" component="pre" sx={{ fontFamily: 'monospace', fontSize: '0.9rem' }}>
+                        {`{CLIENTE}/{CODIGO_REGION}/{CIUDAD}/{CODIGO_TIENDA}/data`}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-                        Nota: El identificador del equipo (tipo_equipo o tipo_sensor) debe incluirse dentro del payload JSON.
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                        <strong>CLIENTE</strong>: identificador de integración (hoy <code>tiwater</code> para TI Water). Debe
+                        coincidir con el prefijo permitido en el Topic space de Azure.
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        <strong>CODIGO_REGION</strong>: código de región en el catálogo (ej. <code>Noroeste</code>, <code>Bajio</code>).
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        <strong>CIUDAD</strong>: nombre de ciudad sin barra <code>/</code>; si usas otro formato, alinea con el
+                        punto de venta dado de alta.
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        <strong>CODIGO_TIENDA</strong>: debe coincidir con el código del punto de venta (ej. <code>TIENDA_001</code>).
+                        El <strong>cliente corporativo</strong> y la asignación en la plataforma se resuelven por este código en base de datos,
+                        no por un segmento extra en el topic.
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 2 }}>
+                        Ejemplo: <code>tiwater/Noroeste/Hermosillo/TIENDA_001/data</code>
                       </Typography>
                     </CardContent>
                   </Card>
                 </Box>
 
-                <Divider />
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom color="text.secondary">
+                    FORMATO LEGACY (COMPATIBLE)
+                  </Typography>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Typography variant="body1" component="pre" sx={{ fontFamily: 'monospace' }}>
+                        tiwater/&#123;CODIGO_TIENDA&#125;/data
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                        Tres segmentos: solo código de tienda. Útil para equipos antiguos; el backend asume región/ciudad vacías
+                        o valores por defecto.
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Box>
 
                 <Box>
                   <Typography variant="subtitle2" gutterBottom color="text.secondary">
-                    FORMATO JSON - TOPIC /data
+                    PAYLOAD
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    El payload debe incluir el identificador del equipo dentro del JSON:
+                    Cuerpo JSON (UTF-8). Puedes usar las etiquetas en español y mayúsculas del mocker de referencia, o los
+                    nombres normalizados en snake_case; el servicio mapea ambos a sensores internos.
                   </Typography>
                   <Card variant="outlined">
                     <CardContent>
@@ -243,25 +389,36 @@ export default function MQTTDocumentationPage() {
                           p: 2,
                           borderRadius: 1,
                           overflow: 'auto',
+                          fontSize: '0.75rem',
                         }}
                       >
                         {`{
-  "tipo_equipo": "equipo_001",
-  "tipo_sensor": "presion",
-  "flujo_produccion": 12.5,
-  "flujo_rechazo": 8.3,
-  "tds": 45,
-  "electronivel_purificada": 85.5,
-  "electronivel_recuperada": 75.2,
-  "presion_in": 45.3,
-  "presion_out": 67.8,
+  "CAUDAL PURIFICADA": 1.2,
+  "CAUDAL RECUPERACION": 1.8,
+  "CAUDAL RECHAZO": 0.12,
+  "NIVEL PURIFICADA": 62.5,
+  "NIVEL CRUDA": 55.0,
+  "PORCENTAJE NIVEL PURIFICADA": 62.5,
+  "PORCENTAJE NIVEL CRUDA": 55.0,
+  "CAUDAL CRUDA": 1.5,
+  "ACUMULADO CRUDA": 1200.5,
+  "CAUDAL CRUDA L/min": 18.2,
+  "TDS": 45,
+  "PRESION CO2": 72,
+  "ch1": 2.1, "ch2": 2.1, "ch3": 1.2, "ch4": 2.0,
+  "EFICIENCIA": 58.5,
+  "vida": 120,
   "timestamp": 1234567890,
-  "source": "Gateway",
-  "gateway_ip": "192.168.1.100"
+  "lat": 29.07,
+  "long": -110.95
 }`}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-                        Campos requeridos: tipo_equipo o tipo_sensor (identifica el equipo/sensor), timestamp, y los datos del sensor.
+                        <strong>timestamp</strong>: Unix en segundos (recomendado). Alternativas equivalentes en backend:{' '}
+                        <code>flujo_produccion</code>, <code>electronivel_purificada</code>, etc.
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                        Publica con <strong>QoS 1</strong> si tu cliente lo permite (mismo criterio que el mocker de carga).
                       </Typography>
                     </CardContent>
                   </Card>
@@ -270,17 +427,53 @@ export default function MQTTDocumentationPage() {
             </AccordionDetails>
           </Accordion>
 
+          {/* Flujo */}
+          <Accordion expanded={expanded === 'flow'} onChange={handleChange('flow')}>
+            <AccordionSummary expandIcon={<Iconify icon="solar:alt-arrow-down-bold-duotone" width={24} />}>
+              <Typography variant="h6">Qué ocurre al publicar un mensaje</Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Stack spacing={2}>
+                <Typography variant="body2" color="text.secondary">
+                  1. Tu gateway se conecta a <strong>Event Grid MQTT</strong> con TLS y certificado de cliente válido.
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  2. Publicas en <code>{'{CLIENTE}/{REGION}/{CIUDAD}/{CODIGO_TIENDA}/data'}</code> (o formato legacy de tres segmentos).
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  3. El <strong>consumidor MQTT</strong> de Aquatech (servicio de API) recibe el mensaje, parsea región/ciudad/código
+                  de tienda desde el topic y el JSON del cuerpo.
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  4. Los campos se <strong>normalizan</strong> (p. ej. &quot;CAUDAL PURIFICADA&quot; → flujo de producción) y se
+                  persisten en <strong>PostgreSQL</strong> (sensores / mensajes), asociados al punto de venta por{' '}
+                  <code>codigo_tienda</code>.
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  5. La aplicación web y la API REST leen esos datos para tableros, históricos y alertas.
+                </Typography>
+              </Stack>
+            </AccordionDetails>
+          </Accordion>
+
           {/* Ejemplo de Código ESP32 */}
           <Accordion expanded={expanded === 'code'} onChange={handleChange('code')}>
             <AccordionSummary expandIcon={<Iconify icon="solar:alt-arrow-down-bold-duotone" width={24} />}>
-              <Typography variant="h6">Ejemplo de Implementación - ESP32</Typography>
+              <Typography variant="h6">Ejemplo ESP32 / gateway (TLS + usuario)</Typography>
             </AccordionSummary>
             <AccordionDetails>
               <Stack spacing={3}>
+                <Typography variant="body2" color="text.secondary">
+                  Para <strong>Azure Event Grid</strong> necesitas <code>WiFiClientSecure</code>, puerto <strong>8883</strong>,{' '}
+                  <strong>usuario MQTT</strong> = Client authentication name, y <strong>certificado de cliente + clave privada</strong>{' '}
+                  en el stack TLS (mTLS). Los ESP32 tienen límites de tamaño de certificado: valida el tamaño de PEM y
+                  considera un gateway Linux/Industrial con OpenSSL si el broker rechaza la negociación.
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Sustituye el host por el valor de esta página (<code>{MQTT_DOC_HOST}</code>), el topic por tu ruta real
+                  (ej. <code>tiwater/Noroeste/Hermosillo/TIENDA_001/data</code>) y las credenciales por las que te asigne Aquatech.
+                </Typography>
                 <Box>
-                  <Typography variant="subtitle2" gutterBottom color="text.secondary">
-                    OPCIÓN 1: Puerto 1883 (Sin Autenticación)
-                  </Typography>
                   <Card variant="outlined">
                     <CardContent>
                       <Typography
@@ -288,78 +481,12 @@ export default function MQTTDocumentationPage() {
                         component="pre"
                         sx={{
                           fontFamily: 'monospace',
-                          fontSize: '0.75rem',
+                          fontSize: '0.72rem',
                           backgroundColor: 'grey.100',
                           p: 2,
                           borderRadius: 1,
                           overflow: 'auto',
-                          maxHeight: 300,
-                        }}
-                      >
-                        {`#include <WiFi.h>
-#include <PubSubClient.h>
-
-const char* ssid = "TU_WIFI_SSID";
-const char* password = "TU_WIFI_PASSWORD";
-
-const char* mqtt_server = "146.190.143.141";
-const int mqtt_port = 1883;  // Puerto libre
-
-WiFiClient espClient;
-PubSubClient client(espClient);
-
-void setup() {
-  Serial.begin(115200);
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-  }
-  client.setServer(mqtt_server, mqtt_port);
-}
-
-void reconnect() {
-  while (!client.connected()) {
-    if (client.connect("ESP32_Client")) {
-      Serial.println("MQTT conectado (puerto 1883)");
-    } else {
-      delay(5000);
-    }
-  }
-}
-
-void loop() {
-  if (!client.connected()) reconnect();
-  client.loop();
-  
-  String topic = "tiwater/CODIGO_TIENDA_001/data";
-  String payload = "{\\"tipo_equipo\\":\\"equipo_001\\",\\"presion_in\\":45.3,\\"presion_out\\":67.8,\\"timestamp\\":1234567890}";
-  client.publish(topic.c_str(), payload.c_str());
-  delay(5000);
-}`}
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Box>
-
-                <Divider />
-
-                <Box>
-                  <Typography variant="subtitle2" gutterBottom color="text.secondary">
-                    OPCIÓN 2: Puerto 8883 (Con Autenticación y TLS)
-                  </Typography>
-                  <Card variant="outlined">
-                    <CardContent>
-                      <Typography
-                        variant="body2"
-                        component="pre"
-                        sx={{
-                          fontFamily: 'monospace',
-                          fontSize: '0.75rem',
-                          backgroundColor: 'grey.100',
-                          p: 2,
-                          borderRadius: 1,
-                          overflow: 'auto',
-                          maxHeight: 350,
+                          maxHeight: 420,
                         }}
                       >
                         {`#include <WiFi.h>
@@ -369,15 +496,14 @@ void loop() {
 const char* ssid = "TU_WIFI_SSID";
 const char* password = "TU_WIFI_PASSWORD";
 
-const char* mqtt_server = "146.190.143.141";
-const int mqtt_port = 8883;  // Puerto seguro
-const char* mqtt_username = "Aquatech001";
-const char* mqtt_password = "Aquatech2025*";
+const char* mqtt_server = "${MQTT_DOC_HOST}";
+const int mqtt_port = 8883;
+// Mismo concepto que MQTT_USERNAME en Azure; el mocker usa "${MQTT_EXAMPLE_CLIENT_AUTH}" (solo referencia)
+const char* mqtt_user = "TU_CLIENT_AUTH_NAME_AZURE";
 
-// Certificado CA (proporcionado por Aquatech)
-const char* ca_cert = "-----BEGIN CERTIFICATE-----\\n"
-"TU_CERTIFICADO_CA_AQUI\\n"
-"-----END CERTIFICATE-----";
+// Pegar PEM del certificado de cliente y clave privada (o cargar desde SPIFFS)
+const char* client_cert = "-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----";
+const char* client_key  = "-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----";
 
 WiFiClientSecure espClient;
 PubSubClient client(espClient);
@@ -385,33 +511,35 @@ PubSubClient client(espClient);
 void setup() {
   Serial.begin(115200);
   WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-  }
-  
-  espClient.setCACert(ca_cert);
+  while (WiFi.status() != WL_CONNECTED) delay(500);
+
+  espClient.setCACert(nullptr); // o cadena CA si tu build lo requiere
+  espClient.setCertificate(client_cert);
+  espClient.setPrivateKey(client_key);
   client.setServer(mqtt_server, mqtt_port);
 }
 
 void reconnect() {
   while (!client.connected()) {
-    if (client.connect("ESP32_Client", mqtt_username, mqtt_password)) {
-      Serial.println("MQTT conectado (puerto 8883 - TLS)");
-    } else {
-      delay(5000);
-    }
+    // Event Grid: usuario obligatorio; sin password MQTT
+    if (client.connect("esp32_tiwater_01", mqtt_user, "")) {
+      Serial.println("MQTT conectado (8883 TLS)");
+    } else delay(5000);
   }
 }
 
 void loop() {
   if (!client.connected()) reconnect();
   client.loop();
-  
-  String topic = "tiwater/CODIGO_TIENDA_001/data";
-  String payload = "{\\"tipo_equipo\\":\\"equipo_001\\",\\"presion_in\\":45.3,\\"presion_out\\":67.8,\\"timestamp\\":1234567890}";
-  client.publish(topic.c_str(), payload.c_str());
-  delay(5000);
+  String topic = "tiwater/Noroeste/Hermosillo/TIENDA_001/data";
+  String payload = "{\\"TDS\\":45,\\"NIVEL PURIFICADA\\":62.5,\\"timestamp\\":1730000000}";
+  client.publish(topic.c_str(), payload.c_str(), true); // QoS1 requiere API PubSubClient acorde
+  delay(60000);
 }`}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                        Nota: la firma exacta de <code>connect</code> y QoS depende de la librería. En Node.js / Python el
+                        mismo patrón es el que usa el repo <code>lcc_mqtt_mocker</code> (`mqtts`, usuario, cert/key, sin password).
                       </Typography>
                     </CardContent>
                   </Card>
@@ -420,10 +548,10 @@ void loop() {
             </AccordionDetails>
           </Accordion>
 
-          {/* Respuestas del Servidor */}
+          {/* Diagnóstico */}
           <Accordion expanded={expanded === 'responses'} onChange={handleChange('responses')}>
             <AccordionSummary expandIcon={<Iconify icon="solar:alt-arrow-down-bold-duotone" width={24} />}>
-              <Typography variant="h6">Respuestas del Servidor</Typography>
+              <Typography variant="h6">Diagnóstico de conexión</Typography>
             </AccordionSummary>
             <AccordionDetails>
               <Stack spacing={2}>
@@ -431,34 +559,51 @@ void loop() {
                   <Iconify icon="solar:check-circle-bold-duotone" width={24} sx={{ color: 'success.main' }} />
                   <Box>
                     <Typography variant="body1" fontWeight="bold">
-                      Conexión Exitosa
+                      Conexión exitosa
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      El gateway se ha conectado satisfactoriamente al servidor MQTT.
+                      El cliente MQTT completa el handshake TLS y el broker acepta el CONNECT (certificado y permisos de
+                      publicación correctos).
                     </Typography>
                   </Box>
                 </Box>
 
-                <Box display="flex" alignItems="center" gap={1}>
+                <Box display="flex" alignItems="flex-start" gap={1}>
                   <Iconify icon="solar:close-circle-bold-duotone" width={24} sx={{ color: 'error.main' }} />
                   <Box>
                     <Typography variant="body1" fontWeight="bold" color="error">
-                      Error 401 - Usuario no autorizado
+                      Rechazo de autenticación / permisos
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Las credenciales proporcionadas son incorrectas o el usuario no tiene permisos.
+                      Thumbprint del certificado no coincide con el cliente en Azure, <code>username</code> distinto al Client
+                      authentication name, o falta un <strong>Permission binding</strong> de tipo <strong>Publisher</strong> en el
+                      Topic space adecuado.
                     </Typography>
                   </Box>
                 </Box>
 
-                <Box display="flex" alignItems="center" gap={1}>
+                <Box display="flex" alignItems="flex-start" gap={1}>
                   <Iconify icon="solar:close-circle-bold-duotone" width={24} sx={{ color: 'error.main' }} />
                   <Box>
                     <Typography variant="body1" fontWeight="bold" color="error">
-                      Error de Conexión TLS
+                      Fallo TLS (cadena, SNI o tiempo)
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Verifica que el certificado CA sea correcto y esté configurado adecuadamente.
+                      Revisa hostname/SNI, reloj del dispositivo, y que el cliente confíe en las CA de Azure. En App Service,
+                      a veces se requiere <code>WEBSITES_INCLUDE_CLOUD_CERTS=true</code> para salidas TLS (lado consumidor API).
+                    </Typography>
+                  </Box>
+                </Box>
+
+                <Box display="flex" alignItems="flex-start" gap={1}>
+                  <Iconify icon="solar:close-circle-bold-duotone" width={24} sx={{ color: 'warning.main' }} />
+                  <Box>
+                    <Typography variant="body1" fontWeight="bold" color="warning.dark">
+                      Publicación rechazada (topic no permitido)
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      El Topic space no incluye tu ruta (ajusta el template, p. ej. <code>tiwater/#</code>). El JSON inválido no
+                      se corrige en el broker: fallará después en el consumidor Aquatech.
                     </Typography>
                   </Box>
                 </Box>
@@ -470,25 +615,31 @@ void loop() {
           <Paper sx={{ p: 3, bgcolor: 'warning.lighter' }}>
             <Stack spacing={1}>
               <Typography variant="h6" color="warning.dark">
-                Notas Importantes
+                Resumen
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                • El servidor MQTT ofrece dos opciones: puerto 1883 (sin autenticación) y puerto 8883 (con TLS y autenticación).
+                • Producción: <strong>Azure Event Grid MQTT</strong>, puerto <strong>8883</strong>, TLS, autenticación con{' '}
+                <strong>certificado X.509</strong> y <strong>usuario MQTT</strong> = Client authentication name; sin contraseña MQTT.
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                • Para el puerto 8883, el certificado CA debe ser proporcionado por Aquatech para validar la conexión TLS.
+                • Topic recomendado:{' '}
+                <code>
+                  {'{CLIENTE}/{CODIGO_REGION}/{CIUDAD}/{CODIGO_TIENDA}/data'}
+                </code>{' '}
+                (ej. <code>tiwater/Noroeste/Hermosillo/TIENDA_001/data</code>). Legacy: <code>tiwater/&#123;CODIGO_TIENDA&#125;/data</code>.
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                • Los topics deben seguir la estructura: tiwater/&#123;codigo_tienda&#125;/data
+                • Payload JSON con telemetría (etiquetas tipo mocker o campos normalizados) y <code>timestamp</code> Unix en segundos.
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                • El identificador del equipo (tipo_equipo o tipo_sensor) debe incluirse dentro del payload JSON, no en el topic.
+                • El <code>CODIGO_TIENDA</code> debe existir en la plataforma; el cliente de negocio se asocia por ese alta, no por el topic.
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                • El formato JSON debe ser válido y contener todos los campos requeridos, incluyendo timestamp.
+                • Hostname por defecto en esta página: <code>{MQTT_DOC_HOST}</code> (override con{' '}
+                <code>VITE_MQTT_PUBLIC_HOSTNAME</code> si hace falta).
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                • Para obtener credenciales o soporte, contacta a un representante de Aquatech.
+                • Credenciales, topic space y certificados: contacto Aquatech / LCC.
               </Typography>
             </Stack>
           </Paper>
