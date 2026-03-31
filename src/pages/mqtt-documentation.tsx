@@ -456,24 +456,93 @@ MQTT_LOAD_PUNTOS_COUNT=135`}
             </AccordionDetails>
           </Accordion>
 
-          {/* Ejemplo de Código ESP32 */}
+          {/* Ejemplos Node / Python / CLI */}
           <Accordion expanded={expanded === 'code'} onChange={handleChange('code')}>
             <AccordionSummary expandIcon={<Iconify icon="solar:alt-arrow-down-bold-duotone" width={24} />}>
-              <Typography variant="h6">Ejemplo ESP32 / gateway (TLS + usuario)</Typography>
+              <Typography variant="h6">Ejemplos para probar la conexión</Typography>
             </AccordionSummary>
             <AccordionDetails>
               <Stack spacing={3}>
                 <Typography variant="body2" color="text.secondary">
-                  Para <strong>Azure Event Grid</strong> necesitas <code>WiFiClientSecure</code>, puerto <strong>8883</strong>,{' '}
-                  <strong>usuario MQTT</strong> = Client authentication name, y <strong>certificado de cliente + clave privada</strong>{' '}
-                  en el stack TLS (mTLS). Los ESP32 tienen límites de tamaño de certificado: valida el tamaño de PEM y
-                  considera un gateway Linux/Industrial con OpenSSL si el broker rechaza la negociación.
+                  Necesitas tres archivos PEM del cliente: <code>client.pem</code> (certificado) y <code>client.key</code>{' '}
+                  (clave privada), más el <strong>Client authentication name</strong> como usuario MQTT. Event Grid{' '}
+                  <strong>no usa contraseña MQTT</strong>. El host de ejemplo es <code>{MQTT_DOC_HOST}</code>.
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Sustituye el host por el valor de esta página (<code>{MQTT_DOC_HOST}</code>), el topic por tu ruta real
-                  (ej. <code>tiwater/Noroeste/Hermosillo/TIENDA_001/data</code>) y las credenciales por las que te asigne Aquatech.
+                  <strong>Nota:</strong> <code>curl</code> es para HTTP/HTTPS; no habla el protocolo MQTT. Para una prueba rápida
+                  desde terminal usa <code>mosquitto_pub</code> (cliente Mosquitto) o los scripts de Node.js / Python siguientes.
                 </Typography>
+
                 <Box>
+                  <Typography variant="subtitle2" gutterBottom color="primary.main">
+                    Node.js (JavaScript o TypeScript)
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                    <code>npm install mqtt</code> — mismo enfoque que el publicador interno (<code>mqtts</code>, cert/key en disco).
+                  </Typography>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Typography
+                        variant="body2"
+                        component="pre"
+                        sx={{
+                          fontFamily: 'monospace',
+                          fontSize: '0.72rem',
+                          backgroundColor: 'grey.100',
+                          p: 2,
+                          borderRadius: 1,
+                          overflow: 'auto',
+                          maxHeight: 380,
+                        }}
+                      >
+                        {`// publish-once.mjs  (Node 18+)
+import fs from 'fs';
+import mqtt from 'mqtt';
+
+const broker = process.env.MQTT_BROKER ?? '${MQTT_DOC_HOST}';
+const username = process.env.MQTT_USERNAME ?? '${MQTT_EXAMPLE_CLIENT_AUTH}';
+const topic =
+  process.env.MQTT_TOPIC ?? 'tiwater/Noroeste/Hermosillo/TIENDA_001/data';
+
+const url = \`mqtts://\${broker}:8883\`;
+const client = mqtt.connect(url, {
+  clientId: \`node-test-\${Date.now()}\`,
+  username,
+  // sin password — Event Grid
+  rejectUnauthorized: true,
+  cert: fs.readFileSync('./client.pem'),
+  key: fs.readFileSync('./client.key'),
+});
+
+client.on('error', (err) => {
+  console.error(err);
+  process.exit(1);
+});
+
+client.on('connect', () => {
+  const payload = JSON.stringify({
+    TDS: 45,
+    'NIVEL PURIFICADA': 62.5,
+    timestamp: Math.floor(Date.now() / 1000),
+  });
+  client.publish(topic, payload, { qos: 1 }, (err) => {
+    if (err) console.error(err);
+    else console.log('Publicado OK');
+    client.end();
+  });
+});`}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Box>
+
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom color="primary.main">
+                    Python
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                    <code>pip install paho-mqtt</code>
+                  </Typography>
                   <Card variant="outlined">
                     <CardContent>
                       <Typography
@@ -489,57 +558,89 @@ MQTT_LOAD_PUNTOS_COUNT=135`}
                           maxHeight: 420,
                         }}
                       >
-                        {`#include <WiFi.h>
-#include <WiFiClientSecure.h>
-#include <PubSubClient.h>
+                        {`import json
+import ssl
+import time
+import paho.mqtt.client as mqtt
 
-const char* ssid = "TU_WIFI_SSID";
-const char* password = "TU_WIFI_PASSWORD";
+BROKER = "${MQTT_DOC_HOST}"
+PORT = 8883
+USERNAME = "${MQTT_EXAMPLE_CLIENT_AUTH}"
+TOPIC = "tiwater/Noroeste/Hermosillo/TIENDA_001/data"
 
-const char* mqtt_server = "${MQTT_DOC_HOST}";
-const int mqtt_port = 8883;
-// Mismo concepto que MQTT_USERNAME en Azure; el mocker usa "${MQTT_EXAMPLE_CLIENT_AUTH}" (solo referencia)
-const char* mqtt_user = "TU_CLIENT_AUTH_NAME_AZURE";
 
-// Pegar PEM del certificado de cliente y clave privada (o cargar desde SPIFFS)
-const char* client_cert = "-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----";
-const char* client_key  = "-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----";
+def on_connect(client, userdata, flags, reason_code, properties):
+    if reason_code.is_failure:
+        print(f"Error de conexión: {reason_code}")
+        return
+    payload = json.dumps(
+        {"TDS": 45, "NIVEL PURIFICADA": 62.5, "timestamp": int(time.time())}
+    )
+    client.publish(TOPIC, payload, qos=1)
+    print("Publicado OK")
+    client.disconnect()
 
-WiFiClientSecure espClient;
-PubSubClient client(espClient);
 
-void setup() {
-  Serial.begin(115200);
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) delay(500);
-
-  espClient.setCACert(nullptr); // o cadena CA si tu build lo requiere
-  espClient.setCertificate(client_cert);
-  espClient.setPrivateKey(client_key);
-  client.setServer(mqtt_server, mqtt_port);
-}
-
-void reconnect() {
-  while (!client.connected()) {
-    // Event Grid: usuario obligatorio; sin password MQTT
-    if (client.connect("esp32_tiwater_01", mqtt_user, "")) {
-      Serial.println("MQTT conectado (8883 TLS)");
-    } else delay(5000);
-  }
-}
-
-void loop() {
-  if (!client.connected()) reconnect();
-  client.loop();
-  String topic = "tiwater/Noroeste/Hermosillo/TIENDA_001/data";
-  String payload = "{\\"TDS\\":45,\\"NIVEL PURIFICADA\\":62.5,\\"timestamp\\":1730000000}";
-  client.publish(topic.c_str(), payload.c_str(), true); // QoS1 requiere API PubSubClient acorde
-  delay(60000);
-}`}
+client = mqtt.Client(
+    mqtt.CallbackAPIVersion.VERSION2,
+    client_id=f"python-test-{int(time.time())}",
+)
+client.tls_set(
+    certfile="client.pem",
+    keyfile="client.key",
+    cert_reqs=ssl.CERT_REQUIRED,
+    tls_version=ssl.PROTOCOL_TLS_CLIENT,
+)
+client.username_pw_set(USERNAME)
+client.on_connect = on_connect
+client.connect(BROKER, PORT, keepalive=60)
+client.loop_forever()`}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-                        Nota: la firma exacta de <code>connect</code> y QoS depende de la librería. En Node.js / Python el
-                        mismo patrón es el que usa el repo <code>lcc_mqtt_mocker</code> (`mqtts`, usuario, cert/key, sin password).
+                        Si usas <code>paho-mqtt</code> 1.x, cambia el constructor a <code>mqtt.Client()</code> sin{' '}
+                        <code>CallbackAPIVersion</code> y ajusta la firma de <code>on_connect</code> (código de retorno entero).
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Box>
+
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom color="primary.main">
+                    Línea de comandos (mosquitto_pub)
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                    Instala el cliente: <code>brew install mosquitto</code> (macOS) o <code>apt install mosquitto-clients</code>{' '}
+                    (Debian/Ubuntu). No uses <code>-P</code> (password) con Event Grid.
+                  </Typography>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Typography
+                        variant="body2"
+                        component="pre"
+                        sx={{
+                          fontFamily: 'monospace',
+                          fontSize: '0.72rem',
+                          backgroundColor: 'grey.100',
+                          p: 2,
+                          borderRadius: 1,
+                          overflow: 'auto',
+                        }}
+                      >
+                        {`mosquitto_pub \\
+  -h ${MQTT_DOC_HOST} \\
+  -p 8883 \\
+  --tls-version tlsv1.2 \\
+  -i "cli-test-$(date +%s)" \\
+  -u "${MQTT_EXAMPLE_CLIENT_AUTH}" \\
+  --cert client.pem \\
+  --key client.key \\
+  -t "tiwater/Noroeste/Hermosillo/TIENDA_001/data" \\
+  -m '{"TDS":45,"timestamp":1730000000}' \\
+  -q 1`}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                        Si el sistema no confía en la cadena del servidor, añade <code>--cafile</code> con el PEM de CA que
+                        indique Aquatech o exporta <code>SSL_CERT_FILE</code> según tu SO.
                       </Typography>
                     </CardContent>
                   </Card>
