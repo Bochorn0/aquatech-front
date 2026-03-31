@@ -217,9 +217,12 @@ export default function MQTTDocumentationPage() {
                             >
                               {downloading ? 'Descargando...' : 'Descargar material Aquatech (ZIP)'}
                             </Button>
-                            <Typography variant="caption" color="text.secondary">
-                              Si el portal ofrece un paquete CA adicional, úsalo según las instrucciones del ZIP (contraseña
-                              igual a tu sesión cuando aplique).
+                            <Typography variant="caption" color="text.secondary" component="div">
+                              El ZIP lo arma el API con los PEM configurados en Azure (
+                              <code>MQTT_DOC_DOWNLOAD_CA_CERT_B64</code>, <code>MQTT_DOC_DOWNLOAD_CLIENT_CERT_B64</code>
+                              — Base64 de un PEM cada uno; no son <code>MQTT_CLIENT_CERT_B64</code> del consumidor). El ZIP
+                              va cifrado; la contraseña sigue la regla del usuario en el API (p. ej. correo o
+                              <code>mqtt_zip_password</code>).
                             </Typography>
                           </Stack>
                         </Box>
