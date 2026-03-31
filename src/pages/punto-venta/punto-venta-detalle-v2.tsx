@@ -49,6 +49,20 @@ function getRegionColor(region: { id?: string; code?: string; name?: string; col
   return DEFAULT_REGION_COLORS[Math.abs(seed) % DEFAULT_REGION_COLORS.length];
 }
 
+/** Calendar day in America/Hermosillo; must match GET /puntoVentas/:id/historico `date`. */
+function todayYmdHermosillo(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Hermosillo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const y = parts.find((p) => p.type === 'year')?.value;
+  const mo = parts.find((p) => p.type === 'month')?.value;
+  const d = parts.find((p) => p.type === 'day')?.value;
+  return `${y}-${mo}-${d}`;
+}
+
 export default function PuntoVentaDetalleV2() {
   const { id } = useParams<{ id: string }>();
   const [punto, setPunto] = useState<any>(null);
@@ -201,11 +215,14 @@ export default function PuntoVentaDetalleV2() {
       const osmosisSystems = puntoData?.osmosisSystems || [];
       const tiwaterSystems = osmosisSystems.filter((s: any) => (s.resourceType || '').toString().toLowerCase() === 'tiwater');
       const resourceId = (tiwaterSystems[0]?.resourceId || tiwaterSystems[0]?.id || 'tiwater-system').toString().trim() || 'tiwater-system';
+      const historicoDate = todayYmdHermosillo();
       try {
         const types = ['purificada', 'cruda', 'recuperada'] as const;
         const results = await Promise.all(
           types.map((t) =>
-            fetch(`${CONFIG.API_BASE_URL_V2}/puntoVentas/${id}/historico?type=${t}&resourceId=${encodeURIComponent(resourceId)}`, {
+            fetch(
+              `${CONFIG.API_BASE_URL_V2}/puntoVentas/${id}/historico?type=${t}&resourceId=${encodeURIComponent(resourceId)}&date=${encodeURIComponent(historicoDate)}`,
+              {
               headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
             }).then((r) => r.ok ? r.json() : null).catch(() => null)
           )

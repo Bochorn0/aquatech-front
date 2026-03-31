@@ -9,8 +9,8 @@ import { Box, Grid, Paper, Table, Button, Select, MenuItem, TableRow, TableBody,
 
 import { StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
-import { CONFIG } from 'src/config-global';
 import { get } from 'src/api/axiosHelper';
+import { CONFIG } from 'src/config-global';
 
 import type  { Cliente, PuntosVenta } from './types';
 
