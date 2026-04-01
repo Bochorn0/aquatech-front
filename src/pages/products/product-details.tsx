@@ -3,7 +3,25 @@ import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 
-import { Box, Chip, Card, Grid, Paper, Button, Divider, Typography, CardContent, CircularProgress } from '@mui/material';
+import {
+  Box,
+  Chip,
+  Card,
+  Grid,
+  Paper,
+  Button,
+  Divider,
+  Typography,
+  CardContent,
+  CircularProgress,
+  Alert,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Stack,
+} from '@mui/material';
 
 import { get } from 'src/api/axiosHelper';
 import { CONFIG } from 'src/config-global';
@@ -11,7 +29,7 @@ import { CONFIG } from 'src/config-global';
 import ProductLogs from './product-logs';
 import { MultipleBarChart } from '../charts/multiple-bar-chart';
 
-import type { Product, MetricCardProps } from '../types';
+import type { Product, MetricCardProps, MergedVolumeBreakdown } from '../types';
 
 
 // Separate MetricCard Component
@@ -75,6 +93,135 @@ function formatLastTimeOnline(product: Product): string {
   } catch {
     return 'N/A';
   }
+}
+
+function formatLitersDisplay(value: number): string {
+  if (!Number.isFinite(value)) return 'N/A';
+  return value.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+/** Fecha límite del bloqueo/fusión (misma zona que el resto del detalle). */
+function formatMergeBoundaryDate(seconds: number | null): string {
+  if (seconds == null || !(Number(seconds) > 0)) return 'N/A';
+  try {
+    const ms = Number(seconds) > 1e12 ? Number(seconds) : Number(seconds) * 1000;
+    const date = new Date(ms);
+    return date.toLocaleString('es-MX', {
+      timeZone: MEXICO_TZ,
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return 'N/A';
+  }
+}
+
+function MergedVolumesSection({
+  breakdown,
+  officialProductionDisplay,
+  officialRejectionDisplay,
+}: {
+  breakdown: MergedVolumeBreakdown;
+  officialProductionDisplay: string | number;
+  officialRejectionDisplay: string | number;
+}) {
+  const { before_merge, since_merge_live, switched_at, old_device_id } = breakdown;
+  const hasLive = since_merge_live != null;
+  const sumProd =
+    hasLive && since_merge_live
+      ? before_merge.production_liters + since_merge_live.production_liters
+      : null;
+  const sumRej =
+    hasLive && since_merge_live
+      ? before_merge.rejection_liters + since_merge_live.rejection_liters
+      : null;
+
+  return (
+    <Paper sx={{ p: 3, mb: 4, borderLeft: 4, borderColor: 'info.main' }}>
+      <Typography variant="h6" gutterBottom>
+        Comparar volúmenes (histórico archivado vs. contador en vivo)
+      </Typography>
+      <Alert severity="info" sx={{ mb: 2 }} variant="outlined">
+        El sistema <strong>sigue sumando el histórico al contador actual</strong>: las tarjetas de volumen de
+        arriba muestran ese <strong>total fusionado</strong> (no se resta ni se revierte nada). Esta tabla solo
+        expone el desglose para que puedas comparar la parte archivada con lo acumulado en Tuya después del
+        bloqueo.
+      </Alert>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Total oficial en esta pantalla: producción{' '}
+        <strong>{officialProductionDisplay}</strong> L · rechazo <strong>{officialRejectionDisplay}</strong> L
+        (mismo criterio que en el listado de equipos).
+      </Typography>
+      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+        Fecha de referencia (bloqueo / fusión):{' '}
+        <Typography component="span" variant="subtitle2" color="text.primary">
+          {formatMergeBoundaryDate(switched_at)}
+        </Typography>
+      </Typography>
+      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+        Registro archivado: <code>{old_device_id}</code>
+      </Typography>
+      <Table size="small" sx={{ maxWidth: 720 }}>
+        <TableHead>
+          <TableRow>
+            <TableCell>Periodo</TableCell>
+            <TableCell align="right">Producción (L)</TableCell>
+            <TableCell align="right">Rechazo (L)</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          <TableRow>
+            <TableCell>
+              Hasta la fecha de referencia
+              <Typography variant="caption" display="block" color="text.secondary">
+                Valores congelados en el archivo
+              </Typography>
+            </TableCell>
+            <TableCell align="right">{formatLitersDisplay(before_merge.production_liters)}</TableCell>
+            <TableCell align="right">{formatLitersDisplay(before_merge.rejection_liters)}</TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell>
+              Desde la fecha de referencia
+              <Typography variant="caption" display="block" color="text.secondary">
+                Solo contador en vivo (Tuya), sin el archivo
+              </Typography>
+            </TableCell>
+            <TableCell align="right">
+              {hasLive ? formatLitersDisplay(since_merge_live!.production_liters) : '—'}
+            </TableCell>
+            <TableCell align="right">
+              {hasLive ? formatLitersDisplay(since_merge_live!.rejection_liters) : '—'}
+            </TableCell>
+          </TableRow>
+          {hasLive && sumProd != null && sumRej != null ? (
+            <TableRow sx={{ '& td': { fontWeight: 600, borderTop: 1, borderColor: 'divider' } }}>
+              <TableCell>
+                Archivo + en vivo (referencia)
+                <Typography variant="caption" display="block" color="text.secondary">
+                  Debe alinearse con el total fusionado de las tarjetas (posible diferencia mínima por redondeo)
+                </Typography>
+              </TableCell>
+              <TableCell align="right">{formatLitersDisplay(sumProd)}</TableCell>
+              <TableCell align="right">{formatLitersDisplay(sumRej)}</TableCell>
+            </TableRow>
+          ) : null}
+        </TableBody>
+      </Table>
+      {!hasLive ? (
+        <Alert severity="warning" sx={{ mt: 2 }}>
+          No se recibió el estado en vivo de Tuya en esta carga; solo se muestran los volúmenes del archivo.
+          Actualice la página cuando el servicio esté disponible para ver la columna &quot;desde la fecha&quot;.
+        </Alert>
+      ) : null}
+    </Paper>
+  );
 }
 
 const ProductDetail: React.FC = () => {
@@ -175,9 +322,19 @@ const ProductDetail: React.FC = () => {
           Volver a Equipos
         </Button>
         <Divider sx={{ borderStyle: 'dashed' }} />
-        <Typography variant="h4" gutterBottom>
-          {product.name} ({product.product_name})
-        </Typography>
+        <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap" sx={{ mb: 1 }}>
+          <Typography variant="h4" component="span" gutterBottom sx={{ mb: 0 }}>
+            {product.name} ({product.product_name})
+          </Typography>
+          {Array.isArray(product.merged_from_device_ids) && product.merged_from_device_ids.length > 0 ? (
+            <Chip
+              size="small"
+              color="info"
+              label="Histórico fusionado (volúmenes combinados)"
+              sx={{ mt: 0.5 }}
+            />
+          ) : null}
+        </Stack>
 
         <Paper sx={{ p: 3, mb: 4 }}>
           <Typography variant="h6" gutterBottom textAlign='center'>
@@ -245,6 +402,16 @@ const ProductDetail: React.FC = () => {
           />
         </Paper>
         )}
+        {product.product_type === 'Osmosis' &&
+          Array.isArray(product.merged_from_device_ids) &&
+          product.merged_from_device_ids.length > 0 &&
+          !product.merged_volume_breakdown && (
+            <Alert severity="info" sx={{ mb: 3 }}>
+              Este equipo tiene histórico fusionado desde otro registro; los totales de producción y rechazo ya
+              incluyen ese archivo. No hay fila archivada <code>_…</code> enlazada para mostrar el desglose por
+              fecha en esta vista.
+            </Alert>
+          )}
         {product.product_type === 'Osmosis' && (
         <Grid container spacing={3} mb={4}>
           <Grid item xs={12} sm={6} md={3}>
@@ -256,16 +423,16 @@ const ProductDetail: React.FC = () => {
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
             <MetricCard
-              title="Total Flow Rate (1)"
+              title="Volumen producción (acum.)"
               value={product.status.find((s) => s.code === 'flowrate_total_1')?.value || 'N/A'}
-              unit="L/min"
+              unit="L"
             />
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
             <MetricCard
-              title="Total Flow Rate (2)"
+              title="Volumen rechazo (acum.)"
               value={product.status.find((s) => s.code === 'flowrate_total_2')?.value || 'N/A'}
-              unit="L/min"
+              unit="L"
             />
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
@@ -277,6 +444,17 @@ const ProductDetail: React.FC = () => {
           </Grid>
         </Grid>
         )}
+        {product.product_type === 'Osmosis' && product.merged_volume_breakdown ? (
+          <MergedVolumesSection
+            breakdown={product.merged_volume_breakdown}
+            officialProductionDisplay={
+              product.status.find((s) => s.code === 'flowrate_total_1')?.value ?? 'N/A'
+            }
+            officialRejectionDisplay={
+              product.status.find((s) => s.code === 'flowrate_total_2')?.value ?? 'N/A'
+            }
+          />
+        ) : null}
         {product.product_type === 'Osmosis' && (
         <Paper sx={{ p: 3, mb: 4 }}>
           <Typography variant="h6" gutterBottom>

@@ -2,6 +2,16 @@ interface Status {
     code: string;
     value: any;  // Adjust this if you want more specific types for the value
   };
+
+  /** Present on GET /products/:id when Osmosis row has a locked `_…` archive pair (bloqueo / fusión de histórico). */
+  export type MergedVolumeBreakdown = {
+    switched_at: number | null;
+    old_device_id: string;
+    live_device_id: string;
+    before_merge: { production_liters: number; rejection_liters: number };
+    /** Live Tuya counters only (post-fusión); null if Tuya no devolvió status en esta respuesta. */
+    since_merge_live: { production_liters: number; rejection_liters: number } | null;
+  };
   
   export type Product  = {
     id: string;
@@ -24,6 +34,10 @@ interface Status {
   last_updated_display?: number;
   /** When true, product is included in the Tuya logs routine (cron). Admin-configurable in Personalización > Productos rutina logs. */
   tuya_logs_routine_enabled?: boolean;
+  /** Device ids whose archived flow totals were folded into this row (bloqueo de equipos). */
+  merged_from_device_ids?: string[];
+  /** Desglose volúmenes antes/después de la fecha de fusión (solo si hay fila `_…` en BD). */
+  merged_volume_breakdown?: MergedVolumeBreakdown | null;
   // Allow dynamic properties (strings) to be added to a product object
   [key: string]: any;  // This allows any string as a key on the product object
 }
