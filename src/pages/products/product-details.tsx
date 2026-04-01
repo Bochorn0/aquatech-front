@@ -326,7 +326,8 @@ const ProductDetail: React.FC = () => {
           <Typography variant="h4" component="span" gutterBottom sx={{ mb: 0 }}>
             {product.name} ({product.product_name})
           </Typography>
-          {Array.isArray(product.merged_from_device_ids) && product.merged_from_device_ids.length > 0 ? (
+          {(product.merged_volume_breakdown ||
+            (Array.isArray(product.merged_from_device_ids) && product.merged_from_device_ids.length > 0)) ? (
             <Chip
               size="small"
               color="info"

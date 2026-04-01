@@ -34,9 +34,9 @@ interface Status {
   last_updated_display?: number;
   /** When true, product is included in the Tuya logs routine (cron). Admin-configurable in Personalización > Productos rutina logs. */
   tuya_logs_routine_enabled?: boolean;
-  /** Device ids whose archived flow totals were folded into this row (bloqueo de equipos). */
+  /** Device ids whose archived flow totals were folded into this row (bloqueo de equipos). Puede venir vacío en la fila viva tras sync aunque exista archivo `_…`. */
   merged_from_device_ids?: string[];
-  /** Desglose volúmenes antes/después de la fecha de fusión (solo si hay fila `_…` en BD). */
+  /** Desglose volúmenes si hay fila `_…` enlazada al id vivo de Tuya (no depende de merged_from en la fila viva). */
   merged_volume_breakdown?: MergedVolumeBreakdown | null;
   // Allow dynamic properties (strings) to be added to a product object
   [key: string]: any;  // This allows any string as a key on the product object
