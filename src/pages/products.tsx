@@ -150,8 +150,8 @@ useEffect(() => {
           };
           await post(`/products/sendCommand`, requestData);
           setCurrentProducts((prevProducts) =>
-            prevProducts.map((product) =>
-              product.id === productId ? { ...product, online: true } : product
+            prevProducts.map((p) =>
+              p.id === productId ? { ...p, online: true } : p
             )
           );
         }
