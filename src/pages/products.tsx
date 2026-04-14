@@ -128,8 +128,13 @@ useEffect(() => {
     cancelButtonText: 'Cancelar',
   });
 
-  const handleToggle = async (productId: string) => {
+  const handleToggle = async (product: Product) => {
+    const productId = product.id;
     if (processing[productId]) return; // Prevent multiple clicks
+    const productType = (product.product_type || '').toLowerCase();
+    const isApagador = productType === 'apagador';
+    const currentSwitchState = Boolean(product.status.find((s) => s.code === 'switch_1')?.value);
+    const nextSwitchState = !currentSwitchState;
   
     // Show confirmation prompt
       try {
@@ -137,9 +142,11 @@ useEffect(() => {
         if (result.isConfirmed) {
           setProcessing((prev) => ({ ...prev, [productId]: true }));
           setSwitchState((prev) => ({ ...prev, [productId]: true })); // Turn switch ON
-          const requestData = { 
+          const requestData = {
             id: productId,
-            commands: [{ "code": "water_wash", "value": true }]
+            commands: isApagador
+              ? [{ code: 'switch_1', value: nextSwitchState }]
+              : [{ code: 'water_wash', value: true }]
           };
           await post(`/products/sendCommand`, requestData);
           setCurrentProducts((prevProducts) =>
@@ -425,14 +432,14 @@ useEffect(() => {
                         <Stack direction="row" spacing={1} alignItems="center">
                             <Chip
                               label="Flush"
-                              disabled={!product.online || product.product_type !== 'Osmosis'}
+                              disabled={!product.online || !['osmosis', 'apagador'].includes((product.product_type || '').toLowerCase())}
                               color={(switchState[product.id] || false) ? 'primary' : 'default'}
                               sx={{ display: 'flex', alignItems: 'center', padding: '5px' }}
                               icon={
                                 <Switch
                                   title="Forzar flush"
                                   checked={switchState[product.id] || false} 
-                                  onChange={() => handleToggle(product.id)}
+                                  onChange={() => handleToggle(product)}
                                   disabled={processing[product.id] || false} 
                                 />
                               }

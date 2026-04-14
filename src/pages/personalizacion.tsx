@@ -77,7 +77,7 @@ const estados = [
   'Zacatecas',
 ];
 
-const ProductTypes = ['Osmosis', 'Nivel']
+const ProductTypes = ['Osmosis', 'Nivel', 'Apagador']
 
 const defaultCity: City = {
     state: "",
