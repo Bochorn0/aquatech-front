@@ -12,7 +12,7 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <ToastContainer 
+      <ToastContainer
         position="top-right" // You can customize position
         autoClose={5000} // Auto close duration
         hideProgressBar={false}
@@ -23,6 +23,7 @@ export default function App() {
         draggable
         pauseOnHover
         theme="colored" // or "light" | "dark"
+        style={{ zIndex: 20000 }}
       />
       <Router />
     </ThemeProvider>

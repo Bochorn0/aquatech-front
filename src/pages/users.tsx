@@ -1,4 +1,5 @@
 import Swal from "sweetalert2";
+import { toast } from 'react-toastify';
 import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
 
@@ -145,7 +146,7 @@ export default function UserRoleManagement() {
       if (userForm.password?.trim()) {
         const pwCheck = validatePasswordClient(userForm.password);
         if (!pwCheck.ok) {
-          await Swal.fire({ icon: "error", title: "Contraseña", text: pwCheck.message });
+          toast.error(pwCheck.message, { position: 'top-right', autoClose: 6000 });
           return;
         }
       }
