@@ -9,6 +9,7 @@ import { Box, Chip, Grid, Table, Paper, Stack, Button, Select, Switch, MenuItem,
 import { StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
 import { CONFIG } from 'src/config-global';
+import { getSwitch1Value, isApagadorProduct } from 'src/utils/product-apagador';
 import { get, post } from "src/api/axiosHelper";
 
 import type { Cliente, Product, DisplayFields } from './types';
@@ -119,49 +120,65 @@ useEffect(() => {
   return () => clearInterval(interval);
 }, [clientFilters, currentRole, isInitialFetch, selectedCity, selectedClient, selectedDrive, selectedStatus]);
 
-  const confirmationAlert = () => Swal.fire({
-    icon: 'warning',
-    title: 'Advertencia',
-    text: 'Estas a punto de forzar un flush. estas seguro?',
-    showCancelButton: true,
-    confirmButtonText: 'Sí, Continuar',
-    cancelButtonText: 'Cancelar',
-  });
+  const confirmationAlert = (isApagador: boolean) =>
+    Swal.fire({
+      icon: 'warning',
+      title: 'Advertencia',
+      text: isApagador
+        ? '¿Cambiar el estado del apagador (interruptor)?'
+        : 'Estás a punto de forzar un flush. ¿Estás seguro?',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, Continuar',
+      cancelButtonText: 'Cancelar',
+    });
 
   const handleToggle = async (product: Product) => {
     const productId = product.id;
     if (processing[productId]) return; // Prevent multiple clicks
-    const productType = (product.product_type || '').toLowerCase();
-    const isApagador = productType === 'apagador';
-    const currentSwitchState = Boolean(product.status.find((s) => s.code === 'switch_1')?.value);
+    const apagador = isApagadorProduct(product);
+    const currentSwitchState = getSwitch1Value(product);
     const nextSwitchState = !currentSwitchState;
-  
-    // Show confirmation prompt
-      try {
-        const result = await confirmationAlert();
-        if (result.isConfirmed) {
-          setProcessing((prev) => ({ ...prev, [productId]: true }));
-          setSwitchState((prev) => ({ ...prev, [productId]: true })); // Turn switch ON
-          const requestData = {
-            id: productId,
-            commands: isApagador
-              ? [{ code: 'switch_1', value: nextSwitchState }]
-              : [{ code: 'water_wash', value: true }]
-          };
-          await post(`/products/sendCommand`, requestData);
-          setCurrentProducts((prevProducts) =>
-            prevProducts.map((p) =>
-              p.id === productId ? { ...p, online: true } : p
-            )
-          );
+
+    try {
+      const result = await confirmationAlert(apagador);
+      if (result.isConfirmed) {
+        setProcessing((prev) => ({ ...prev, [productId]: true }));
+        if (!apagador) {
+          setSwitchState((prev) => ({ ...prev, [productId]: true }));
         }
-      } catch (error) {
-        console.error("Error deleting user:", error);
-      } finally {
-        setProcessing((prev) => ({ ...prev, [productId]: false }));
-        setSwitchState((prev) => ({ ...prev, [productId]: false })); // Reset switch OFF
+        const requestData = {
+          id: productId,
+          commands: apagador
+            ? [{ code: 'switch_1', value: nextSwitchState }]
+            : [{ code: 'water_wash', value: true }],
+        };
+        await post(`/products/sendCommand`, requestData);
+        setCurrentProducts((prevProducts) =>
+          prevProducts.map((p) => {
+            if (p.id !== productId) return p;
+            if (apagador) {
+              const statusArr = Array.isArray(p.status) ? [...p.status] : [];
+              const idx = statusArr.findIndex((s) => s.code === 'switch_1');
+              if (idx >= 0) {
+                statusArr[idx] = { ...statusArr[idx], value: nextSwitchState };
+              } else {
+                statusArr.push({ code: 'switch_1', value: nextSwitchState });
+              }
+              const nextType =
+                (p.product_type || '').toLowerCase() === 'osmosis' ? 'Apagador' : p.product_type;
+              return { ...p, online: true, status: statusArr, product_type: nextType };
+            }
+            return { ...p, online: true };
+          })
+        );
       }
+    } catch (error) {
+      console.error('Error enviando comando al equipo:', error);
+    } finally {
+      setProcessing((prev) => ({ ...prev, [productId]: false }));
+      setSwitchState((prev) => ({ ...prev, [productId]: false }));
     }
+  };
 
 
   // const handleFieldToggle = (field: keyof DisplayFields) => {
@@ -431,16 +448,42 @@ useEffect(() => {
                       <StyledTableCell>
                         <Stack direction="row" spacing={1} alignItems="center">
                             <Chip
-                              label="Flush"
-                              disabled={!product.online || !['osmosis', 'apagador'].includes((product.product_type || '').toLowerCase())}
-                              color={(switchState[product.id] || false) ? 'primary' : 'default'}
+                              label={
+                                isApagadorProduct(product)
+                                  ? getSwitch1Value(product)
+                                    ? 'Encendido'
+                                    : 'Apagado'
+                                  : 'Flush'
+                              }
+                              disabled={
+                                !product.online ||
+                                ((product.product_type || '').toLowerCase() !== 'osmosis' &&
+                                  !isApagadorProduct(product))
+                              }
+                              color={
+                                isApagadorProduct(product)
+                                  ? getSwitch1Value(product)
+                                    ? 'success'
+                                    : 'default'
+                                  : switchState[product.id]
+                                    ? 'primary'
+                                    : 'default'
+                              }
                               sx={{ display: 'flex', alignItems: 'center', padding: '5px' }}
                               icon={
                                 <Switch
-                                  title="Forzar flush"
-                                  checked={switchState[product.id] || false} 
+                                  title={
+                                    isApagadorProduct(product)
+                                      ? 'Encender o apagar salida'
+                                      : 'Forzar flush'
+                                  }
+                                  checked={
+                                    isApagadorProduct(product)
+                                      ? getSwitch1Value(product)
+                                      : Boolean(switchState[product.id])
+                                  }
                                   onChange={() => handleToggle(product)}
-                                  disabled={processing[product.id] || false} 
+                                  disabled={processing[product.id] || false}
                                 />
                               }
                             />

@@ -23,8 +23,9 @@ import {
   Stack,
 } from '@mui/material';
 
-import { get } from 'src/api/axiosHelper';
 import { CONFIG } from 'src/config-global';
+import { normalizeProductTypeFromStatus } from 'src/utils/product-apagador';
+import { get } from 'src/api/axiosHelper';
 
 import ProductLogs from './product-logs';
 import { MultipleBarChart } from '../charts/multiple-bar-chart';
@@ -235,8 +236,9 @@ const ProductDetail: React.FC = () => {
     const fetchProductDetails = async () => {
       try {
         const response = await get<Product>(`/products/${id}`);
-        setProduct(response);
-        prepareChartData(response)
+        const normalized = normalizeProductTypeFromStatus(response);
+        setProduct(normalized);
+        prepareChartData(normalized);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching product details:', error);
