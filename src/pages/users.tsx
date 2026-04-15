@@ -28,6 +28,7 @@ import {
   FormControlLabel
 } from "@mui/material";
 
+import { validatePasswordClient } from "src/utils/password-policy";
 import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
 import { CONFIG } from "src/config-global";
@@ -141,6 +142,13 @@ export default function UserRoleManagement() {
   const handleUserSubmit = async () => {
     setLoading(true);
     try {
+      if (userForm.password?.trim()) {
+        const pwCheck = validatePasswordClient(userForm.password);
+        if (!pwCheck.ok) {
+          await Swal.fire({ icon: "error", title: "Contraseña", text: pwCheck.message });
+          return;
+        }
+      }
       const selectedClientIds = Array.isArray(userForm.client_ids) ? userForm.client_ids.filter(Boolean) : [];
       const clientId = selectedClientIds.length > 0
         ? selectedClientIds[0]

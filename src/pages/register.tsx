@@ -12,6 +12,8 @@ import InputAdornment from '@mui/material/InputAdornment';
 
 import { useRouter } from 'src/routes/hooks';
 
+import { validatePasswordClient } from 'src/utils/password-policy';
+
 import { CONFIG } from 'src/config-global';
 import { post } from 'src/api/axiosHelper';
 
@@ -33,6 +35,11 @@ export function RequestAccessPage() {
     setErrorMessage(null);
 
     try {
+      const pwCheck = validatePasswordClient(password);
+      if (!pwCheck.ok) {
+        setErrorMessage(pwCheck.message);
+        return;
+      }
       setRole('user'); // Default role as 'user'
       await post(`/auth/register`, { email, nombre, password, role });
 

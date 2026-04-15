@@ -11,6 +11,8 @@ import Typography from '@mui/material/Typography';
 import LoadingButton from '@mui/lab/LoadingButton';
 import InputAdornment from '@mui/material/InputAdornment';
 
+import { validatePasswordClient } from 'src/utils/password-policy';
+
 import { post } from 'src/api/axiosHelper';
 import { CONFIG } from 'src/config-global';
 
@@ -64,8 +66,9 @@ export function ResetPasswordPage() {
       return;
     }
 
-    if (!password || password.length < 6) {
-      setErrorMessage('La contraseña debe tener al menos 6 caracteres');
+    const pwCheck = validatePasswordClient(password);
+    if (!pwCheck.ok) {
+      setErrorMessage(pwCheck.message);
       return;
     }
 
