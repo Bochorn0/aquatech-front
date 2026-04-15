@@ -1,12 +1,12 @@
 # Runs in the Aquatech front Git repository root (separate repo from the API).
-# Azure Static Web Apps workflow still handles SWA deploy; this adds lint + local build on every PR.
+# Only on pull_request: pushes to main already run "Azure Static Web Apps CI/CD" (build + deploy).
+# This workflow adds ESLint + a plain npm build on PRs without duplicating that second run on main.
 
 name: CI
 
 on:
   pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
