@@ -71,7 +71,7 @@
     "eslint-config-airbnb-typescript": "^18.0.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-import-resolver-typescript": "^3.6.1",
-    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-jsx-a11y": "^6.9.0",
     "eslint-plugin-perfectionist": "^2.11.0",
     "eslint-plugin-prettier": "^5.2.1",
