@@ -46,7 +46,7 @@
     "react-apexcharts": "^1.4.1",
     "react-csv": "^2.2.2",
     "react-dom": "^18.3.1",
-    "react-helmet-async": "^2.0.5",
+    "react-helmet-async": "^3.0.0",
     "react-leaflet": "^4.2.1",
     "react-router-dom": "^6.26.1",
     "react-simple-maps": "^3.0.0",
