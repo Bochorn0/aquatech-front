@@ -12,7 +12,7 @@ import InputAdornment from '@mui/material/InputAdornment';
 
 import { useRouter } from 'src/routes/hooks';
 
-import { validatePasswordClient } from 'src/utils/password-policy';
+import { getPasswordRulesHint, validatePasswordClient } from 'src/utils/password-policy';
 
 import { CONFIG } from 'src/config-global';
 import { post } from 'src/api/axiosHelper';
@@ -98,6 +98,7 @@ export function RequestAccessPage() {
             </InputAdornment>
           ),
         }}
+        helperText={getPasswordRulesHint()}
         sx={{ mb: 3 }}
       />
       {errorMessage && (

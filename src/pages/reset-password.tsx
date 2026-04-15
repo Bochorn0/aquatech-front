@@ -11,7 +11,7 @@ import Typography from '@mui/material/Typography';
 import LoadingButton from '@mui/lab/LoadingButton';
 import InputAdornment from '@mui/material/InputAdornment';
 
-import { validatePasswordClient } from 'src/utils/password-policy';
+import { getPasswordRulesHint, validatePasswordClient } from 'src/utils/password-policy';
 
 import { post } from 'src/api/axiosHelper';
 import { CONFIG } from 'src/config-global';
@@ -177,6 +177,7 @@ export function ResetPasswordPage() {
               </InputAdornment>
             ),
           }}
+          helperText={getPasswordRulesHint()}
           sx={{ mb: 3 }}
         />
         <TextField

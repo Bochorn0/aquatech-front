@@ -29,7 +29,7 @@ import {
   FormControlLabel
 } from "@mui/material";
 
-import { validatePasswordClient } from "src/utils/password-policy";
+import { getPasswordRulesHint, validatePasswordClient } from "src/utils/password-policy";
 import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
 import { CONFIG } from "src/config-global";
@@ -459,7 +459,15 @@ export default function UserRoleManagement() {
               </Select>
             </FormControl>
             <TextField label="Puesto" name="puesto" value={userForm.puesto} onChange={handleUserChange} fullWidth />
-            <TextField label="Password" name="password" type="password" value={userForm.password} onChange={handleUserChange} fullWidth />
+            <TextField
+              label="Password"
+              name="password"
+              type="password"
+              value={userForm.password}
+              onChange={handleUserChange}
+              fullWidth
+              helperText={`Si la cambia: ${getPasswordRulesHint()}`}
+            />
             <TextField 
               label="Contraseña ZIP MQTT" 
               name="mqtt_zip_password" 
