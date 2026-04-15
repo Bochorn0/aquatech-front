@@ -1,6 +1,5 @@
-# Runs in the Aquatech front Git repository root (separate repo from the API).
-# Only on pull_request: pushes to main already run "Azure Static Web Apps CI/CD" (build + deploy).
-# This workflow adds ESLint + a plain npm build on PRs without duplicating that second run on main.
+# Phase 4 (supply chain): PR checks — secret scan + lint/build (parallel) + optional audit.
+# Pushes to main still use Azure Static Web Apps only (no duplicate runs).
 
 name: CI
 
@@ -12,7 +11,20 @@ permissions:
   contents: read
 
 jobs:
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   lint-and-build:
+    name: Lint & build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
