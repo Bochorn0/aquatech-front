@@ -6,10 +6,10 @@ import { useNavigate } from 'react-router-dom';
 
 import { Box, Chip, Grid, Table, Paper, Stack, Button, Select, Switch, MenuItem, TableRow, TableBody, TextField, TableHead, InputLabel, Typography, FormControl, TablePagination, CircularProgress } from '@mui/material';
 
+import { getSwitch1Value, isApagadorProduct } from 'src/utils/product-apagador';
 import { StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
 import { CONFIG } from 'src/config-global';
-import { getSwitch1Value, isApagadorProduct } from 'src/utils/product-apagador';
 import { get, post } from "src/api/axiosHelper";
 
 import type { Cliente, Product, DisplayFields } from './types';

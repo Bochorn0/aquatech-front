@@ -63,7 +63,7 @@ export default function UserRoleManagement() {
     { path: '/dashboard', label: 'Dashboard (Parent - Required for submenu)' },
     { path: '/dashboard/v1', label: 'Dashboard V1 (métricas + mapa)' },
     { path: '/dashboard/v2', label: 'Dashboard V2 (sensores)' },
-    { path: '/equipos', label: 'Equipos' },
+    { path: '/equipos', label: 'Equipos (lista, detalle, histórico Tuya /Equipos/historico)' },
     { path: '/usuarios', label: 'Usuarios' },
     { path: '/notificaciones', label: 'Notificaciones (crear y enviar)' },
     { path: '/controladores', label: 'Controladores' },
@@ -527,7 +527,7 @@ export default function UserRoleManagement() {
                   Estos permisos definen <strong>qué ver en el menú</strong> y <strong>qué endpoints de la API</strong> puede usar este rol. Al marcar un permiso, los usuarios con este rol verán esa sección y podrán llamar a las APIs asociadas.
                 </Typography>
                 <Typography variant="caption" color="info.main" display="block" sx={{ mb: 2 }}>
-                  API: / = acceso general · /dashboard = dashboard (parent) · /dashboard/v1, /dashboard/v2 = versiones · /equipos = productos · /puntoVenta = puntos de venta · /personalizacion = personalización · /usuarios = usuarios y roles · /notificaciones = crear y enviar notificaciones · /controladores = controladores · /tiwater-catalog = catálogo TI Water.
+                  API: / = acceso general · /dashboard = dashboard (parent) · /dashboard/v1, /dashboard/v2 = versiones · /equipos = productos (lista, detalle Equipos/:id, hub histórico Equipos/historico y Equipos/:id/historico) · /puntoVenta = puntos de venta · /personalizacion = personalización · /usuarios = usuarios y roles · /notificaciones = crear y enviar notificaciones · /controladores = controladores · /tiwater-catalog = catálogo TI Water.
                 </Typography>
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
                   Para submenús (v1/v2): marque el parent (ej. Puntos De Venta) y la versión deseada (ej. Puntos De Venta V1).

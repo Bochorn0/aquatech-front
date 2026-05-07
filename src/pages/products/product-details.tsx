@@ -5,29 +5,33 @@ import { useParams } from 'react-router-dom';
 
 import {
   Box,
+  Tab,
   Chip,
   Card,
   Grid,
+  Tabs,
   Paper,
-  Button,
-  Divider,
-  Typography,
-  CardContent,
-  CircularProgress,
   Alert,
   Table,
+  Stack,
+  Button,
+  Divider,
+  TableRow,
   TableBody,
   TableCell,
   TableHead,
-  TableRow,
-  Stack,
+  Typography,
+  CardContent,
+  CircularProgress,
 } from '@mui/material';
 
-import { CONFIG } from 'src/config-global';
 import { normalizeProductTypeFromStatus } from 'src/utils/product-apagador';
+
 import { get } from 'src/api/axiosHelper';
+import { CONFIG } from 'src/config-global';
 
 import ProductLogs from './product-logs';
+import ProductHistoricoLogs from './product-historico-logs';
 import { MultipleBarChart } from '../charts/multiple-bar-chart';
 
 import type { Product, MetricCardProps, MergedVolumeBreakdown } from '../types';
@@ -231,6 +235,8 @@ const ProductDetail: React.FC = () => {
   const [product, setProduct] = useState<Product>();
   const [loading, setLoading] = useState<boolean>(true); 
   const [charData, setChartData] = useState<any>();
+  /** Logs = vista actual (Tuya + DB); Histórico = sólo totales/TDS Tuya con persistencia bajo rutina activa. */
+  const [osmosisLogTab, setOsmosisLogTab] = useState<'logs' | 'historico'>('logs');
 
   useEffect(() => {
     const fetchProductDetails = async () => {
@@ -499,9 +505,30 @@ const ProductDetail: React.FC = () => {
           </Grid>
         </Paper>
         )}
-        {(product.product_type === 'Osmosis' || product.product_type === 'Nivel') && (
-          <ProductLogs productType={product.product_type} />
-        )}
+        {(product.product_type === 'Osmosis' || product.product_type === 'Nivel') &&
+          (product.product_type === 'Nivel' ? (
+            <ProductLogs productType={product.product_type} />
+          ) : product.tuya_logs_routine_enabled ? (
+            <Box sx={{ mt: 2 }}>
+              <Tabs
+                value={osmosisLogTab}
+                onChange={(_e, v: 'logs' | 'historico') => setOsmosisLogTab(v)}
+                sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
+              >
+                <Tab label="Logs" value="logs" />
+                <Tab label="Histórico Tuya" value="historico" />
+              </Tabs>
+              {osmosisLogTab === 'logs' ? (
+                <ProductLogs productType={product.product_type} />
+              ) : (
+                <ProductHistoricoLogs routineEnabled />
+              )}
+            </Box>
+          ) : (
+            <Box sx={{ mt: 2 }}>
+              <ProductLogs productType={product.product_type} />
+            </Box>
+          ))}
       </Box>
     </>
   );

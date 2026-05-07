@@ -33,6 +33,8 @@ export const CustomizationPageV2 = lazy(() => import('src/pages/personalizacion-
 export const MapsPage = lazy(() => import('src/pages/maps'));
 export const CalidadAguaPage = lazy(() => import('src/pages/calidad-agua'));
 export const ProductsDetailPage = lazy(() => import('src/pages/products/product-details'));
+export const EquiposHistoricoHubPage = lazy(() => import('src/pages/products/equipos-historico-hub'));
+export const ProductHistoricoPage = lazy(() => import('src/pages/products/product-historico-page'));
 export const MQTTDocumentationPage = lazy(() => import('src/pages/mqtt-documentation'));
 export const NotificationsDashboardPage = lazy(() => import('src/pages/notifications-dashboard'));
 export const TIWaterCatalogPage = lazy(() => import('src/pages/tiwater-catalog'));
@@ -258,6 +260,26 @@ export function Router() {
           element: (
             <TokenProtectedRoute>
               <PermissionProtectedRoute requiredPath="/equipos">
+                <EquiposHistoricoHubPage />
+              </PermissionProtectedRoute>
+            </TokenProtectedRoute>
+          ),
+          path: 'Equipos/historico',
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <PermissionProtectedRoute requiredPath="/equipos">
+                <ProductHistoricoPage />
+              </PermissionProtectedRoute>
+            </TokenProtectedRoute>
+          ),
+          path: 'Equipos/:id/historico',
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <PermissionProtectedRoute requiredPath="/equipos">
                 <ProductsPage />
               </PermissionProtectedRoute>
             </TokenProtectedRoute>
@@ -333,7 +355,7 @@ export function Router() {
             </TokenProtectedRoute>
           ),
           path: 'notificaciones',
-        }
+        },
         // {
         //   element: (
         //     <TokenProtectedRoute>

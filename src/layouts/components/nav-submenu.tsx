@@ -19,7 +19,18 @@ export type NavSubMenuItem = {
   title: string;
   path: string;
   requiredPath: string; // Permission path to check
+  /** 'exact' sólo marca activo cuando pathname === path (o alsoActiveRegex); por defecto también activa path/… */
+  activeMatch?: 'exact' | 'prefix';
+  /** Casos que no cubre path único (ej. /Equipos/:id/historico frente al hub /Equipos/historico) */
+  alsoActiveRegex?: RegExp;
 };
+
+function pathnameMatchesNavSubItem(pathname: string, item: NavSubMenuItem): boolean {
+  if (pathname === item.path) return true;
+  if (item.alsoActiveRegex?.test(pathname)) return true;
+  if (item.activeMatch === 'exact') return false;
+  return pathname.startsWith(`${item.path}/`);
+}
 
 export type NavSubMenuProps = {
   title: string;
@@ -36,7 +47,7 @@ export function NavSubMenu({ title, icon, items, defaultPath }: NavSubMenuProps)
   const filteredItems = items.filter(item => hasPermission(item.requiredPath));
   
   // Check if any sub-item is active
-  const isAnySubItemActive = filteredItems.some(item => pathname === item.path || pathname.startsWith(`${item.path}/`));
+  const isAnySubItemActive = filteredItems.some((item) => pathnameMatchesNavSubItem(pathname, item));
   
   // Check if main item should be active (if defaultPath matches)
   const isMainActive = defaultPath ? pathname === defaultPath || pathname.startsWith(`${defaultPath}/`) : false;
@@ -115,7 +126,7 @@ export function NavSubMenu({ title, icon, items, defaultPath }: NavSubMenuProps)
       <Collapse in={open} timeout="auto" unmountOnExit>
         <Box component="ul" sx={{ pl: 2, listStyle: 'none' }}>
           {filteredItems.map((item) => {
-            const isItemActive = pathname === item.path || pathname.startsWith(`${item.path}/`);
+            const isItemActive = pathnameMatchesNavSubItem(pathname, item);
 
             return (
               <ListItem key={item.path} disableGutters disablePadding>

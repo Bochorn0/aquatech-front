@@ -23,8 +23,20 @@ export const allNavItems = [
   },
   {
     title: 'Equipos',
-    path: '/equipos',
+    path: '/Equipos',
     icon: icon('ic-products'),
+    requiredPath: '/equipos',
+    submenu: true,
+    defaultPath: '/Equipos',
+    subItems: [
+      { title: 'Lista', path: '/Equipos', requiredPath: '/equipos', activeMatch: 'exact' },
+      {
+        title: 'Histórico Tuya',
+        path: '/Equipos/historico',
+        requiredPath: '/equipos',
+        alsoActiveRegex: /^\/Equipos\/[^/]+\/historico\/?$/,
+      },
+    ],
   },
   {
     title: 'Personalizacion',
