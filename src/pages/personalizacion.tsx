@@ -41,6 +41,7 @@ import { get, post, patch, remove } from "src/api/axiosHelper";
 import { SvgColor } from 'src/components/svg-color';
 
 import type { City, User, Metric, Product, Cliente, PuntosVenta } from './types';
+import { PersonalizacionTuyaAlertsTab } from './personalizacion-tuya-alerts-tab';
 
 const estados = [
   'Aguascalientes',
@@ -110,8 +111,11 @@ export function CustomizationPage() {
     }
   }, []);
 
-  /** Tab order: admin has Métricas, PV, Clientes, Ciudades, Equipos, … — non-admin skips 2 admin tabs, so Equipos is index 2 not 4. */
+  /** Tab order: admin — Métricas, PV, Clientes, Ciudades, Equipos, Alertas Tuya, rutina, mezclados. Non-admin: Métricas, PV, Equipos, Alertas Tuya. */
   const equiposTabIndex = isAdmin ? 4 : 2;
+  const tuyaAlertsTabIndex = isAdmin ? 5 : 3;
+  const rutinaTabIndex = 6;
+  const mezcladosTabIndex = 7;
 
   const [metrics, setMetrics] = useState<Metric[]>([]);
   const [puntosVenta, setPuntosVenta] = useState<PuntosVenta[]>([]);
@@ -879,6 +883,7 @@ const handlePvProductosChange = (e: any) => {
           {isAdmin && <CustomTab label="Clientes" />}
           {isAdmin && <CustomTab label="Ciudades" />}
           <CustomTab label="Equipos" />
+          <CustomTab label="Alertas Tuya" />
           {isAdmin && <CustomTab label="Productos rutina logs" />}
           {isAdmin && <CustomTab label="Productos mezclados" />}
       </CustomTabs>
@@ -1221,7 +1226,9 @@ const handlePvProductosChange = (e: any) => {
           </Grid>
         )}
 
-        {isAdmin && tabIndex === 5 && (
+        {tabIndex === tuyaAlertsTabIndex && <PersonalizacionTuyaAlertsTab products={products} />}
+
+        {isAdmin && tabIndex === rutinaTabIndex && (
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
@@ -1290,7 +1297,7 @@ const handlePvProductosChange = (e: any) => {
           </Grid>
         )}
 
-        {isAdmin && tabIndex === 6 && (
+        {isAdmin && tabIndex === mezcladosTabIndex && (
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <Box sx={{ overflowX: 'auto' }}>
