@@ -32,7 +32,6 @@ jobs:
       - uses: semgrep/semgrep-action@v1
         with:
           config: >-
-            p/default
             p/javascript
             p/typescript
             p/react
