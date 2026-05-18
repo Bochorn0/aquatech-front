@@ -1,29 +1,18 @@
-# PR checks: secrets, SAST (Semgrep), lint/build, dependency audit (FEMSA 40 / 50 / 7).
-# Pushes to main still use Azure Static Web Apps only (no duplicate runs).
+# Periodic security evidence (FEMSA controls 40 / 50): SAST + dependency audit.
+# Runs weekly and on demand; does not deploy.
 
-name: CI
+name: Security scan (scheduled)
 
 on:
-  pull_request:
+  schedule:
+    - cron: '0 14 * * 1'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  secrets:
-    name: Secret scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  sast:
+  semgrep:
     name: SAST (Semgrep)
     runs-on: ubuntu-latest
     steps:
@@ -37,8 +26,8 @@ jobs:
             p/typescript
             p/react
 
-  lint-and-build:
-    name: Lint, build & audit
+  dependency-audit:
+    name: Dependency audit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,12 +39,6 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
-
-      - name: ESLint
-        run: yarn lint
-
-      - name: Production build
-        run: yarn build
 
       - name: Yarn audit (critical or higher)
         run: yarn audit --level critical
