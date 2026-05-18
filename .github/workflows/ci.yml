@@ -57,17 +57,20 @@ jobs:
       - name: Production build
         run: yarn build
 
-      # Yarn v1 exit codes: 4=low, 8=moderate, 12=high, 16=critical (not filtered by --level)
+      # Yarn v1: exit code is a bitmask (16=critical). Composite codes like 30 include critical.
       - name: Dependency audit (critical or higher)
         run: |
-          yarn audit --level critical || code=$?
-          code=${code:-0}
-          if [ "$code" -eq 16 ]; then
-            echo "::error::Critical vulnerabilities found (yarn audit)"
+          set +e
+          out=$(yarn audit --level critical 2>&1)
+          code=$?
+          set -e
+          echo "$out"
+          if echo "$out" | grep -qE '│ critical '; then
+            echo "::error::Critical vulnerabilities found"
             exit 1
           fi
-          if [ "$code" -ne 0 ] && [ "$code" -ne 4 ] && [ "$code" -ne 8 ] && [ "$code" -ne 12 ]; then
-            echo "::error::yarn audit failed with exit code $code"
+          if [ $((code & 16)) -ne 0 ]; then
+            echo "::error::yarn audit reported critical (exit $code)"
             exit 1
           fi
           echo "No critical vulnerabilities (yarn audit exit $code)"

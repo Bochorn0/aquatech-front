@@ -42,8 +42,11 @@ jobs:
 
       - name: Dependency audit (critical or higher)
         run: |
-          yarn audit --level critical || code=$?
-          code=${code:-0}
-          [ "$code" -eq 16 ] && exit 1
-          [ "$code" -ne 0 ] && [ "$code" -ne 4 ] && [ "$code" -ne 8 ] && [ "$code" -ne 12 ] && exit 1
+          set +e
+          out=$(yarn audit --level critical 2>&1)
+          code=$?
+          set -e
+          echo "$out"
+          echo "$out" | grep -qE '│ critical ' && exit 1
+          [ $((code & 16)) -ne 0 ] && exit 1
           exit 0
