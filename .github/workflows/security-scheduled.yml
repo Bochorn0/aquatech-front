@@ -40,5 +40,10 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      - name: Yarn audit (critical or higher)
-        run: yarn audit --level critical
+      - name: Dependency audit (critical or higher)
+        run: |
+          yarn audit --level critical || code=$?
+          code=${code:-0}
+          [ "$code" -eq 16 ] && exit 1
+          [ "$code" -ne 0 ] && [ "$code" -ne 4 ] && [ "$code" -ne 8 ] && [ "$code" -ne 12 ] && exit 1
+          exit 0

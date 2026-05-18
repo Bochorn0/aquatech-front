@@ -57,5 +57,17 @@ jobs:
       - name: Production build
         run: yarn build
 
-      - name: Yarn audit (critical or higher)
-        run: yarn audit --level critical
+      # Yarn v1 exit codes: 4=low, 8=moderate, 12=high, 16=critical (not filtered by --level)
+      - name: Dependency audit (critical or higher)
+        run: |
+          yarn audit --level critical || code=$?
+          code=${code:-0}
+          if [ "$code" -eq 16 ]; then
+            echo "::error::Critical vulnerabilities found (yarn audit)"
+            exit 1
+          fi
+          if [ "$code" -ne 0 ] && [ "$code" -ne 4 ] && [ "$code" -ne 8 ] && [ "$code" -ne 12 ]; then
+            echo "::error::yarn audit failed with exit code $code"
+            exit 1
+          fi
+          echo "No critical vulnerabilities (yarn audit exit $code)"
