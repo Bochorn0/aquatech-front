@@ -1,0 +1,52 @@
+# Periodic security evidence (FEMSA controls 40 / 50): SAST + dependency audit.
+# Runs weekly and on demand; does not deploy.
+
+name: Security scan (scheduled)
+
+on:
+  schedule:
+    - cron: '0 14 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/default
+            p/javascript
+            p/typescript
+            p/react
+
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Dependency audit (critical or higher)
+        run: |
+          set +e
+          out=$(yarn audit --level critical 2>&1)
+          code=$?
+          set -e
+          echo "$out"
+          echo "$out" | grep -qE '│ critical ' && exit 1
+          [ $((code & 16)) -ne 0 ] && exit 1
+          exit 0
