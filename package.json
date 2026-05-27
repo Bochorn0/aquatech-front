@@ -7,7 +7,12 @@
   "scripts": {
     "dev": "vite",
     "start": "vite preview",
+    "start:devlocal": "vite build --mode devlocal && vite preview --mode devlocal",
+    "start:local": "npm run start:devlocal",
     "build": "tsc && vite build",
+    "build:local": "tsc && vite build --mode devlocal",
+    "preview": "vite preview",
+    "preview:devlocal": "vite preview --mode devlocal",
     "lint": "eslint \"src/**/*.{js,jsx,ts,tsx}\"",
     "lint:fix": "eslint --fix \"src/**/*.{js,jsx,ts,tsx}\"",
     "fm:check": "prettier --check \"src/**/*.{js,jsx,ts,tsx}\"",
