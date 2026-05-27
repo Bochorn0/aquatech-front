@@ -31,6 +31,7 @@ import {
   DialogContent,
   CircularProgress,
 } from "@mui/material";
+import Autocomplete from '@mui/material/Autocomplete';
 
 import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
@@ -41,6 +42,15 @@ import { get, post, patch, remove } from "src/api/axiosHelper";
 import { SvgColor } from 'src/components/svg-color';
 
 import type { City, User, Metric, Product, Cliente, PuntosVenta } from './types';
+
+/** Above MUI Dialog (often 1300+); SweetAlert defaults ~1060 and appears behind — looks like clicks do nothing */
+const mergeSwalTop = Swal.mixin({
+  customClass: { container: 'swal-merge-on-top' },
+  didOpen: () => {
+    const el = document.querySelector('.swal2-container') as HTMLElement | null;
+    if (el) el.style.zIndex = '20000';
+  },
+});
 
 const estados = [
   'Aguascalientes',
@@ -149,6 +159,135 @@ export function CustomizationPage() {
     product_type: '',
   });
   const [bulkProductModalOpen, setBulkProductModalOpen] = useState(false);
+
+  type MergeVolumeLiters = {
+    production_liters: number | null;
+    rejection_liters: number | null;
+    source?: string;
+  };
+
+  type MergeDuplicatePreview = {
+    ok: boolean;
+    oldDeviceId: string;
+    newDeviceId: string;
+    old: {
+      device_id: string;
+      name?: string;
+      postgres_id?: number;
+      product_logs_count: number;
+      production_liters: number | null;
+      rejection_liters: number | null;
+      volume_source?: string;
+    };
+    new: {
+      device_id: string;
+      name?: string;
+      postgres_id?: number;
+      product_logs_count: number;
+      merged_from_device_ids: string[];
+      production_liters: number | null;
+      rejection_liters: number | null;
+      volume_source?: string;
+      stored_db?: MergeVolumeLiters | null;
+      tuya_live?: MergeVolumeLiters | null;
+    };
+    expected_after_merge: { production_liters: number; rejection_liters: number };
+    puntoventa_affected_count: number;
+    puntoventa_samples: { id: number; name?: string; code?: string }[];
+    warnings?: string[];
+    summary: {
+      product_logs_to_repoint: number;
+      old_row_will_be_deleted: boolean;
+      merged_from_will_include: string[];
+      expected_production_liters?: number;
+      expected_rejection_liters?: number;
+    };
+  };
+
+  const formatMergeLiters = (value: number | null | undefined) =>
+    value != null && Number.isFinite(Number(value)) ? `${Number(value).toLocaleString('es-MX')} L` : '—';
+
+  const litFromProductStatus = (p: Product | null) => {
+    const status = (p as Product & { status?: { code: string; value?: unknown }[] })?.status;
+    if (!Array.isArray(status)) {
+      return { production_liters: null as number | null, rejection_liters: null as number | null };
+    }
+    const prod = status.find((s) => s.code === 'flowrate_total_1')?.value;
+    const rej = status.find((s) => s.code === 'flowrate_total_2')?.value;
+    const pn = prod != null && prod !== '' ? Number(prod) : NaN;
+    const rn = rej != null && rej !== '' ? Number(rej) : NaN;
+    return {
+      production_liters: Number.isFinite(pn) ? pn : null,
+      rejection_liters: Number.isFinite(rn) ? rn : null,
+    };
+  };
+
+  const sumMergeLiters = (
+    a: { production_liters?: number | null; rejection_liters?: number | null },
+    b: { production_liters?: number | null; rejection_liters?: number | null }
+  ) => ({
+    production_liters:
+      Math.round(
+        ((a.production_liters != null ? Number(a.production_liters) : 0) +
+          (b.production_liters != null ? Number(b.production_liters) : 0)) *
+          100
+      ) / 100,
+    rejection_liters:
+      Math.round(
+        ((a.rejection_liters != null ? Number(a.rejection_liters) : 0) +
+          (b.rejection_liters != null ? Number(b.rejection_liters) : 0)) *
+          100
+      ) / 100,
+  });
+
+  const normalizeMergePreview = (
+    raw: MergeDuplicatePreview,
+    oldP: Product | null,
+    newP: Product | null
+  ): MergeDuplicatePreview => {
+    const oldFallback = litFromProductStatus(oldP);
+    const newFallback = litFromProductStatus(newP);
+    const old = {
+      ...raw.old,
+      production_liters: raw.old?.production_liters ?? oldFallback.production_liters,
+      rejection_liters: raw.old?.rejection_liters ?? oldFallback.rejection_liters,
+    };
+    const newSide = {
+      ...raw.new,
+      production_liters: raw.new?.production_liters ?? newFallback.production_liters,
+      rejection_liters: raw.new?.rejection_liters ?? newFallback.rejection_liters,
+    };
+    const expected_after_merge =
+      raw.expected_after_merge ??
+      sumMergeLiters(
+        { production_liters: old.production_liters, rejection_liters: old.rejection_liters },
+        { production_liters: newSide.production_liters, rejection_liters: newSide.rejection_liters }
+      );
+    return {
+      ...raw,
+      ok: raw.ok !== false && !!raw.oldDeviceId && !!raw.newDeviceId,
+      old,
+      new: newSide,
+      expected_after_merge,
+      summary: {
+        ...raw.summary,
+        product_logs_to_repoint: raw.summary?.product_logs_to_repoint ?? 0,
+        old_row_will_be_deleted: raw.summary?.old_row_will_be_deleted ?? true,
+        merged_from_will_include: raw.summary?.merged_from_will_include ?? [],
+        expected_production_liters:
+          raw.summary?.expected_production_liters ?? expected_after_merge.production_liters,
+        expected_rejection_liters:
+          raw.summary?.expected_rejection_liters ?? expected_after_merge.rejection_liters,
+      },
+    };
+  };
+
+  const [mergeModalOpen, setMergeModalOpen] = useState(false);
+  const [mergeOldProduct, setMergeOldProduct] = useState<Product | null>(null);
+  const [mergeNewProduct, setMergeNewProduct] = useState<Product | null>(null);
+  const [mergePreview, setMergePreview] = useState<MergeDuplicatePreview | null>(null);
+  const [mergePreviewLoading, setMergePreviewLoading] = useState(false);
+  const [mergeApplying, setMergeApplying] = useState(false);
 
   type MergedProductsListItem = {
     liveDeviceId: string;
@@ -727,6 +866,150 @@ const handlePvProductosChange = (e: any) => {
       })
     : products;
 
+  const mergeableProducts = useMemo(
+    () =>
+      products.filter((p) => {
+        const key = getProductDeviceKey(p as Product & { _id?: string });
+        return key && !key.startsWith('_');
+      }),
+    [products]
+  );
+
+  const formatProductOptionLabel = (p: Product | null) => {
+    if (!p) return '';
+    const key = getProductDeviceKey(p as Product & { _id?: string });
+    const clientName =
+      typeof p.cliente === 'object' && p.cliente !== null ? (p.cliente as Cliente).name : '';
+    return `${p.name ?? key} · ${key}${clientName ? ` · ${clientName}` : ''}`;
+  };
+
+  const handleOpenMergeModal = () => {
+    setMergeOldProduct(null);
+    setMergeNewProduct(null);
+    setMergePreview(null);
+    setMergeModalOpen(true);
+  };
+
+  const handleCloseMergeModal = () => {
+    if (mergeApplying) return;
+    setMergeModalOpen(false);
+    setMergeOldProduct(null);
+    setMergeNewProduct(null);
+    setMergePreview(null);
+  };
+
+  const handleMergePreview = async () => {
+    const oldDeviceId = mergeOldProduct ? getProductDeviceKey(mergeOldProduct as Product & { _id?: string }) : '';
+    const newDeviceId = mergeNewProduct ? getProductDeviceKey(mergeNewProduct as Product & { _id?: string }) : '';
+    if (!oldDeviceId || !newDeviceId) {
+      mergeSwalTop.fire({ icon: 'info', title: 'Selecciona ambos equipos', text: 'Indica el equipo viejo y el nuevo (canónico).' });
+      return;
+    }
+    if (oldDeviceId === newDeviceId) {
+      mergeSwalTop.fire({ icon: 'warning', title: 'Ids iguales', text: 'El equipo viejo y el nuevo deben ser distintos.' });
+      return;
+    }
+    setMergePreviewLoading(true);
+    setMergePreview(null);
+    try {
+      const preview = await post<MergeDuplicatePreview>('/products/merge-duplicates/preview', {
+        oldDeviceId,
+        newDeviceId,
+      });
+      setMergePreview(normalizeMergePreview(preview, mergeOldProduct, mergeNewProduct));
+    } catch (error: unknown) {
+      console.error('Error previewing merge:', error);
+      const err = error as { response?: { data?: { errors?: string[]; message?: string } } };
+      const errors = err?.response?.data?.errors;
+      mergeSwalTop.fire({
+        icon: 'error',
+        title: 'No se pudo previsualizar',
+        html: errors?.length
+          ? `<ul style="text-align:left">${errors.map((e) => `<li>${e}</li>`).join('')}</ul>`
+          : err?.response?.data?.message || 'Revise permisos admin o ids.',
+      });
+    } finally {
+      setMergePreviewLoading(false);
+    }
+  };
+
+  const handleApplyMerge = async () => {
+    if (!mergePreview?.oldDeviceId || !mergePreview?.newDeviceId) {
+      mergeSwalTop.fire({
+        icon: 'info',
+        title: 'Faltan datos',
+        text: 'Selecciona equipos y pulsa Previsualizar antes de aplicar el merge.',
+      });
+      return;
+    }
+    if (!mergePreview.ok) {
+      mergeSwalTop.fire({
+        icon: 'warning',
+        title: 'Vista previa requerida',
+        text: 'Pulsa Previsualizar primero para validar el merge.',
+      });
+      return;
+    }
+    const expected =
+      mergePreview.expected_after_merge ??
+      sumMergeLiters(mergePreview.old ?? {}, mergePreview.new ?? {});
+    const confirmResult = await mergeSwalTop.fire({
+      icon: 'warning',
+      title: '¿Confirmar fusión de equipos?',
+      html: [
+        '<p>Se fusionará el equipo viejo en el nuevo (canónico). <strong>Esta acción es difícil de revertir.</strong></p>',
+        '<ul style="text-align:left;margin:0;padding-left:1.25rem">',
+        `<li>Viejo: <strong>${mergePreview.old?.name ?? mergePreview.oldDeviceId}</strong></li>`,
+        `<li>Nuevo: <strong>${mergePreview.new?.name ?? mergePreview.newDeviceId}</strong></li>`,
+        `<li>Producción esperada: ${formatMergeLiters(expected.production_liters)}</li>`,
+        `<li>Rechazo esperado: ${formatMergeLiters(expected.rejection_liters)}</li>`,
+        `<li>Logs a repuntar: ${mergePreview.summary?.product_logs_to_repoint ?? 0}</li>`,
+        `<li>Puntos de venta (meta): ${mergePreview.puntoventa_affected_count ?? 0}</li>`,
+        '</ul>',
+      ].join(''),
+      showCancelButton: true,
+      confirmButtonText: 'Sí, fusionar',
+      cancelButtonText: 'Cancelar',
+      reverseButtons: true,
+      focusCancel: true,
+    });
+    if (!confirmResult.isConfirmed) return;
+
+    setMergeApplying(true);
+    try {
+      const result = await post<{
+        success: boolean;
+        product_logs_updated?: number;
+        puntoventa_updated?: number;
+        merged_from_device_ids?: string[];
+        warnings?: string[];
+      }>('/products/merge-duplicates', {
+        oldDeviceId: mergePreview.oldDeviceId,
+        newDeviceId: mergePreview.newDeviceId,
+      });
+      const warnText =
+        result.warnings?.length ? `\n\nAdvertencias:\n${result.warnings.join('\n')}` : '';
+      mergeSwalTop.fire({
+        icon: 'success',
+        title: 'Merge completado',
+        text: `Logs actualizados: ${result.product_logs_updated ?? 0}. PV meta: ${result.puntoventa_updated ?? 0}.${warnText}`,
+      });
+      handleCloseMergeModal();
+      await fetchProducts();
+      if (isAdmin) await fetchMergedProducts();
+    } catch (error: unknown) {
+      console.error('Error applying merge:', error);
+      const err = error as { response?: { data?: { errors?: string[]; message?: string } } };
+      mergeSwalTop.fire({
+        icon: 'error',
+        title: 'Error al fusionar',
+        text: err?.response?.data?.errors?.join(' ') || err?.response?.data?.message || 'No se pudo completar.',
+      });
+    } finally {
+      setMergeApplying(false);
+    }
+  };
+
   const handleSelectAllProducts = (checked: boolean) => {
     if (checked) {
       const ids = new Set(filteredProducts.map((p) => getProductDeviceKey(p as Product & { _id?: string })));
@@ -1148,15 +1431,26 @@ const handlePvProductosChange = (e: any) => {
                       Actualizar seleccionados
                     </Button>
                     {isAdmin && (
-                      <Button
-                        variant="contained"
-                        color="warning"
-                        onClick={handleLockSelectedProducts}
-                        disabled={selectedProductIds.size === 0 || loading}
-                        title="Solo administradores: archivar logs y enlazar id Tuya en merged_from_device_ids"
-                      >
-                        Bloquear seleccionados
-                      </Button>
+                      <>
+                        <Button
+                          variant="contained"
+                          color="secondary"
+                          onClick={handleOpenMergeModal}
+                          disabled={loading || mergeApplying}
+                          title="Fusionar dos equipos Tuya duplicados (viejo → nuevo canónico)"
+                        >
+                          Merge productos
+                        </Button>
+                        <Button
+                          variant="contained"
+                          color="warning"
+                          onClick={handleLockSelectedProducts}
+                          disabled={selectedProductIds.size === 0 || loading}
+                          title="Solo administradores: archivar logs y enlazar id Tuya en merged_from_device_ids"
+                        >
+                          Bloquear seleccionados
+                        </Button>
+                      </>
                     )}
                   </Grid>
                 </Grid>
@@ -1703,6 +1997,165 @@ const handlePvProductosChange = (e: any) => {
               disabled={loading || (!bulkProductFormData.cliente && !bulkProductFormData.city && !bulkProductFormData.product_type)}
             >
               {loading ? <CircularProgress size={24} /> : `Aplicar a ${selectedProductIds.size}`}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={mergeModalOpen} onClose={handleCloseMergeModal} fullWidth maxWidth="md">
+          <DialogTitle>Merge productos (duplicados Tuya)</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Selecciona el equipo <strong>viejo</strong> (se eliminará de la base) y el <strong>nuevo</strong>{' '}
+              (canónico, permanece visible). Los logs y referencias en punto de venta se repuntan al nuevo id; los
+              totales en UI se suman vía <code>merged_from_device_ids</code>.
+            </Typography>
+            <Box display="flex" flexDirection="column" gap={2} mt={1}>
+              <Autocomplete
+                options={mergeableProducts}
+                value={mergeOldProduct}
+                onChange={(_, value) => {
+                  setMergeOldProduct(value);
+                  setMergePreview(null);
+                }}
+                getOptionLabel={formatProductOptionLabel}
+                isOptionEqualToValue={(a, b) =>
+                  getProductDeviceKey(a as Product & { _id?: string }) ===
+                  getProductDeviceKey(b as Product & { _id?: string })
+                }
+                renderInput={(params) => (
+                  <TextField {...params} label="Equipo viejo (absorber / eliminar fila)" size="small" />
+                )}
+              />
+              <Autocomplete
+                options={mergeableProducts.filter(
+                  (p) =>
+                    !mergeOldProduct ||
+                    getProductDeviceKey(p as Product & { _id?: string }) !==
+                      getProductDeviceKey(mergeOldProduct as Product & { _id?: string })
+                )}
+                value={mergeNewProduct}
+                onChange={(_, value) => {
+                  setMergeNewProduct(value);
+                  setMergePreview(null);
+                }}
+                getOptionLabel={formatProductOptionLabel}
+                isOptionEqualToValue={(a, b) =>
+                  getProductDeviceKey(a as Product & { _id?: string }) ===
+                  getProductDeviceKey(b as Product & { _id?: string })
+                }
+                renderInput={(params) => (
+                  <TextField {...params} label="Equipo nuevo (canónico / visible)" size="small" />
+                )}
+              />
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Button
+                  type="button"
+                  variant="outlined"
+                  onClick={handleMergePreview}
+                  disabled={!mergeOldProduct || !mergeNewProduct || mergePreviewLoading || mergeApplying}
+                >
+                  {mergePreviewLoading ? <CircularProgress size={22} /> : 'Previsualizar'}
+                </Button>
+              </Box>
+              {mergePreview?.ok && (() => {
+                const expected =
+                  mergePreview.expected_after_merge ??
+                  sumMergeLiters(mergePreview.old ?? {}, mergePreview.new ?? {});
+                return (
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Volúmenes (litros) — vista previa
+                  </Typography>
+                  <Table size="small" sx={{ mb: 2 }}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell />
+                        <TableCell align="right">Volumen total prod.</TableCell>
+                        <TableCell align="right">Volumen total rechazo</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell>
+                          <strong>Equipo viejo</strong>
+                          <Typography variant="caption" display="block" color="text.secondary">
+                            {mergePreview.old?.name ?? mergePreview.oldDeviceId}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right">{formatMergeLiters(mergePreview.old?.production_liters)}</TableCell>
+                        <TableCell align="right">{formatMergeLiters(mergePreview.old?.rejection_liters)}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>
+                          <strong>Equipo nuevo</strong>
+                          <Typography variant="caption" display="block" color="text.secondary">
+                            {mergePreview.new?.name ?? mergePreview.newDeviceId}
+                            {mergePreview.new?.volume_source === 'tuya_live' ? ' · Tuya en vivo' : ''}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right">{formatMergeLiters(mergePreview.new?.production_liters)}</TableCell>
+                        <TableCell align="right">{formatMergeLiters(mergePreview.new?.rejection_liters)}</TableCell>
+                      </TableRow>
+                      <TableRow sx={{ bgcolor: 'action.hover' }}>
+                        <TableCell>
+                          <strong>Total esperado en Equipos</strong>
+                          <Typography variant="caption" display="block" color="text.secondary">
+                            Suma viejo + nuevo (mismo criterio que tras el merge)
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          <strong>{formatMergeLiters(expected.production_liters)}</strong>
+                        </TableCell>
+                        <TableCell align="right">
+                          <strong>{formatMergeLiters(expected.rejection_liters)}</strong>
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Otros impactos
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Logs a repuntar:</strong> {mergePreview.summary?.product_logs_to_repoint ?? 0} ·{' '}
+                    <strong>Nuevo (logs actuales):</strong> {mergePreview.new?.product_logs_count ?? 0}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Puntos de venta (meta):</strong> {mergePreview.puntoventa_affected_count ?? 0}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    <strong>merged_from_device_ids:</strong>{' '}
+                    {(mergePreview.summary?.merged_from_will_include ?? []).join(', ')}
+                  </Typography>
+                  {mergePreview.puntoventa_samples?.length > 0 && (
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                      PV ejemplo:{' '}
+                      {mergePreview.puntoventa_samples
+                        .map((pv) => pv.name || pv.code || String(pv.id))
+                        .join(', ')}
+                    </Typography>
+                  )}
+                  {mergePreview.warnings?.map((w) => (
+                    <Typography key={w} variant="caption" color="warning.main" display="block" sx={{ mt: 1 }}>
+                      {w}
+                    </Typography>
+                  ))}
+                </Paper>
+                );
+              })()}
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button type="button" onClick={handleCloseMergeModal} color="secondary" disabled={mergeApplying}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleApplyMerge}
+              variant="contained"
+              color="error"
+              disabled={!mergePreview?.ok || mergeApplying}
+            >
+              {mergeApplying ? <CircularProgress size={24} /> : 'Aplicar merge'}
             </Button>
           </DialogActions>
         </Dialog>
