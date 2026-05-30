@@ -20,7 +20,7 @@ function addJsonSheet(workbook: ExcelJS.Workbook, name: string, rows: Record<str
   const worksheet = workbook.addWorksheet(name);
   if (rows.length === 0) return;
 
-  const headers = Object.keys(rows[0]);
+  const headers = Object.keys(rows[0]); 
   worksheet.addRow(headers);
   rows.forEach((row) => {
     worksheet.addRow(headers.map((header) => row[header] ?? ''));
