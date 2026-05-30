@@ -38,33 +38,33 @@ export default defineConfig(({ mode }) => {
       'process.env.NODE_ENV': JSON.stringify(nodeEnv === 'production' ? 'production' : 'development'),
     },
     plugins: [
-    react(),
-    checker({
-      typescript: true,
-      eslint: {
-        lintCommand: 'eslint "./src/**/*.{js,jsx,ts,tsx}"',
-        dev: { logLevel: ['error'] },
-      },
-      overlay: {
-        position: 'tl',
-        initialIsOpen: false,
-      },
-    }),
-  ],
-  resolve: {
-    alias: [
-      {
-        find: /^~(.+)/,
-        replacement: path.join(process.cwd(), 'node_modules/$1'),
-      },
-      {
-        find: /^src(.+)/,
-        replacement: path.join(process.cwd(), 'src/$1'),
-      },
+      react(),
+      checker({
+        typescript: true,
+        eslint: {
+          lintCommand: 'eslint "./src/**/*.{js,jsx,ts,tsx}"',
+          dev: { logLevel: ['error'] },
+        },
+        overlay: {
+          position: 'tl',
+          initialIsOpen: false,
+        },
+      }),
     ],
-  },
-  server: { port: PORT, host: true, https: HTTPS_CONFIG },
-  preview: { port: PORT, host: true },
+    resolve: {
+      alias: [
+        {
+          find: /^~(.+)/,
+          replacement: path.join(process.cwd(), 'node_modules/$1'),
+        },
+        {
+          find: /^src(.+)/,
+          replacement: path.join(process.cwd(), 'src/$1'),
+        },
+      ],
+    },
+    server: { port: PORT, host: true, https: HTTPS_CONFIG },
+    preview: { port: PORT, host: true },
     // Strip console & debugger only for deployed production bundles (not devlocal)
     esbuild: mode === 'production' ? { drop: ['console', 'debugger'] } : {},
   };

@@ -1,6 +1,5 @@
 import type { Dayjs } from 'dayjs'; // Only import Dayjs as a type
 import dayjs from 'dayjs';
-import * as XLSX from 'xlsx';
 import { useState } from 'react';
 import { saveAs } from 'file-saver';
 
@@ -9,6 +8,7 @@ import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { Box, Grid, Switch, Button,  Divider, Typography, FormControlLabel } from '@mui/material';
 
 import { get } from 'src/api/axiosHelper';
+import { writeExcelWorkbook } from 'src/utils/excel-workbook';
 
 interface HourData {
   hora: string;
@@ -162,13 +162,10 @@ function ExportReportButton({ product, puntoVentaId, puntoVentaName }: ExportRep
         'Volumen Rechazo Total (L)': h.estadisticas?.rejected_volume_total ?? '',
       }));
 
-      const wsResumen = XLSX.utils.json_to_sheet(resumen);
-
       // ==========================
       // 2️⃣ Hojas: Datos brutos separados por tipo
       // ==========================
-      
-      // Datos brutos TDS
+
       const datosBrutosTDS: any[] = [];
       hours.forEach((h) => {
         const tdsData = h.tds_agrupado || [];
@@ -181,9 +178,7 @@ function ExportReportButton({ product, puntoVentaId, puntoVentaName }: ExportRep
           });
         });
       });
-      const wsBrutosTDS = datosBrutosTDS.length > 0 ? XLSX.utils.json_to_sheet(datosBrutosTDS) : null;
 
-      // Datos brutos Flujo Producción
       const datosBrutosFlujoProd: any[] = [];
       hours.forEach((h) => {
         const flujoProd = h.flujo_produccion_agrupado || [];
@@ -196,9 +191,7 @@ function ExportReportButton({ product, puntoVentaId, puntoVentaName }: ExportRep
           });
         });
       });
-      const wsBrutosFlujoProd = datosBrutosFlujoProd.length > 0 ? XLSX.utils.json_to_sheet(datosBrutosFlujoProd) : null;
 
-      // Datos brutos Flujo Rechazo
       const datosBrutosFlujoRech: any[] = [];
       hours.forEach((h) => {
         const flujoRech = h.flujo_rechazo_agrupado || [];
@@ -211,9 +204,7 @@ function ExportReportButton({ product, puntoVentaId, puntoVentaName }: ExportRep
           });
         });
       });
-      const wsBrutosFlujoRech = datosBrutosFlujoRech.length > 0 ? XLSX.utils.json_to_sheet(datosBrutosFlujoRech) : null;
 
-      // Datos brutos Volumen Producción
       const datosBrutosVolProd: any[] = [];
       hours.forEach((h) => {
         const volProd = h.production_volume_agrupado || [];
@@ -226,9 +217,7 @@ function ExportReportButton({ product, puntoVentaId, puntoVentaName }: ExportRep
           });
         });
       });
-      const wsBrutosVolProd = datosBrutosVolProd.length > 0 ? XLSX.utils.json_to_sheet(datosBrutosVolProd) : null;
 
-      // Datos brutos Volumen Rechazo
       const datosBrutosVolRech: any[] = [];
       hours.forEach((h) => {
         const volRech = h.rejected_volume_agrupado || [];
@@ -241,38 +230,31 @@ function ExportReportButton({ product, puntoVentaId, puntoVentaName }: ExportRep
           });
         });
       });
-      const wsBrutosVolRech = datosBrutosVolRech.length > 0 ? XLSX.utils.json_to_sheet(datosBrutosVolRech) : null;
 
       // ==========================
       // 3️⃣ Hoja: Mini gráfico (TDS)
       // ==========================
       const miniChart: (string | number)[][] = [];
-      miniChart.push(['Hora', 'TDS Promedio', 'Gráfico']); // encabezado
+      miniChart.push(['Hora', 'TDS Promedio', 'Gráfico']);
 
       hours.forEach((h: any) => {
         const avg = h.estadisticas?.tds_promedio ?? 0;
-        const bar = '█'.repeat(Math.min(20, Math.round(avg))); // mini gráfico ASCII
+        const bar = '█'.repeat(Math.min(20, Math.round(avg)));
         miniChart.push([h.hora, avg, bar]);
       });
-
-      const wsChart = XLSX.utils.aoa_to_sheet(miniChart);
 
       // ==========================
       // 🧾 Crear libro y guardar
       // ==========================
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen_por_Hora');
-      
-      // Agregar hojas de datos brutos solo si tienen datos
-      if (wsBrutosTDS) XLSX.utils.book_append_sheet(wb, wsBrutosTDS, 'Datos_Brutos_TDS');
-      if (wsBrutosFlujoProd) XLSX.utils.book_append_sheet(wb, wsBrutosFlujoProd, 'Datos_Brutos_Flujo_Prod');
-      if (wsBrutosFlujoRech) XLSX.utils.book_append_sheet(wb, wsBrutosFlujoRech, 'Datos_Brutos_Flujo_Rech');
-      if (wsBrutosVolProd) XLSX.utils.book_append_sheet(wb, wsBrutosVolProd, 'Datos_Brutos_Vol_Prod');
-      if (wsBrutosVolRech) XLSX.utils.book_append_sheet(wb, wsBrutosVolRech, 'Datos_Brutos_Vol_Rech');
-      
-      XLSX.utils.book_append_sheet(wb, wsChart, 'Mini_Grafico_TDS');
-
-      const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const buffer = await writeExcelWorkbook([
+        { name: 'Resumen_por_Hora', rows: resumen },
+        ...(datosBrutosTDS.length > 0 ? [{ name: 'Datos_Brutos_TDS', rows: datosBrutosTDS }] : []),
+        ...(datosBrutosFlujoProd.length > 0 ? [{ name: 'Datos_Brutos_Flujo_Prod', rows: datosBrutosFlujoProd }] : []),
+        ...(datosBrutosFlujoRech.length > 0 ? [{ name: 'Datos_Brutos_Flujo_Rech', rows: datosBrutosFlujoRech }] : []),
+        ...(datosBrutosVolProd.length > 0 ? [{ name: 'Datos_Brutos_Vol_Prod', rows: datosBrutosVolProd }] : []),
+        ...(datosBrutosVolRech.length > 0 ? [{ name: 'Datos_Brutos_Vol_Rech', rows: datosBrutosVolRech }] : []),
+        { name: 'Mini_Grafico_TDS', rows: miniChart },
+      ]);
       const blob = new Blob([buffer], { type: 'application/octet-stream' });
       
       // Generar nombre de archivo según el tipo de reporte
@@ -355,8 +337,6 @@ function ExportReportButton({ product, puntoVentaId, puntoVentaName }: ExportRep
         'Velocidad Promedio Rechazo (L/s)': row.produccion.flowrate_speed_2?.value ?? '',
       }));
 
-      const wsResumen = XLSX.utils.json_to_sheet(resumenProduccion);
-
       // ==========================
       // 2️⃣ Hoja: Valores Iniciales y Finales
       // ==========================
@@ -380,8 +360,6 @@ function ExportReportButton({ product, puntoVentaId, puntoVentaName }: ExportRep
         'Fin - Velocidad Producción': row.fin.flowrate_speed_1?.value ?? '',
         'Fin - Velocidad Rechazo': row.fin.flowrate_speed_2?.value ?? '',
       }));
-
-      const wsInicioFin = XLSX.utils.json_to_sheet(valoresInicioFin);
 
       // ==========================
       // 3️⃣ Hoja: Estadísticas Resumen
@@ -418,8 +396,6 @@ function ExportReportButton({ product, puntoVentaId, puntoVentaName }: ExportRep
         { Métrica: 'Fecha Fin', Valor: endDate?.format('DD-MM-YYYY') ?? '' },
       ];
 
-      const wsEstadisticas = XLSX.utils.json_to_sheet(estadisticas);
-
       // ==========================
       // 4️⃣ Hoja: Resumen por hora (agrupado por día y producto)
       // ==========================
@@ -453,18 +429,16 @@ function ExportReportButton({ product, puntoVentaId, puntoVentaName }: ExportRep
           });
         });
       });
-      const wsPorHora = hourlyRows.length > 0 ? XLSX.utils.json_to_sheet(hourlyRows) : null;
 
       // ==========================
       // 🧾 Crear libro y guardar
       // ==========================
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, wsResumen, 'Producción_Diaria');
-      XLSX.utils.book_append_sheet(wb, wsInicioFin, 'Valores_Inicio_Fin');
-      if (wsPorHora) XLSX.utils.book_append_sheet(wb, wsPorHora, 'Por_Hora');
-      XLSX.utils.book_append_sheet(wb, wsEstadisticas, 'Estadísticas');
-
-      const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const buffer = await writeExcelWorkbook([
+        { name: 'Producción_Diaria', rows: resumenProduccion },
+        { name: 'Valores_Inicio_Fin', rows: valoresInicioFin },
+        ...(hourlyRows.length > 0 ? [{ name: 'Por_Hora', rows: hourlyRows }] : []),
+        { name: 'Estadísticas', rows: estadisticas },
+      ]);
       const blob = new Blob([buffer], { type: 'application/octet-stream' });
       const displayName = puntoVentaName || 'PuntoVenta';
       const fileName = `Reporte_Mensual_${displayName}_${startDate?.format('DD-MM-YYYY')}_${endDate?.format('DD-MM-YYYY')}.xlsx`;
