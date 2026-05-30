@@ -1,6 +1,8 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
+  readonly VITE_API_BASE_URL?: string;
+  readonly VITE_API_BASE_URL_V2?: string;
   readonly VITE_PASSWORD_MIN_LENGTH?: string;
   readonly VITE_PASSWORD_MAX_LENGTH?: string;
   readonly VITE_PASSWORD_REQUIRE_UPPERCASE?: string;

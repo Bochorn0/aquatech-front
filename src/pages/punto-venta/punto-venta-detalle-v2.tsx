@@ -819,7 +819,7 @@ function prepareChartDataNiveles(puntoData: any, setChartDataNiveles: any) {
     const hasHistoricoRecuperada = product.historico_recuperada?.hours_with_data && Array.isArray(product.historico_recuperada.hours_with_data) && product.historico_recuperada.hours_with_data.length > 0;
     const hasHistoricoCruda = product.historico_cruda?.hours_with_data && Array.isArray(product.historico_cruda.hours_with_data) && product.historico_cruda.hours_with_data.length > 0;
     
-    console.log(`[prepareChartDataNiveles] ${product.id} (${product.product_type || 'Nivel'}):`, {
+    console.log('[prepareChartDataNiveles] product:', product.id, product.product_type || 'Nivel', {
       hasHistoricoPurificada: !!product.historico,
       hasHistoricoRecuperada: !!product.historico_recuperada,
       hasHistoricoCruda: !!product.historico_cruda,
@@ -911,7 +911,7 @@ function prepareChartDataNiveles(puntoData: any, setChartDataNiveles: any) {
         estadisticas: { valorActual },
       };
     } catch (error) {
-      console.error(`[prepareChartDataNiveles] Error procesando histórico para ${product.id}:`, error);
+      console.error('[prepareChartDataNiveles] Error procesando histórico para product:', product.id, error);
       return null;
     }
   }

@@ -1,4 +1,4 @@
-# Phase 4 (supply chain): PR checks — secret scan + lint/build (parallel) + optional audit.
+# PR checks: secrets, SAST (Semgrep), lint/build, dependency audit (FEMSA 40 / 50 / 7).
 # Pushes to main still use Azure Static Web Apps only (no duplicate runs).
 
 name: CI
@@ -23,8 +23,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/javascript
+            p/typescript
+            p/react
+
   lint-and-build:
-    name: Lint & build
+    name: Lint, build & audit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +56,20 @@ jobs:
       - name: Production build
         run: yarn build
 
-      - name: npm audit (critical or higher)
-        continue-on-error: true
-        run: yarn audit --level critical
+      # Yarn v1: exit code is a bitmask (16=critical). Composite codes like 30 include critical.
+      - name: Dependency audit (critical or higher)
+        run: |
+          set +e
+          out=$(yarn audit --level critical 2>&1)
+          code=$?
+          set -e
+          echo "$out"
+          if echo "$out" | grep -qE '│ critical '; then
+            echo "::error::Critical vulnerabilities found"
+            exit 1
+          fi
+          if [ $((code & 16)) -ne 0 ]; then
+            echo "::error::yarn audit reported critical (exit $code)"
+            exit 1
+          fi
+          echo "No critical vulnerabilities (yarn audit exit $code)"

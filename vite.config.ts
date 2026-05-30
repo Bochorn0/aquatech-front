@@ -18,49 +18,54 @@ const HTTPS_CONFIG =
     : undefined;
 
 export default defineConfig(({ mode }) => {
+  /** All keys from `.env`, `.env.local`, `.env.<mode>`, etc. — used for legacy REACT_APP_* and VITE_* at build/preview time. */
   const env = loadEnv(mode, process.cwd(), '');
   const reactApi1 = env.REACT_APP_API_BASE_URL || env.VITE_API_BASE_URL || '';
   const reactApi2 = env.REACT_APP_API_BASE_URL_V2 || env.VITE_API_BASE_URL_V2 || '';
   const nodeEnv = mode === 'production' ? 'production' : 'development';
 
   return {
-  define: {
-    // Expose REACT_APP_* env vars to the client (Vite only exposes VITE_* by default)
-    'process.env.REACT_APP_API_BASE_URL': JSON.stringify(reactApi1),
-    'process.env.REACT_APP_API_BASE_URL_V2': JSON.stringify(reactApi2),
-    'process.env.REACT_APP_TIWATER_API_KEY': JSON.stringify(env.REACT_APP_TIWATER_API_KEY || ''),
-    'process.env.REACT_APP_ICON_URL': JSON.stringify(env.REACT_APP_ICON_URL || ''),
-    'process.env.NODE_ENV': JSON.stringify(nodeEnv),
-  },
-  plugins: [
-    react(),
-    checker({
-      typescript: true,
-      eslint: {
-        lintCommand: 'eslint "./src/**/*.{js,jsx,ts,tsx}"',
-        dev: { logLevel: ['error'] },
-      },
-      overlay: {
-        position: 'tl',
-        initialIsOpen: false,
-      },
-    }),
-  ],
-  resolve: {
-    alias: [
-      {
-        find: /^~(.+)/,
-        replacement: path.join(process.cwd(), 'node_modules/$1'),
-      },
-      {
-        find: /^src(.+)/,
-        replacement: path.join(process.cwd(), 'src/$1'),
-      },
+    define: {
+      // Expose REACT_APP_* env vars to the client (Vite only exposes VITE_* by default)
+      'process.env.REACT_APP_API_BASE_URL': JSON.stringify(reactApi1),
+      'process.env.REACT_APP_API_BASE_URL_V2': JSON.stringify(reactApi2),
+      'process.env.REACT_APP_TIWATER_API_KEY': JSON.stringify(
+        process.env.REACT_APP_TIWATER_API_KEY || env.REACT_APP_TIWATER_API_KEY || ''
+      ),
+      'process.env.REACT_APP_ICON_URL': JSON.stringify(
+        process.env.REACT_APP_ICON_URL || env.REACT_APP_ICON_URL || ''
+      ),
+      'process.env.NODE_ENV': JSON.stringify(nodeEnv === 'production' ? 'production' : 'development'),
+    },
+    plugins: [
+      react(),
+      checker({
+        typescript: true,
+        eslint: {
+          lintCommand: 'eslint "./src/**/*.{js,jsx,ts,tsx}"',
+          dev: { logLevel: ['error'] },
+        },
+        overlay: {
+          position: 'tl',
+          initialIsOpen: false,
+        },
+      }),
     ],
-  },
-  server: { port: PORT, host: true, https: HTTPS_CONFIG },
-  preview: { port: PORT, host: true },
-  // Strip console and debugger in production so Azure/prod logs stay clean
-  esbuild: mode === 'production' ? { drop: ['console', 'debugger'] } : {},
+    resolve: {
+      alias: [
+        {
+          find: /^~(.+)/,
+          replacement: path.join(process.cwd(), 'node_modules/$1'),
+        },
+        {
+          find: /^src(.+)/,
+          replacement: path.join(process.cwd(), 'src/$1'),
+        },
+      ],
+    },
+    server: { port: PORT, host: true, https: HTTPS_CONFIG },
+    preview: { port: PORT, host: true },
+    // Strip console & debugger only for deployed production bundles (not devlocal)
+    esbuild: mode === 'production' ? { drop: ['console', 'debugger'] } : {},
   };
 });

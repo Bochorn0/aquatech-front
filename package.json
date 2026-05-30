@@ -27,6 +27,9 @@
     "node": "20.x"
   },
   "packageManager": "yarn@1.22.22",
+  "resolutions": {
+    "form-data": ">=4.0.4"
+  },
   "dependencies": {
     "@emotion/cache": "^11.13.1",
     "@emotion/react": "^11.13.3",
