@@ -31,7 +31,7 @@
     "form-data": ">=4.0.4"
   },
   "dependencies": {
-    "@emotion/cache": "^11.13.1",
+    "@emotion/cache": "^11.14.0",
     "@emotion/react": "^11.13.3",
     "@emotion/styled": "^11.13.0",
     "@fontsource-variable/dm-sans": "^5.0.7",
