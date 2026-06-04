@@ -436,10 +436,10 @@
   resolved "https://registry.npmjs.org/@fontsource-variable/dm-sans/-/dm-sans-5.0.7.tgz"
   integrity sha512-m1M71SAXBUO3SFTl3gtUvlP/ahH5sIrnX+Ag8LWKH5HnMVNs4b5ZjNuXbk9MlbmvMmCaKjxdbo6baVTXtzgbyg==
 
-"@fontsource/barlow@^5.0.14":
-  version "5.0.14"
-  resolved "https://registry.npmjs.org/@fontsource/barlow/-/barlow-5.0.14.tgz"
-  integrity sha512-4F+rbfklgWHatFheB3ZQgTFjkqzMiWfHomy69TWSGc0qU+w+QhX9dGz7IVQRksvKciJoXAhxijCxwAJw418g4Q==
+"@fontsource/barlow@^5.2.8":
+  version "5.2.8"
+  resolved "https://registry.yarnpkg.com/@fontsource/barlow/-/barlow-5.2.8.tgz#ccb4740544a23b695046e0617390e7fc287bb9c0"
+  integrity sha512-iuFOnY4OI2cd1STrJ3NdJNzWjhcwv6JarmqfdoZzAmz9g0jTVjES86MNbuBxqVR3ydbTEjo4opEl24GXScRM7w==
 
 "@humanwhocodes/config-array@^0.11.14":
   version "0.11.14"
@@ -757,6 +757,16 @@
   resolved "https://registry.yarnpkg.com/@rollup/rollup-android-arm64/-/rollup-android-arm64-4.60.4.tgz#e371b653ceabc900790ae73f5548a0fd7cd63a70"
   integrity sha512-GxxTKApUpzRhof7poWvCJHRF51C67u1R7D6DiluBE8wKU1u5GWE8t+v81JvJYtbawoBFX1hLv5Ei4eVjkWokaw==
 
+"@rollup/rollup-android-arm-eabi@4.60.4":
+  version "4.60.4"
+  resolved "https://registry.yarnpkg.com/@rollup/rollup-android-arm-eabi/-/rollup-android-arm-eabi-4.60.4.tgz#3a04f01e9f01392bbef5920b94aa3b88794be7ab"
+  integrity sha512-F5QXMSiFebS9hKZj02XhWLLnRpJ3B3AROP0tWbFBSj+6kCbg5m9j5JoHKd4mmSVy5mS/IMQloYgYxCuJC0fxEQ==
+
+"@rollup/rollup-android-arm64@4.60.4":
+  version "4.60.4"
+  resolved "https://registry.yarnpkg.com/@rollup/rollup-android-arm64/-/rollup-android-arm64-4.60.4.tgz#e371b653ceabc900790ae73f5548a0fd7cd63a70"
+  integrity sha512-GxxTKApUpzRhof7poWvCJHRF51C67u1R7D6DiluBE8wKU1u5GWE8t+v81JvJYtbawoBFX1hLv5Ei4eVjkWokaw==
+
 "@rollup/rollup-darwin-arm64@4.60.4":
   version "4.60.4"
   resolved "https://registry.npmjs.org/@rollup/rollup-darwin-arm64/-/rollup-darwin-arm64-4.60.4.tgz"
@@ -882,10 +892,68 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 =======
 =======
 =======
+=======
+  version "1.15.40"
+  resolved "https://registry.yarnpkg.com/@swc/core-darwin-x64/-/core-darwin-x64-1.15.40.tgz#3180daef5c1e47b435f8edd084509e0a5c0d883b"
+  integrity sha512-HbbPzvfLBUXjIB1Ezks+//lNUjmLjfyd63XSwprJgrZaXYdm70kohXPJUWdqKZozolFxbPaO+xtBaiUp6BoueA==
+
+"@swc/core-linux-arm-gnueabihf@1.15.40":
+  version "1.15.40"
+  resolved "https://registry.yarnpkg.com/@swc/core-linux-arm-gnueabihf/-/core-linux-arm-gnueabihf-1.15.40.tgz#18fcd3c70e48fdfae07c9f18751b1409ce1e5e84"
+  integrity sha512-SlRZsCjOCPR2LvFs0Ri/Xrx/5o5TCt8vl4gW6mX1hEZOG0a625RxzRHpHdAQNGykmAN/7IeaFAJG+QnNmxlHcA==
+
+"@swc/core-linux-arm64-gnu@1.15.40":
+  version "1.15.40"
+  resolved "https://registry.yarnpkg.com/@swc/core-linux-arm64-gnu/-/core-linux-arm64-gnu-1.15.40.tgz#26304933922f2a8e3194770e404403fc25a19c89"
+  integrity sha512-Q8byxJt2fh8CR3EUX6snBpy47AoBVm+In/+Z3rjDHMjC38ZvR9/gtUUNCT0tfrn4EdVsO8/QPi59nxrxvqxvBQ==
+
+"@swc/core-linux-arm64-musl@1.15.40":
+  version "1.15.40"
+  resolved "https://registry.yarnpkg.com/@swc/core-linux-arm64-musl/-/core-linux-arm64-musl-1.15.40.tgz#3402dfba04ba7b8ea81f243e2f8fa2c336b54d03"
+  integrity sha512-4z0MgHU+7M0pZDqBN1El7mFXDI1SBwinfcUkAyA4v8QrhOIUOZltySt2aStQLZGrdXVXM4Y4ylfiTC04ED+MoQ==
+
+"@swc/core-linux-ppc64-gnu@1.15.40":
+  version "1.15.40"
+  resolved "https://registry.yarnpkg.com/@swc/core-linux-ppc64-gnu/-/core-linux-ppc64-gnu-1.15.40.tgz#b3df9065cad352328c1eeef08a28fc9fe98785aa"
+  integrity sha512-fLI4iUgeSZu0eRWUXwe6YzPFx9gHbFiPkl8Rp3mJfP8OpNR3nTQCGPvHdDh9xniW7mVvgMY4ni7A4VzqI1KrpA==
+
+"@swc/core-linux-s390x-gnu@1.15.40":
+  version "1.15.40"
+  resolved "https://registry.yarnpkg.com/@swc/core-linux-s390x-gnu/-/core-linux-s390x-gnu-1.15.40.tgz#58e5b601f641dde81b30626ef66a668701ec918f"
+  integrity sha512-YqeKMAb7d4nQSGMJQ454IlaCENpzcDqhvBE9+CPfdnYpnUXxd+BSrB6Xk0YjW8UyoEhUj4p6quATCxbsp6J3jg==
+
+"@swc/core-linux-x64-gnu@1.15.40":
+  version "1.15.40"
+  resolved "https://registry.yarnpkg.com/@swc/core-linux-x64-gnu/-/core-linux-x64-gnu-1.15.40.tgz#cf057dce0c148c53f2d30152baaf60ea29e5d59c"
+  integrity sha512-7HOuS1iGcme/j/TuL1TfmmLGiMQrjv/GmjyZeydl00FKPtpGXEldwqfI56xgd1YzrzoB2svWjxbGGyQ0TEASxg==
+
+"@swc/core-linux-x64-musl@1.15.40":
+  version "1.15.40"
+  resolved "https://registry.yarnpkg.com/@swc/core-linux-x64-musl/-/core-linux-x64-musl-1.15.40.tgz#21fb1a4d0193e9bbcd1469ecd36166d2e96e4006"
+  integrity sha512-h4kZYHc7dpc9P9u4brRJaS8Pl7tPVHAeiLSzw7T5RfIJgAoSdaCMKzI/2Uay9gFhaw8uyCDl0L5q37r0EpAfIA==
+
+"@swc/core-win32-arm64-msvc@1.15.40":
+  version "1.15.40"
+  resolved "https://registry.yarnpkg.com/@swc/core-win32-arm64-msvc/-/core-win32-arm64-msvc-1.15.40.tgz#1dba23b2b0db86b3d6d65da2abd627cc607a1fbc"
+  integrity sha512-+mQgKZXSj6mV38Zh05QaxSjUDmGP/R2JWlXZTDLSPkDzHU6p3GxN9eeSf5dfyDVU86946fmCvSzyl/ucImx8+A==
+
+"@swc/core-win32-ia32-msvc@1.15.40":
+  version "1.15.40"
+  resolved "https://registry.yarnpkg.com/@swc/core-win32-ia32-msvc/-/core-win32-ia32-msvc-1.15.40.tgz#b2da1e33165d469467b1046a2189db468da488eb"
+  integrity sha512-yvwdPLGd25mcj/mNatjNQ0lZujtQD6psH3v9PNmMb+fSzjbNG8KIDxjFWrcV+fsFVLOkyOmdJsFmX7NAFjVyPw==
+
+"@swc/core-win32-x64-msvc@1.15.40":
+  version "1.15.40"
+  resolved "https://registry.yarnpkg.com/@swc/core-win32-x64-msvc/-/core-win32-x64-msvc-1.15.40.tgz#3563f7e8ce8708f5fda43eb8e0956ef11e0da320"
+  integrity sha512-OXtKsLU1bVtInzzDEAY2sYiF/rl4tvAnLLLpuMp3HzAOQZ5A+i69AKDhA1YLQTaMAqO3vzyYNVAYVRMPtSYD4w==
+
+"@swc/core@^1.12.11":
+>>>>>>> dependabot/npm_and_yarn/fontsource/barlow-5.2.8
   version "1.15.40"
   resolved "https://registry.yarnpkg.com/@swc/core-darwin-x64/-/core-darwin-x64-1.15.40.tgz#3180daef5c1e47b435f8edd084509e0a5c0d883b"
   integrity sha512-HbbPzvfLBUXjIB1Ezks+//lNUjmLjfyd63XSwprJgrZaXYdm70kohXPJUWdqKZozolFxbPaO+xtBaiUp6BoueA==
@@ -1430,6 +1498,7 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 "@typescript-eslint/utils@7.18.0", "@typescript-eslint/utils@^6.13.0 || ^7.0.0":
 =======
 "@typescript-eslint/typescript-estree@8.60.1":
@@ -1458,6 +1527,9 @@
 =======
 "@typescript-eslint/utils@7.18.0", "@typescript-eslint/utils@^6.13.0 || ^7.0.0":
 >>>>>>> dependabot/npm_and_yarn/emotion/react-11.14.0
+=======
+"@typescript-eslint/utils@7.18.0", "@typescript-eslint/utils@^6.13.0 || ^7.0.0":
+>>>>>>> dependabot/npm_and_yarn/fontsource/barlow-5.2.8
   version "7.18.0"
   resolved "https://registry.npmjs.org/@typescript-eslint/utils/-/utils-7.18.0.tgz"
   integrity sha512-kK0/rNa2j74XuHVcoCZxdFBMF+aq/vH83CXAOHieC+2Gis4mF8jJXT5eAfyD3K0sAxtPuwxaIOIOvhwzVDt/kw==
@@ -2231,6 +2303,7 @@ data-view-byte-offset@^1.0.0:
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 data-view-byte-offset@^1.0.1:
   version "1.0.1"
@@ -2244,6 +2317,8 @@ data-view-byte-offset@^1.0.1:
 >>>>>>> dependabot/npm_and_yarn/eslint-plugin-react-7.37.5
 =======
 >>>>>>> dependabot/npm_and_yarn/emotion/react-11.14.0
+=======
+>>>>>>> dependabot/npm_and_yarn/fontsource/barlow-5.2.8
 dayjs@^1.11.13, dayjs@^1.8.34:
   version "1.11.13"
   resolved "https://registry.npmjs.org/dayjs/-/dayjs-1.11.13.tgz"
@@ -2267,6 +2342,7 @@ debug@^3.2.7:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 debug@^4.4.3:
   version "4.4.3"
@@ -2282,6 +2358,8 @@ debug@^4.4.3:
 >>>>>>> dependabot/npm_and_yarn/eslint-plugin-react-7.37.5
 =======
 >>>>>>> dependabot/npm_and_yarn/emotion/react-11.14.0
+=======
+>>>>>>> dependabot/npm_and_yarn/fontsource/barlow-5.2.8
 deep-equal@^2.0.5:
   version "2.2.0"
   resolved "https://registry.npmjs.org/deep-equal/-/deep-equal-2.2.0.tgz"
@@ -2780,8 +2858,11 @@ eslint-plugin-react-hooks@^4.6.2:
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 >>>>>>> dependabot/npm_and_yarn/emotion/react-11.14.0
+=======
+>>>>>>> dependabot/npm_and_yarn/fontsource/barlow-5.2.8
 eslint-plugin-react@^7.35.0:
   version "7.35.0"
   resolved "https://registry.npmjs.org/eslint-plugin-react/-/eslint-plugin-react-7.35.0.tgz"
@@ -2841,6 +2922,7 @@ eslint-visitor-keys@^3.3.0, eslint-visitor-keys@^3.4.1, eslint-visitor-keys@^3.4
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 eslint-visitor-keys@^5.0.0:
   version "5.0.1"
@@ -2854,6 +2936,8 @@ eslint-visitor-keys@^5.0.0:
 >>>>>>> dependabot/npm_and_yarn/eslint-plugin-react-7.37.5
 =======
 >>>>>>> dependabot/npm_and_yarn/emotion/react-11.14.0
+=======
+>>>>>>> dependabot/npm_and_yarn/fontsource/barlow-5.2.8
 eslint@^8.57.0:
   version "8.57.0"
   resolved "https://registry.npmjs.org/eslint/-/eslint-8.57.0.tgz"
@@ -3056,6 +3140,7 @@ for-each@^0.3.3:
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 for-each@^0.3.5:
   version "0.3.5"
@@ -3067,6 +3152,8 @@ for-each@^0.3.5:
 >>>>>>> dependabot/npm_and_yarn/eslint-plugin-react-7.37.5
 =======
 >>>>>>> dependabot/npm_and_yarn/emotion/react-11.14.0
+=======
+>>>>>>> dependabot/npm_and_yarn/fontsource/barlow-5.2.8
 form-data@>=4.0.4, form-data@^4.0.5:
   version "4.0.5"
   resolved "https://registry.yarnpkg.com/form-data/-/form-data-4.0.5.tgz#b49e48858045ff4cbf6b03e1805cebcad3679053"
@@ -4019,6 +4106,7 @@ mime-types@^2.1.12:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 minimatch@^10.2.2:
   version "10.2.5"
@@ -4034,6 +4122,8 @@ minimatch@^10.2.2:
 >>>>>>> dependabot/npm_and_yarn/eslint-plugin-react-7.37.5
 =======
 >>>>>>> dependabot/npm_and_yarn/emotion/react-11.14.0
+=======
+>>>>>>> dependabot/npm_and_yarn/fontsource/barlow-5.2.8
 minimatch@^3.0.4, minimatch@^3.0.5, minimatch@^3.1.1, minimatch@^3.1.2:
   version "3.1.5"
   resolved "https://registry.npmjs.org/minimatch/-/minimatch-3.1.5.tgz"
@@ -4895,6 +4985,7 @@ stop-iteration-iterator@^1.0.0:
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 stop-iteration-iterator@^1.1.0:
   version "1.1.0"
@@ -4907,6 +4998,8 @@ stop-iteration-iterator@^1.1.0:
 >>>>>>> dependabot/npm_and_yarn/eslint-plugin-react-7.37.5
 =======
 >>>>>>> dependabot/npm_and_yarn/emotion/react-11.14.0
+=======
+>>>>>>> dependabot/npm_and_yarn/fontsource/barlow-5.2.8
 string.prototype.includes@^2.0.0:
   version "2.0.0"
   resolved "https://registry.npmjs.org/string.prototype.includes/-/string.prototype.includes-2.0.0.tgz"
@@ -5300,6 +5393,7 @@ typed-array-length@^1.0.6:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 typed-array-length@^1.0.7:
   version "1.0.8"
@@ -5316,6 +5410,8 @@ typed-array-length@^1.0.7:
 >>>>>>> dependabot/npm_and_yarn/eslint-plugin-react-7.37.5
 =======
 >>>>>>> dependabot/npm_and_yarn/emotion/react-11.14.0
+=======
+>>>>>>> dependabot/npm_and_yarn/fontsource/barlow-5.2.8
 typescript@^5.5.4:
   version "5.5.4"
   resolved "https://registry.npmjs.org/typescript/-/typescript-5.5.4.tgz"
