@@ -2,5 +2,12 @@
   "navigationFallback": {
     "rewrite": "/index.html",
     "exclude": ["/assets/*", "/*.{css,scss,js,ico,png,jpg,jpeg,gif,svg,webp,woff,woff2}"]
+  },
+  "globalHeaders": {
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://lccapp-aefcbwh0ecd7b8cz.canadacentral-01.azurewebsites.net; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://purecatamphetamine.github.io https://images.tuyacn.com; font-src 'self' data:; frame-src https://www.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
   }
 }
