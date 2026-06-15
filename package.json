@@ -29,7 +29,7 @@
   "packageManager": "yarn@1.22.22",
   "resolutions": {
     "form-data": ">=4.0.4",
-    "eslint-import-resolver-typescript": "3.6.1",
+    "eslint-import-resolver-typescript": "4.4.5",
     "eslint-plugin-perfectionist": "^2.11.0"
   },
   "dependencies": {
@@ -83,7 +83,7 @@
     "eslint-config-airbnb": "^19.0.4",
     "eslint-config-airbnb-typescript": "^18.0.0",
     "eslint-config-prettier": "^9.1.0",
-    "eslint-import-resolver-typescript": "3.6.1",
+    "eslint-import-resolver-typescript": "4.4.5",
     "eslint-plugin-import": "^2.29.1",
     "eslint-plugin-jsx-a11y": "^6.9.0",
     "eslint-plugin-perfectionist": "^2.11.0",
