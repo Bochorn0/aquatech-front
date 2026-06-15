@@ -60,7 +60,7 @@
     "react-leaflet": "^4.2.1",
     "react-router-dom": "^6.30.2",
     "react-simple-maps": "^3.0.0",
-    "react-toastify": "^11.0.5",
+    "react-toastify": "^11.1.0",
     "simplebar-react": "^3.2.6",
     "exceljs": "^4.4.0",
     "sweetalert2": "^11.22.4"
