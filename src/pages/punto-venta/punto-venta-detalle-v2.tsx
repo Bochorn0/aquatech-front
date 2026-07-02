@@ -70,6 +70,7 @@ export default function PuntoVentaDetalleV2() {
   const { id } = useParams<{ id: string }>();
   const [punto, setPunto] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [chartsLoading, setChartsLoading] = useState<boolean>(true);
   const [chartDataNiveles, setChartDataNiveles] = useState<any>(null);
   const [tiwaterData, setTiwaterData] = useState<any>(null);
@@ -127,8 +128,12 @@ export default function PuntoVentaDetalleV2() {
 
         if (response.ok) {
           const result = await response.json();
-          if (result.success && result.data?.timestamp) {
-            setLatestSensorTimestamp(new Date(result.data.timestamp));
+          if (result.success && result.data) {
+            if (result.data.timestamp) {
+              setLatestSensorTimestamp(new Date(result.data.timestamp));
+            }
+          } else if (result.success && result.data?.hasData === false) {
+            setLatestSensorTimestamp(null);
           }
         }
       } catch (error) {
@@ -286,6 +291,7 @@ export default function PuntoVentaDetalleV2() {
     const fetchPuntoVentaDetails = async (opts: { bustCache?: boolean } = {}) => {
       const { bustCache = false } = opts;
       try {
+        setLoadError(null);
         const params = new URLSearchParams();
         params.set('light', '1'); // Always light: no historico in main response
         if (bustCache) params.set('_t', String(Date.now()));
@@ -394,6 +400,7 @@ export default function PuntoVentaDetalleV2() {
         }
       } catch (error) {
         console.error('Error fetching punto venta details:', error);
+        setLoadError('No se pudo cargar el punto de venta. Verifica que exista y que tengas permisos.');
         setLoading(false);
         setChartsLoading(false);
       }
@@ -409,10 +416,29 @@ export default function PuntoVentaDetalleV2() {
     return undefined;
   }, [id, refreshTrigger]);
 
-  if (loading || !punto) {
+  if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
         <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (!punto) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Button
+          variant="outlined"
+          color="primary"
+          component="a"
+          href={getDashboardVersion() === 'v1' ? '/v1/PuntoVenta' : '/PuntoVenta'}
+          sx={{ mb: 2 }}
+        >
+          Volver a Puntos de Venta
+        </Button>
+        <Alert severity="warning">
+          {loadError || 'No se encontró información para este punto de venta.'}
+        </Alert>
       </Box>
     );
   }
@@ -423,6 +449,8 @@ export default function PuntoVentaDetalleV2() {
   const tiwaterProduct = osmosisSystems.find((s: any) => (s.resourceType || '').toString().toLowerCase() === 'tiwater') || null;
   const niveles = punto?.productos?.filter((p: any) => p.product_type === 'Nivel') || [];
   const metricas = punto?.productos?.filter((p: any) => p.product_type === 'Metrica') || [];
+  const usingDefaultSensors = (punto?.osmosisSystems || []).some((s: any) => s.isDefault === true)
+    || tiwaterData?.isDefault === true;
 
   // Dev mode: only boolean column from API
   const userStr = localStorage.getItem('user');
@@ -751,6 +779,12 @@ export default function PuntoVentaDetalleV2() {
         <Typography variant="h4" align="center" fontWeight="bold" sx={{ mb: 3 }}>
           {punto.name || 'NOMBRE TIENDA'}
         </Typography>
+
+        {usingDefaultSensors && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Este punto de venta aún no tiene lecturas de sensores. Se muestran valores de referencia hasta que el equipo comience a reportar datos.
+          </Alert>
+        )}
 
         {/* Grid Principal Reorganizado */}
         <Grid container spacing={3}>
