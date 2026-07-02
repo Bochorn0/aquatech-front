@@ -2,7 +2,6 @@ import { Helmet } from 'react-helmet-async';
 import { useParams } from 'react-router-dom';
 import { useRef, useMemo, useState, useEffect } from 'react';
 
-import EditIcon from '@mui/icons-material/Edit';
 import { useTheme } from '@mui/material/styles';
 import CardHeader from '@mui/material/CardHeader';
 import {
@@ -34,6 +33,7 @@ import { getDashboardVersion } from 'src/utils/permissions';
 import { CONFIG } from 'src/config-global';
 
 import { Chart, useChart } from 'src/components/chart';
+import { Iconify } from 'src/components/iconify';
 
 /** Fallback palette when region has no color (match dashboard map). */
 const DEFAULT_REGION_COLORS = [
@@ -1946,7 +1946,7 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
             )}
             {onLocationUpdated && (
               <IconButton size="small" onClick={handleOpenEditLocation} title="Editar región y ubicación" sx={{ p: 0.25 }}>
-                <EditIcon fontSize="small" />
+                <Iconify icon="solar:pen-bold-duotone" width={16} />
               </IconButton>
             )}
           </Box>
