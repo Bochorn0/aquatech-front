@@ -11,9 +11,15 @@ import geoData from 'src/utils/states.json';
 import { fNumber } from 'src/utils/format-number';
 import { getDashboardVersion } from 'src/utils/permissions';
 import {
+  pvDetalleLog,
+  logV1MetricsRow,
+  logTuyaProductStatus,
+} from 'src/utils/punto-venta-detalle-debug';
+import {
   toMetricRange,
   toDisplayScalar,
   safeDisplayText,
+  normalizeV1ClientMetrics,
 } from 'src/utils/safe-display-text';
 
 import { get } from 'src/api/axiosHelper';
@@ -93,7 +99,7 @@ export function prepareChartDataTuya(puntoData: any, setChartDataNiveles: any) {
 
       return {
         nivelId: nivel._id ?? nivel.id,
-        nivelName: nivel.name,
+        nivelName: safeDisplayText(nivel.name, 'Nivel'),
         categories,
         series: [
           {
@@ -113,9 +119,14 @@ export function prepareChartDataTuya(puntoData: any, setChartDataNiveles: any) {
 
 async function fetchMetrics(clienteId: string, setMetrics: any) {
   try {
+    pvDetalleLog('V1 /metrics fetch start (V1 detalle)', { clienteId });
     const metricsResponse = await get<MetricsData[]>(`/metrics`, { cliente: clienteId });
-    setMetrics(metricsResponse[0] || null);
+    logV1MetricsRow('V1 detalle /metrics response', metricsResponse?.[0]);
+    const normalized = normalizeV1ClientMetrics(metricsResponse[0]) ?? null;
+    pvDetalleLog('V1 /metrics normalized (V1 detalle)', { normalized });
+    setMetrics(normalized);
   } catch (err) {
+    console.warn('[PVDetalle] V1 /metrics fetch failed (V1 detalle)', { clienteId, err });
     setMetrics(null);
   }
 }
@@ -217,7 +228,7 @@ export default function PuntoVentaDetalle() {
                 {/* Reporte Mensual: todo el punto de venta (todos los productos) */}
                 <ExportReportButton
                   puntoVentaId={typeof punto._id === 'string' ? punto._id : (punto._id?.toString?.() ?? id)}
-                  puntoVentaName={punto.name}
+                      puntoVentaName={safeDisplayText(punto.name, 'Punto de Venta')}
                 />
                 {/* Reporte Completo: por cada producto osmosis */}
                 {osmosis.length > 0 && (
@@ -610,7 +621,7 @@ function DatosGenerales({ punto }: any) {
                 Cliente
               </Typography>
               <Typography variant="h6" fontWeight="medium">
-                {punto.cliente?.name || 'N/A'}
+                {safeDisplayText(punto.cliente?.name, 'N/A')}
               </Typography>
             </Box>
 
@@ -619,7 +630,7 @@ function DatosGenerales({ punto }: any) {
                 Ubicación
               </Typography>
               <Typography variant="body1" fontWeight="medium">
-                {punto.city?.city}, {punto.city?.state}
+                {safeDisplayText(punto.city?.city)}, {safeDisplayText(punto.city?.state)}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Lat: {lat.toFixed(4)}, Lon: {lon.toFixed(4)}
@@ -707,7 +718,7 @@ function DatosGenerales({ punto }: any) {
                       fontWeight="bold"
                       fill="#1f2937"
                     >
-                      {punto.city?.city}
+                      {safeDisplayText(punto.city?.city)}
                     </text>
                   </Marker>
                 </ComposableMap>
@@ -834,6 +845,14 @@ function NivelHistoricoChart({ nivelName, chart }: { nivelName: string; chart: a
 
 export function TuyaOsmosisMetricsSection({ osmosis = [], metrics = null }: { osmosis?: any[]; metrics?: MetricsData | null }) {
   if (!osmosis?.length) return null;
+
+  pvDetalleLog('TuyaOsmosisMetricsSection render', {
+    osmosisCount: osmosis.length,
+    metrics,
+    tds_range: metrics?.tds_range,
+    production_volume_range: metrics?.production_volume_range,
+  });
+  logTuyaProductStatus('TuyaOsmosisMetricsSection', osmosis);
 
   return (
     <Box sx={{ mt: 4 }}>
@@ -992,7 +1011,7 @@ export function TuyaNivelSection({ niveles, chartDataNiveles, osmosis = [], metr
                     />
                   </Box>
                   <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
-                    <strong>Estado:</strong> {estado ?? '-'}
+                    <strong>Estado:</strong> {safeDisplayText(estado, '-')}
                   </Typography>
                   <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
                     <strong>Nivel:</strong> {porcentaje ?? '-'}%
@@ -1021,7 +1040,7 @@ export function TuyaNivelSection({ niveles, chartDataNiveles, osmosis = [], metr
           return (
             <NivelHistoricoChart
               key={nivel._id ?? nivel.id}
-              nivelName={nivel.name}
+              nivelName={safeDisplayText(nivel.name, 'Nivel')}
               chart={chartData || null}
             />
           );
