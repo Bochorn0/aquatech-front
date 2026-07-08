@@ -8,6 +8,7 @@ import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { Box, Grid, Switch, Button,  Divider, Typography, FormControlLabel } from '@mui/material';
 
 import { writeExcelWorkbook } from 'src/utils/excel-workbook';
+import { safeDisplayText } from 'src/utils/safe-display-text';
 
 import { get } from 'src/api/axiosHelper';
 
@@ -441,7 +442,7 @@ function ExportReportButton({ product, puntoVentaId, puntoVentaName }: ExportRep
         { name: 'Estadísticas', rows: estadisticas },
       ]);
       const blob = new Blob([buffer], { type: 'application/octet-stream' });
-      const displayName = puntoVentaName || 'PuntoVenta';
+      const displayName = safeDisplayText(puntoVentaName, 'PuntoVenta');
       const fileName = `Reporte_Mensual_${displayName}_${startDate?.format('DD-MM-YYYY')}_${endDate?.format('DD-MM-YYYY')}.xlsx`;
 
       saveAs(blob, fileName);
@@ -463,7 +464,7 @@ function ExportReportButton({ product, puntoVentaId, puntoVentaName }: ExportRep
         {showReporteCompleto && (
           <Box sx={{ mb: 3 }}>
             <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
-              Reporte Completo (por Fecha) — {product?.name ?? 'Producto'}
+              Reporte Completo (por Fecha) — {safeDisplayText(product?.name, 'Producto')}
             </Typography>
             <Grid container spacing={2} alignItems="center">
               <Grid item xs={12}>
