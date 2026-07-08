@@ -21,7 +21,7 @@ import { PressureGauge } from '../charts/pressure-gauge';
 
 import type { MetricsData } from '../types';
 
-function prepareChartData(puntoData: any, setChartDataNiveles: any) {
+export function prepareChartDataTuya(puntoData: any, setChartDataNiveles: any) {
   const productos = puntoData?.productos || [];
   const niveles = productos.filter((p: any) => p.product_type === 'Nivel');
   if (niveles.length === 0) {
@@ -80,7 +80,7 @@ function prepareChartData(puntoData: any, setChartDataNiveles: any) {
       const valorActual = nivel.status?.find((s: any) => s.code === 'liquid_level_percent')?.value ?? null;
 
       return {
-        nivelId: nivel._id,
+        nivelId: nivel._id ?? nivel.id,
         nivelName: nivel.name,
         categories,
         series: [
@@ -121,7 +121,7 @@ export default function PuntoVentaDetalle() {
       try {
         const response = await get<any>(`/puntoVentas/${id}?historicoRange=${historicoRange}`);
         setPunto(response);
-        prepareChartData(response, setChartDataNiveles);
+        prepareChartDataTuya(response, setChartDataNiveles);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching punto venta details:', error);
@@ -220,7 +220,7 @@ export default function PuntoVentaDetalle() {
                 )}
               </Card>
             </Box>
-            <NivelSection
+            <TuyaNivelSection
               niveles={niveles}
               chartDataNiveles={chartDataNiveles}
               osmosis={osmosis}
@@ -239,7 +239,7 @@ export default function PuntoVentaDetalle() {
 /* 🧱 Sección 1: Presión + Osmosis */
 /* -------------------------------------------------------------------------- */
 
-function PresionOsmosisSection({ presion, osmosis }: any) {
+export function PresionOsmosisSection({ presion, osmosis }: any) {
   return (
     <Box>
       {/* 🔹 Sistemas de Osmosis */}
@@ -800,7 +800,7 @@ function NivelHistoricoChart({ nivelName, chart }: { nivelName: string; chart: a
 /* 🧱 Sección 3: Niveles */
 /* -------------------------------------------------------------------------- */
 
-function NivelSection({ niveles, chartDataNiveles, osmosis = [], metrics = null, historicoRange = '24h', onHistoricoRangeChange }: any) {
+export function TuyaNivelSection({ niveles, chartDataNiveles, osmosis = [], metrics = null, historicoRange = '24h', onHistoricoRangeChange, hidePeriodSelector = false }: any) {
   if (niveles.length === 0) {
     return (
       <Card variant="outlined" sx={{ p: 2 }}>
@@ -817,20 +817,21 @@ function NivelSection({ niveles, chartDataNiveles, osmosis = [], metrics = null,
 
   return (
     <Box>
-      {/* Rango del histórico: 24h / semana / mes */}
-      <FormControl size="small" sx={{ minWidth: 180, mb: 2 }}>
-        <InputLabel id="historico-range-label" shrink>Período histórico</InputLabel>
-        <Select
-          labelId="historico-range-label"
-          value={historicoRange}
-          label="Período histórico"
-          onChange={(e) => onHistoricoRangeChange?.(e.target.value as '24h' | '7d' | '30d')}
-        >
-          <MenuItem value="24h">Últimas 24 horas</MenuItem>
-          <MenuItem value="7d">Última semana</MenuItem>
-          <MenuItem value="30d">Último mes</MenuItem>
-        </Select>
-      </FormControl>
+      {!hidePeriodSelector && (
+        <FormControl size="small" sx={{ minWidth: 180, mb: 2 }}>
+          <InputLabel id="historico-range-label" shrink>Período histórico</InputLabel>
+          <Select
+            labelId="historico-range-label"
+            value={historicoRange}
+            label="Período histórico"
+            onChange={(e) => onHistoricoRangeChange?.(e.target.value as '24h' | '7d' | '30d')}
+          >
+            <MenuItem value="24h">Últimas 24 horas</MenuItem>
+            <MenuItem value="7d">Última semana</MenuItem>
+            <MenuItem value="30d">Último mes</MenuItem>
+          </Select>
+        </FormControl>
+      )}
       {/* Card con información de todos los niveles - COMENTADO */}
       {/* <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Typography variant="h6" gutterBottom>
@@ -892,11 +893,13 @@ function NivelSection({ niveles, chartDataNiveles, osmosis = [], metrics = null,
       <Box>
         {niveles.map((nivel: any) => {
           // Buscar el chartData correspondiente a este nivel
-          const chartData = chartDataNiveles?.find((cd: any) => cd.nivelId === nivel._id);
+          const chartData = chartDataNiveles?.find(
+            (cd: any) => String(cd.nivelId) === String(nivel._id ?? nivel.id)
+          );
           
           return (
             <NivelHistoricoChart
-              key={nivel._id}
+              key={nivel._id ?? nivel.id}
               nivelName={nivel.name}
               chart={chartData || null}
             />

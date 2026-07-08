@@ -29,11 +29,29 @@ import {
 
 import { fNumber } from 'src/utils/format-number';
 import { getDashboardVersion } from 'src/utils/permissions';
+import { usesMqttSource , usesTuyaSource, resolveHistoricoResourceId } from 'src/utils/punto-venta-source';
 
+import { get } from 'src/api/axiosHelper';
 import { CONFIG } from 'src/config-global';
 
-import { Chart, useChart } from 'src/components/chart';
 import { Iconify } from 'src/components/iconify';
+import { Chart, useChart } from 'src/components/chart';
+
+import { ExportReportButton } from './export-button';
+import {
+  TuyaNivelSection,
+  prepareChartDataTuya,
+  PresionOsmosisSection,
+} from './punto-venta-detalle';
+import {
+  TUYA_RANGE_LABELS,
+  type OsmosisChartBundle,
+  TuyaHistoricoPeriodSelector,
+  TuyaOsmosisHistoricoSection,
+  prepareOsmosisHistoricoCharts,
+} from './tuya-detalle-charts';
+
+import type { MetricsData } from '../types';
 
 /** Fallback palette when region has no color (match dashboard map). */
 const DEFAULT_REGION_COLORS = [
@@ -82,13 +100,17 @@ export default function PuntoVentaDetalleV2() {
   const [customSensorValue, setCustomSensorValue] = useState<string>('');
   const [generatingCustom, setGeneratingCustom] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [historicoRange, setHistoricoRange] = useState<'24h' | '7d' | '30d'>('24h');
+  const [tuyaChartDataNiveles, setTuyaChartDataNiveles] = useState<any>(null);
+  const [tuyaOsmosisCharts, setTuyaOsmosisCharts] = useState<OsmosisChartBundle[]>([]);
+  const [tuyaMetrics, setTuyaMetrics] = useState<MetricsData | null>(null);
   const lastHistoricoFetchAtRef = useRef(0);
 
   const handleLocationUpdated = () => setRefreshTrigger((t) => t + 1);
 
   useEffect(() => {
     lastHistoricoFetchAtRef.current = 0;
-  }, [id, refreshTrigger]);
+  }, [id, refreshTrigger, historicoRange]);
 
   useEffect(() => {
     const fetchTiwaterData = async (codigoTienda: string) => {
@@ -224,10 +246,54 @@ export default function PuntoVentaDetalleV2() {
     };
 
     const fetchHistoricoForCharts = async (puntoData: any) => {
-      // Always run the additional historico consult (GET /historico?type=...) so charts can show when the API has data.
+      if (usesTuyaSource(puntoData?.source_type)) {
+        try {
+          const historicoProducts = (puntoData.productos || []).filter(
+            (p: any) => p.product_type === 'Nivel' || p.product_type === 'Osmosis'
+          );
+          if (historicoProducts.length === 0) {
+            setTuyaChartDataNiveles(null);
+            setTuyaOsmosisCharts([]);
+            return;
+          }
+          const productos = [...(puntoData.productos || [])];
+          await Promise.all(
+            historicoProducts.map(async (prod: any) => {
+              // Prefer numeric DB id (_id); product.id is often the Tuya device_id string
+              const pid = prod._id ?? prod.id;
+              if (!pid) return;
+              const r = await fetch(
+                `${CONFIG.API_BASE_URL_V2}/puntoVentas/${id}/historico?productId=${encodeURIComponent(String(pid))}&range=${historicoRange}`,
+                { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+              );
+              if (!r.ok) return;
+              const json = await r.json();
+              const idx = productos.findIndex(
+                (p: any) => String(p._id ?? p.id) === String(pid) || String(p.id) === String(prod.id)
+              );
+              if (idx >= 0 && json?.data?.historico) {
+                productos[idx] = { ...productos[idx], historico: json.data.historico };
+              }
+            })
+          );
+          const merged = { ...puntoData, productos };
+          setPunto(merged);
+          prepareChartDataTuya(merged, setTuyaChartDataNiveles);
+          const osmosisProds = productos.filter((p: any) => p.product_type === 'Osmosis');
+          setTuyaOsmosisCharts(prepareOsmosisHistoricoCharts(osmosisProds, historicoRange));
+        } catch (e) {
+          console.warn('Error fetching Tuya historico for charts:', e);
+        } finally {
+          lastHistoricoFetchAtRef.current = Date.now();
+          setChartsLoading(false);
+        }
+        return;
+      }
+
+      // MQTT / TIWater historico path
       const osmosisSystems = puntoData?.osmosisSystems || [];
       const tiwaterSystems = osmosisSystems.filter((s: any) => (s.resourceType || '').toString().toLowerCase() === 'tiwater');
-      const resourceId = (tiwaterSystems[0]?.resourceId || tiwaterSystems[0]?.id || 'tiwater-system').toString().trim() || 'tiwater-system';
+      const { resourceId } = resolveHistoricoResourceId({ ...puntoData, osmosisSystems });
       const historicoDate = todayYmdHermosillo();
       try {
         const types = ['purificada', 'cruda', 'recuperada'] as const;
@@ -323,7 +389,7 @@ export default function PuntoVentaDetalleV2() {
 
         const codigoTienda = puntoData.codigo_tienda || id;
         const hasTiwaterSystems = (puntoData?.osmosisSystems || []).some((s: any) => (s.resourceType || '').toString().toLowerCase() === 'tiwater');
-        if (codigoTienda) {
+        if (codigoTienda && usesMqttSource(puntoData.source_type)) {
           if (hasTiwaterSystems) fetchTiwaterData(codigoTienda);
           fetchLatestSensorData(codigoTienda);
         }
@@ -332,6 +398,11 @@ export default function PuntoVentaDetalleV2() {
         const regionId = puntoData.region?.id ?? puntoData.region_id ?? puntoData.ciudad?.regionId ?? '';
         if (puntoVentaId || clienteId) {
           fetchMetricsConfig(puntoVentaId, clienteId ? String(clienteId) : undefined, regionId ? String(regionId) : undefined);
+        }
+        if (usesTuyaSource(puntoData.source_type) && clienteId) {
+          get<MetricsData[]>(`/metrics`, { cliente: String(clienteId) })
+            .then((rows) => setTuyaMetrics(rows?.[0] || null))
+            .catch(() => setTuyaMetrics(null));
         }
 
         setLoading(false);
@@ -343,7 +414,7 @@ export default function PuntoVentaDetalleV2() {
         // If detalle has no TIWater in osmosisSystems (e.g. sensor_latest empty), try sensors/tiwater fallback only; then fetch historico if we have TIWater data.
         let dataForHistorico = puntoData;
         const tiwaterSystems = (puntoData?.osmosisSystems || []).filter((s: any) => (s.resourceType || '').toString().toLowerCase() === 'tiwater');
-        if (tiwaterSystems.length === 0 && codigoTienda) {
+        if (usesMqttSource(puntoData.source_type) && tiwaterSystems.length === 0 && codigoTienda) {
           try {
             const tiwRes = await fetch(`${CONFIG.API_BASE_URL_V2}/sensors/tiwater?codigoTienda=${encodeURIComponent(codigoTienda)}`, {
               headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
@@ -414,7 +485,7 @@ export default function PuntoVentaDetalleV2() {
       return () => clearInterval(interval);
     }
     return undefined;
-  }, [id, refreshTrigger]);
+  }, [id, refreshTrigger, historicoRange]);
 
   if (loading) {
     return (
@@ -447,17 +518,25 @@ export default function PuntoVentaDetalleV2() {
   const osmosisSystems = punto?.osmosisSystems || [];
   const osmosis = osmosisSystems.filter((s: any) => (s.resourceType || '').toString().toLowerCase() === 'osmosis');
   const tiwaterProduct = osmosisSystems.find((s: any) => (s.resourceType || '').toString().toLowerCase() === 'tiwater') || null;
-  const niveles = punto?.productos?.filter((p: any) => p.product_type === 'Nivel') || [];
-  const metricas = punto?.productos?.filter((p: any) => p.product_type === 'Metrica') || [];
-  const usingDefaultSensors = (punto?.osmosisSystems || []).some((s: any) => s.isDefault === true)
-    || tiwaterData?.isDefault === true;
+  const productos = punto?.productos || [];
+  const niveles = productos.filter((p: any) => p.product_type === 'Nivel');
+  const metricas = productos.filter((p: any) => p.product_type === 'Metrica');
+  const isTuyaOrigin = usesTuyaSource(punto?.source_type);
+  const isMqttOrigin = usesMqttSource(punto?.source_type);
+  const tuyaOsmosis = productos.filter((p: any) => p.product_type === 'Osmosis');
+  const tuyaPresion = productos.filter((p: any) => p.product_type === 'Pressure');
+  const tuyaNiveles = productos.filter((p: any) => p.product_type === 'Nivel');
+  const usingDefaultSensors = isMqttOrigin && (
+    (punto?.osmosisSystems || []).some((s: any) => s.isDefault === true)
+    || tiwaterData?.isDefault === true
+  );
 
   // Dev mode: only boolean column from API
   const userStr = localStorage.getItem('user');
   const user = userStr ? JSON.parse(userStr) : null;
   const isAdmin = user?.role?.name === 'admin' || user?.role === 'admin';
   const showDev = punto?.dev_mode === true;
-  const showDevDropdown = showDev && isAdmin;
+  const showDevDropdown = showDev && isAdmin && isMqttOrigin;
 
   const handleGenerateScenario = async () => {
     if (!selectedScenario) {
@@ -803,26 +882,101 @@ export default function PuntoVentaDetalleV2() {
             />
           </Grid>
 
-          {/* Middle: Máquinas */}
-          <Grid item xs={12}>
-            <MaquinasCard 
-              tiwaterData={tiwaterData}
-              tiwaterProduct={tiwaterProduct}
-              metricsConfig={metricsConfig}
-            />
-          </Grid>
+          {/* Middle: Máquinas + Almacenamiento (MQTT / hybrid) */}
+          {isMqttOrigin && (
+            <>
+              <Grid item xs={12}>
+                <MaquinasCard 
+                  tiwaterData={tiwaterData}
+                  tiwaterProduct={tiwaterProduct}
+                  metricsConfig={metricsConfig}
+                />
+              </Grid>
 
-          {/* Bottom: Almacenamiento (Layout horizontal) */}
-          <Grid item xs={12}>
-            <AlmacenamientoCard 
-              niveles={niveles} 
-              chartDataNiveles={chartDataNiveles}
-              tiwaterData={tiwaterData}
-              tiwaterProduct={tiwaterProduct}
-              metricsConfig={metricsConfig}
-              chartsLoading={chartsLoading}
-            />
-          </Grid>
+              <Grid item xs={12}>
+                <AlmacenamientoCard 
+                  niveles={niveles} 
+                  chartDataNiveles={chartDataNiveles}
+                  tiwaterData={tiwaterData}
+                  tiwaterProduct={tiwaterProduct}
+                  metricsConfig={metricsConfig}
+                  chartsLoading={chartsLoading}
+                />
+              </Grid>
+            </>
+          )}
+
+          {/* Tuya equipos: osmosis detail, export, nivel charts, V1-style metrics */}
+          {isTuyaOrigin && (
+            <Grid item xs={12}>
+              <Divider sx={{ borderStyle: 'dashed', my: 1 }} />
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                Equipos Tuya
+                {punto?.source_type === 'hybrid' && (
+                  <Chip label="Origen Tuya" size="small" color="secondary" sx={{ ml: 1 }} />
+                )}
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <PresionOsmosisSection presion={tuyaPresion} osmosis={tuyaOsmosis} />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Card variant="outlined" sx={{ p: 2, mb: 3 }}>
+                    <Typography variant="h6" gutterBottom>
+                      Exportar Reportes
+                    </Typography>
+                    <Divider sx={{ mb: 2 }} />
+                    <ExportReportButton
+                      puntoVentaId={String(punto.id ?? punto._id ?? id)}
+                      puntoVentaName={punto.name}
+                    />
+                    {tuyaOsmosis.length > 0 && (
+                      <>
+                        <Divider sx={{ my: 2 }} />
+                        {tuyaOsmosis.map((producto: any) => (
+                          <Box key={producto.id ?? producto._id} sx={{ mb: 2 }}>
+                            <ExportReportButton product={producto} />
+                          </Box>
+                        ))}
+                      </>
+                    )}
+                  </Card>
+                  {tuyaNiveles.length > 0 && !chartsLoading && (
+                    <TuyaNivelSection
+                      niveles={tuyaNiveles}
+                      chartDataNiveles={tuyaChartDataNiveles}
+                      osmosis={tuyaOsmosis}
+                      metrics={tuyaMetrics}
+                      historicoRange={historicoRange}
+                      onHistoricoRangeChange={(r: '24h' | '7d' | '30d') => setHistoricoRange(r)}
+                      hidePeriodSelector
+                    />
+                  )}
+                </Grid>
+
+                {(tuyaOsmosis.length > 0 || tuyaNiveles.length > 0) && (
+                  <Grid item xs={12}>
+                    <TuyaHistoricoPeriodSelector
+                      value={historicoRange}
+                      onChange={(r) => setHistoricoRange(r)}
+                    />
+                    {chartsLoading ? (
+                      <Box display="flex" justifyContent="center" py={3}>
+                        <CircularProgress size={28} />
+                      </Box>
+                    ) : (
+                      tuyaOsmosis.length > 0 && (
+                        <TuyaOsmosisHistoricoSection
+                          charts={tuyaOsmosisCharts}
+                          rangeLabel={TUYA_RANGE_LABELS[historicoRange]}
+                        />
+                      )
+                    )}
+                  </Grid>
+                )}
+              </Grid>
+            </Grid>
+          )}
         </Grid>
       </Box>
     </>

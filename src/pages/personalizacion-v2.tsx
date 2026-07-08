@@ -15,6 +15,7 @@ import {
   Divider,
   MenuItem,
   TableRow,
+  Checkbox,
   Accordion,
   TableBody,
   TableHead,
@@ -24,6 +25,7 @@ import {
   Typography,
   DialogTitle,
   FormControl,
+  ListItemText,
   DialogActions,
   DialogContent,
   InputAdornment,
@@ -31,17 +33,19 @@ import {
   AccordionDetails,
   AccordionSummary,
   CircularProgress,
-  FormControlLabel
+  FormControlLabel,
 } from "@mui/material";
 
+import { usesMqttSource, usesTuyaSource, getSourceTypeLabel } from 'src/utils/punto-venta-source';
 import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
+import { get } from "src/api/axiosHelper";
 import { CONFIG } from "src/config-global";
 
 import { Iconify } from 'src/components/iconify';
 import { SvgColor } from 'src/components/svg-color';
 
-import type { City, User, Metric, Cliente, MetricAlert, PuntosVenta } from './types';
+import type { City, User, Metric, Cliente, Product, MetricAlert, PuntosVenta, PuntoVentaSourceType } from './types';
 
 // Custom Swal instance with higher z-index to appear above MUI modals (MUI Dialog z-index is 1300)
 const MySwal = Swal.mixin({
@@ -226,7 +230,7 @@ interface SensorConfig {
   };
 }
 
-const defaultPv = { _id: '', name: '' , codigo_tienda: '', client_name:'', cliente: defaultclient, city: defaultCity, city_name: '', productos: [], lat: '' as any, long: '' as any }
+const defaultPv = { _id: '', name: '' , codigo_tienda: '', client_name:'', cliente: defaultclient, city: defaultCity, city_name: '', productos: [], lat: '' as any, long: '' as any, source_type: 'mqtt' as PuntoVentaSourceType }
 
 // Helper function to make v2.0 API calls
 const apiV2Call = async (endpoint: string, method: string = 'GET', data?: any) => {
@@ -288,6 +292,7 @@ export function CustomizationPageV2() {
   // Sensors state for edit modal
   const [editPvSensors, setEditPvSensors] = useState<SensorConfig[]>([]);
   const [editPvId, setEditPvId] = useState<string | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
   
   // Sensors state for view modal
   const [viewSensors, setViewSensors] = useState<SensorConfig[]>([]);
@@ -501,7 +506,17 @@ export function CustomizationPageV2() {
     fetchClients();
     fetchCities();
     fetchPuntosVenta();
+    fetchProducts();
   }, []);
+
+  const fetchProducts = async () => {
+    try {
+      const response = await get<Product[]>('/products');
+      setProducts(Array.isArray(response) ? response : []);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    }
+  };
 
   const fetchRegions = async () => {
     try {
@@ -864,7 +879,11 @@ export function CustomizationPageV2() {
         client_name: pv.cliente?.name || '',
         city: pv.city?._id || pv.city || pv.ciudad?.id || '',
         city_name: pv.city?.city || pv.ciudad?.name || '',
-        productos: [] // Products removed - using sensors instead
+        source_type: (pv.source_type || 'mqtt') as PuntoVentaSourceType,
+        products_count: pv.products_count ?? 0,
+        productos: Array.isArray(pv.productos)
+          ? pv.productos.map((p: any) => (typeof p === 'object' && p != null ? String(p.id ?? p._id ?? '') : String(p)))
+          : [],
       }));
 
       setPuntosVenta(formatted as unknown as PuntosVenta[]);
@@ -1156,9 +1175,16 @@ export function CustomizationPageV2() {
   const handlePvEdit = async (pv: PuntosVenta) => {
     const pvId = pv._id || pv.id || null;
     console.log('[handlePvEdit] Editing puntoVenta:', pv, 'pvId:', pvId);
-    // dev_mode: only boolean column from API, not meta or other JSON
     const devModeValue = pv.dev_mode === true;
-    setPvFormData({ ...pv, devMode: devModeValue });
+    const productIds = Array.isArray(pv.productos)
+      ? pv.productos.map((p) => (typeof p === 'object' && p != null ? String((p as any).id ?? (p as any)._id ?? '') : String(p)))
+      : [];
+    setPvFormData({
+      ...pv,
+      devMode: devModeValue,
+      source_type: (pv.source_type || 'mqtt') as PuntoVentaSourceType,
+      productos: productIds,
+    });
     setEditPvId(pvId ? String(pvId) : null);
     if (pvId) {
       await fetchSensorsForEdit(String(pvId));
@@ -1388,6 +1414,17 @@ export function CustomizationPageV2() {
     }));
   };
 
+  const handlePvSourceTypeChange = (e: any) => {
+    const next = (e.target.value || 'mqtt') as PuntoVentaSourceType;
+    setPvFormData((prev) => ({ ...prev, source_type: next }));
+  };
+
+  const handlePvProductosChange = (e: any) => {
+    const value = e?.target?.value;
+    const next = Array.isArray(value) ? value : value != null && value !== '' ? [value] : [];
+    setPvFormData((prev) => ({ ...prev, productos: next }));
+  };
+
   const handleClientSubmit = async () => {
     setLoading(true);
     try {
@@ -1435,7 +1472,23 @@ export function CustomizationPageV2() {
       const longStr = pvFormData.long != null && pvFormData.long !== '' ? String(pvFormData.long).trim() : '';
       const latNum = latStr === '' ? undefined : parseFloat(latStr);
       const longNum = longStr === '' ? undefined : parseFloat(longStr);
-      const payload: Record<string, unknown> = { ...pvFormData, devMode: devModeEnabled };
+      const sourceType = (pvFormData.source_type || 'mqtt') as PuntoVentaSourceType;
+      const productIds = usesTuyaSource(sourceType) && Array.isArray(pvFormData.productos)
+        ? pvFormData.productos
+            .map((p) => (typeof p === 'object' && p != null ? (p as any).id ?? (p as any)._id : p))
+            .map((id) => parseInt(String(id), 10))
+            .filter((n) => !Number.isNaN(n))
+        : undefined;
+
+      const payload: Record<string, unknown> = {
+        name: pvFormData.name,
+        codigo_tienda: pvFormData.codigo_tienda,
+        city: pvFormData.city,
+        cliente: pvFormData.cliente,
+        source_type: sourceType,
+        devMode: devModeEnabled,
+        productos: productIds,
+      };
       if (latNum !== undefined && !Number.isNaN(latNum)) payload.lat = latNum;
       else delete payload.lat;
       if (longNum !== undefined && !Number.isNaN(longNum)) payload.long = longNum;
@@ -1772,8 +1825,9 @@ export function CustomizationPageV2() {
                         <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
                           <StyledTableCellHeader>Cliente</StyledTableCellHeader>
                           <StyledTableCellHeader>Nombre</StyledTableCellHeader>
+                          <StyledTableCellHeader>Origen</StyledTableCellHeader>
                           <StyledTableCellHeader>Ciudad</StyledTableCellHeader>
-                          <StyledTableCellHeader>Sensores</StyledTableCellHeader>
+                          <StyledTableCellHeader>Sensores / Productos</StyledTableCellHeader>
                           <StyledTableCellHeader>Acciones</StyledTableCellHeader>
                         </TableRow>
                       </TableHead>
@@ -1782,11 +1836,18 @@ export function CustomizationPageV2() {
                           <StyledTableRow key={pv._id || pv.id}>
                             <StyledTableCell>{pv.client_name}</StyledTableCell>
                             <StyledTableCell>{pv.name}</StyledTableCell>
+                            <StyledTableCell>
+                              <Chip size="small" label={getSourceTypeLabel(pv.source_type)} color={pv.source_type === 'tuya' ? 'secondary' : pv.source_type === 'hybrid' ? 'warning' : 'default'} />
+                            </StyledTableCell>
                             <StyledTableCell>{pv.city_name}</StyledTableCell>
                             <StyledTableCell>
+                              {(pv.sensors_count ?? 0) > 0 || (pv.products_count ?? 0) > 0
+                                ? `${pv.sensors_count ?? 0} sens. / ${pv.products_count ?? 0} prod.`
+                                : '—'}
                               <Button 
                                 size="small" 
                                 variant="outlined"
+                                sx={{ ml: 1 }}
                                 onClick={async () => {
                                   const pvId = pv._id || pv.id || '';
                                   if (pvId) {
@@ -3447,6 +3508,19 @@ export function CustomizationPageV2() {
             </DialogTitle>
             <DialogContent>
               <Box display="flex" flexDirection="column" gap={2} mt={1}>
+                <FormControl fullWidth>
+                  <InputLabel shrink>Origen de datos</InputLabel>
+                  <Select
+                    name="source_type"
+                    value={pvFormData.source_type || 'mqtt'}
+                    onChange={handlePvSourceTypeChange}
+                  >
+                    <MenuItem value="mqtt">MQTT (sensores)</MenuItem>
+                    <MenuItem value="tuya">Tuya (productos)</MenuItem>
+                    <MenuItem value="hybrid">Híbrido (MQTT + Tuya)</MenuItem>
+                  </Select>
+                </FormControl>
+                {usesMqttSource(pvFormData.source_type) && (
                 <TextField
                   label="Código tienda"
                   name="codigo_tienda"
@@ -3454,8 +3528,20 @@ export function CustomizationPageV2() {
                   value={pvFormData.codigo_tienda || ""}
                   onChange={handlePvChange}
                   fullWidth
-                  helperText="Identificador único del punto de venta (requerido para v2.0)"
+                  helperText="Identificador MQTT (requerido para origen MQTT o híbrido)"
                 />
+                )}
+                {!usesMqttSource(pvFormData.source_type) && (
+                <TextField
+                  label="Código tienda (opcional)"
+                  name="codigo_tienda"
+                  placeholder="Auto-generado si se deja vacío"
+                  value={pvFormData.codigo_tienda || ""}
+                  onChange={handlePvChange}
+                  fullWidth
+                  helperText="Opcional para puntos Tuya-only; se auto-genera si no se indica"
+                />
+                )}
                 <TextField
                   label="Nombre"
                   name="name"
@@ -3497,6 +3583,33 @@ export function CustomizationPageV2() {
                     })}
                   </Select>
                 </FormControl>
+                {usesTuyaSource(pvFormData.source_type) && (
+                  <FormControl fullWidth>
+                    <InputLabel shrink>Productos Tuya</InputLabel>
+                    <Select
+                      multiple
+                      name="productos"
+                      value={Array.isArray(pvFormData.productos) ? pvFormData.productos.map(String) : []}
+                      onChange={handlePvProductosChange}
+                      renderValue={(selected) =>
+                        products
+                          .filter((p) => selected.includes(String((p as any)._id ?? (p as any).id ?? '')))
+                          .map((p) => p.name)
+                          .join(', ')
+                      }
+                    >
+                      {products.map((prod) => {
+                        const prodId = String((prod as any)._id ?? (prod as any).id ?? '');
+                        return (
+                          <MenuItem key={prodId} value={prodId}>
+                            <Checkbox checked={(pvFormData.productos || []).map(String).includes(prodId)} />
+                            <ListItemText primary={prod.name} secondary={prod.product_type} />
+                          </MenuItem>
+                        );
+                      })}
+                    </Select>
+                  </FormControl>
+                )}
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={6}>
                     <TextField

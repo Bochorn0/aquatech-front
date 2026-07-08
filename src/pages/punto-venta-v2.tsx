@@ -5,8 +5,9 @@ import { useNavigate } from 'react-router-dom';
 
 import Tooltip from '@mui/material/Tooltip';
 import TableSortLabel from '@mui/material/TableSortLabel';
-import { Box, Grid, Paper, Table, Button, Select, MenuItem, TableRow, TableBody, TableCell, TableHead, TextField, InputLabel, Typography, FormControl, ToggleButton, TablePagination, CircularProgress, ToggleButtonGroup } from '@mui/material';
+import { Box, Chip, Grid, Paper, Table, Button, Select, MenuItem, TableRow, TableBody, TableCell, TableHead, TextField, InputLabel, Typography, FormControl, ToggleButton, TablePagination, CircularProgress, ToggleButtonGroup } from '@mui/material';
 
+import { getSourceTypeLabel } from 'src/utils/punto-venta-source';
 import { StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
 import { get } from 'src/api/axiosHelper';
@@ -191,6 +192,8 @@ export default function PuntoVentaTableListV2() {
         return pv.online === true ? 1 : 0;
       case 'sensors_count':
         return pv.sensors_count ?? 0;
+      case 'source_type':
+        return getSourceTypeLabel(pv.source_type);
       default:
         return '';
     }
@@ -341,8 +344,13 @@ export default function PuntoVentaTableListV2() {
                       </TableSortLabel>
                     </StyledTableCellHeader>
                     <StyledTableCellHeader>
+                      <TableSortLabel active={orderBy === 'source_type'} direction={orderBy === 'source_type' ? order : 'asc'} onClick={() => handleSort('source_type')}>
+                        Origen
+                      </TableSortLabel>
+                    </StyledTableCellHeader>
+                    <StyledTableCellHeader>
                       <TableSortLabel active={orderBy === 'sensors_count'} direction={orderBy === 'sensors_count' ? order : 'asc'} onClick={() => handleSort('sensors_count')}>
-                        Sensores
+                        Sensores / Productos
                       </TableSortLabel>
                     </StyledTableCellHeader>
                     <StyledTableCellHeader>Actions</StyledTableCellHeader>
@@ -382,7 +390,12 @@ export default function PuntoVentaTableListV2() {
                             {estadoLine2 && <Box component="span" display="block" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{estadoLine2}</Box>}
                           </StyledTableCell>
                           <StyledTableCell>
-                            {pv.sensors_count ?? 0}
+                            <Chip size="small" label={getSourceTypeLabel(pv.source_type)} variant="outlined" />
+                          </StyledTableCell>
+                          <StyledTableCell>
+                            {(pv.sensors_count ?? 0) > 0 || (pv.products_count ?? 0) > 0
+                              ? `${pv.sensors_count ?? 0} / ${pv.products_count ?? 0}`
+                              : '0'}
                           </StyledTableCell>
                           <StyledTableCell>
                             <Button
