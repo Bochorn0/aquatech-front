@@ -20,6 +20,7 @@ import {
   toDisplayScalar,
   safeDisplayText,
   normalizeV1ClientMetrics,
+  matchV1MetricsRowForCliente,
 } from 'src/utils/safe-display-text';
 
 import { get } from 'src/api/axiosHelper';
@@ -121,8 +122,9 @@ async function fetchMetrics(clienteId: string, setMetrics: any) {
   try {
     pvDetalleLog('V1 /metrics fetch start (V1 detalle)', { clienteId });
     const metricsResponse = await get<MetricsData[]>(`/metrics`, { cliente: clienteId });
-    logV1MetricsRow('V1 detalle /metrics response', metricsResponse?.[0]);
-    const normalized = normalizeV1ClientMetrics(metricsResponse[0]) ?? null;
+    const list = Array.isArray(metricsResponse) ? metricsResponse : (metricsResponse as any)?.data ?? [];
+    logV1MetricsRow('V1 detalle /metrics response', matchV1MetricsRowForCliente(list, String(clienteId)));
+    const normalized = normalizeV1ClientMetrics(matchV1MetricsRowForCliente(list, String(clienteId))) ?? null;
     pvDetalleLog('V1 /metrics normalized (V1 detalle)', { normalized });
     setMetrics(normalized);
   } catch (err) {
@@ -288,8 +290,8 @@ export function PresionOsmosisSection({ presion, osmosis }: any) {
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   {p.icon ? (
                     <img
-                      src={`${CONFIG.ICON_URL}/${p.icon}`}
-                      alt={p.name}
+                      src={`${CONFIG.ICON_URL}/${safeDisplayText(p.icon, '')}`}
+                      alt={safeDisplayText(p.name, 'Osmosis')}
                       style={{ width: '50px', height: '50px', marginRight: '12px' }}
                     />
                   ) : (
@@ -844,15 +846,18 @@ function NivelHistoricoChart({ nivelName, chart }: { nivelName: string; chart: a
 /* -------------------------------------------------------------------------- */
 
 export function TuyaOsmosisMetricsSection({ osmosis = [], metrics = null }: { osmosis?: any[]; metrics?: MetricsData | null }) {
-  if (!osmosis?.length) return null;
+  useEffect(() => {
+    if (!osmosis?.length) return;
+    pvDetalleLog('TuyaOsmosisMetricsSection render', {
+      osmosisCount: osmosis.length,
+      metrics,
+      tds_range: metrics?.tds_range,
+      production_volume_range: metrics?.production_volume_range,
+    });
+    logTuyaProductStatus('TuyaOsmosisMetricsSection', osmosis);
+  }, [osmosis, metrics]);
 
-  pvDetalleLog('TuyaOsmosisMetricsSection render', {
-    osmosisCount: osmosis.length,
-    metrics,
-    tds_range: metrics?.tds_range,
-    production_volume_range: metrics?.production_volume_range,
-  });
-  logTuyaProductStatus('TuyaOsmosisMetricsSection', osmosis);
+  if (!osmosis?.length) return null;
 
   return (
     <Box sx={{ mt: 4 }}>

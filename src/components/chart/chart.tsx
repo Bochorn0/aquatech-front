@@ -1,10 +1,15 @@
 import type { BoxProps } from '@mui/material/Box';
 
-import ApexChart from 'react-apexcharts';
+import ReactApexChart from 'react-apexcharts';
 
 import Box from '@mui/material/Box';
 
 import type { ChartProps } from './types';
+
+const ApexChart =
+  typeof ReactApexChart === 'function'
+    ? ReactApexChart
+    : (ReactApexChart as { default?: typeof ReactApexChart }).default;
 
 const chartClasses = { root: 'aquatech_base_chart' };
 // ----------------------------------------------------------------------
@@ -33,7 +38,11 @@ export function Chart({
       }}
       {...other}
     >
-      <ApexChart type={type} series={series} options={options} width="100%" height="100%" />
+      {typeof ApexChart === 'function' ? (
+        <ApexChart type={type} series={series} options={options} width="100%" height="100%" />
+      ) : (
+        <Box sx={{ p: 2, typography: 'caption', color: 'text.secondary' }}>Gráfica no disponible</Box>
+      )}
     </Box>
   );
 }

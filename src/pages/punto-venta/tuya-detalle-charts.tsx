@@ -16,7 +16,6 @@ import {
 import { fNumber } from 'src/utils/format-number';
 import { safeDisplayText } from 'src/utils/safe-display-text';
 
-import { Iconify } from 'src/components/iconify';
 import { Chart, useChart } from 'src/components/chart';
 
 export type TuyaHistoricoRange = '24h' | '7d' | '30d';
@@ -242,7 +241,6 @@ function TuyaLineChart({
     <Button
       size="small"
       variant="outlined"
-      startIcon={<Iconify icon="solar:export-bold" />}
       onClick={() =>
         downloadChartCsv({
           productName: productName || 'osmosis',

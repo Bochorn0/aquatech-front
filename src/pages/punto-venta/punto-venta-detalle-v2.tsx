@@ -31,10 +31,13 @@ import { fNumber } from 'src/utils/format-number';
 import { getDashboardVersion } from 'src/utils/permissions';
 import { usesMqttSource , usesTuyaSource, resolveHistoricoResourceId } from 'src/utils/punto-venta-source';
 import {
+  safeLower,
   toFlowNumber,
   safeDisplayText,
   resolveClienteId,
   normalizeV1ClientMetrics,
+  sanitizeMetricsConfigList,
+  matchV1MetricsRowForCliente,
 } from 'src/utils/safe-display-text';
 import {
   pvDetalleLog,
@@ -51,6 +54,7 @@ import { CONFIG } from 'src/config-global';
 
 import { Iconify } from 'src/components/iconify';
 import { Chart, useChart } from 'src/components/chart';
+import { PvDetalleErrorBoundary } from 'src/components/pv-detalle-error-boundary';
 
 import { ExportReportButton } from './export-button';
 import {
@@ -256,7 +260,7 @@ export default function PuntoVentaDetalleV2() {
           );
           if (forThisPunto.length > 0) {
             logMetricsConfigRules(`fetchMetricsConfig punto ${puntoVentaId}`, forThisPunto);
-            setMetricsConfig(forThisPunto);
+            setMetricsConfig(sanitizeMetricsConfigList(forThisPunto));
             return;
           }
         }
@@ -292,7 +296,7 @@ export default function PuntoVentaDetalleV2() {
             }
             if (Array.isArray(regionList) && regionList.length > 0) {
               logMetricsConfigRules(`fetchMetricsConfig region fallback punto ${puntoVentaId}`, regionList);
-              setMetricsConfig(regionList);
+              setMetricsConfig(sanitizeMetricsConfigList(regionList));
               return;
             }
           } catch (e) {
@@ -301,7 +305,7 @@ export default function PuntoVentaDetalleV2() {
         }
         if (Array.isArray(list) && list.length > 0) {
           logMetricsConfigRules(`fetchMetricsConfig client list punto ${puntoVentaId}`, list);
-          setMetricsConfig(list);
+          setMetricsConfig(sanitizeMetricsConfigList(list));
         }
       } catch (error) {
         console.error('Error fetching metrics config:', error);
@@ -340,10 +344,15 @@ export default function PuntoVentaDetalleV2() {
             })
           );
           const merged = { ...puntoData, productos };
-          setPunto(merged);
           prepareChartDataTuya(merged, setTuyaChartDataNiveles);
           const osmosisProds = productos.filter((p: any) => p.product_type === 'Osmosis');
-          setTuyaOsmosisCharts(prepareOsmosisHistoricoCharts(osmosisProds, historicoRange));
+          const charts = prepareOsmosisHistoricoCharts(osmosisProds, historicoRange);
+          pvDetalleLog('historico fetch done', {
+            puntoId: id,
+            chartBundles: charts.length,
+            hoursWithData: osmosisProds[0]?.historico?.hours_with_data?.length ?? 0,
+          });
+          setTuyaOsmosisCharts(charts);
         } catch (e) {
           console.warn('Error fetching Tuya historico for charts:', e);
         } finally {
@@ -448,7 +457,9 @@ export default function PuntoVentaDetalleV2() {
           });
         }
         setPunto(puntoData);
-        prepareChartDataNiveles(puntoData, setChartDataNiveles);
+        if (usesMqttSource(puntoData.source_type)) {
+          prepareChartDataNiveles(puntoData, setChartDataNiveles);
+        }
 
         if (usesTuyaSource(puntoData.source_type)) {
           const productosDbg = puntoData.productos || [];
@@ -481,15 +492,14 @@ export default function PuntoVentaDetalleV2() {
           pvDetalleLog('V1 /metrics fetch start', { puntoId: id, clienteId });
           get<MetricsData[]>(`/metrics`, { cliente: clienteId })
             .then((rows) => {
-              const list = Array.isArray(rows) ? rows : [];
-              const forClient = list.find(
-                (m: any) => String(m.cliente ?? m.client_id) === clienteId
-              );
+              const list = Array.isArray(rows) ? rows : (rows as any)?.data ?? [];
+              const forClient = matchV1MetricsRowForCliente(list, clienteId);
               logV1MetricsRow(`punto ${id} /metrics response`, forClient);
               const normalized = normalizeV1ClientMetrics(forClient);
               pvDetalleLog('V1 /metrics normalized', {
                 puntoId: id,
                 found: Boolean(forClient),
+                rowCount: list.length,
                 normalized,
               });
               setTuyaMetrics(normalized);
@@ -970,6 +980,7 @@ export default function PuntoVentaDetalleV2() {
         <Grid container spacing={3}>
           {/* Top: Unified Overview Card (Estado + Osmosis + Map) */}
           <Grid item xs={12}>
+            <PvDetalleErrorBoundary name="Resumen">
             <UnifiedOverviewCard 
               punto={punto}
               puntoId={id}
@@ -981,6 +992,7 @@ export default function PuntoVentaDetalleV2() {
               metricsConfig={metricsConfig}
               onLocationUpdated={handleLocationUpdated}
             />
+            </PvDetalleErrorBoundary>
           </Grid>
 
           {/* Middle: Máquinas + Almacenamiento (MQTT / hybrid) */}
@@ -1010,6 +1022,7 @@ export default function PuntoVentaDetalleV2() {
           {/* Tuya equipos: osmosis detail, export, nivel charts, V1-style metrics */}
           {isTuyaOrigin && (
             <Grid item xs={12}>
+              <PvDetalleErrorBoundary name="Equipos Tuya">
               <Divider sx={{ borderStyle: 'dashed', my: 1 }} />
               <Typography variant="h6" sx={{ mb: 2 }}>
                 Equipos Tuya
@@ -1070,15 +1083,18 @@ export default function PuntoVentaDetalleV2() {
                       </Box>
                     ) : (
                       tuyaOsmosis.length > 0 && (
-                        <TuyaOsmosisHistoricoSection
-                          charts={tuyaOsmosisCharts}
-                          rangeLabel={TUYA_RANGE_LABELS[historicoRange]}
-                        />
+                        <PvDetalleErrorBoundary name="Histórico Tuya">
+                          <TuyaOsmosisHistoricoSection
+                            charts={tuyaOsmosisCharts}
+                            rangeLabel={TUYA_RANGE_LABELS[historicoRange]}
+                          />
+                        </PvDetalleErrorBoundary>
                       )
                     )}
                   </Grid>
                 )}
               </Grid>
+              </PvDetalleErrorBoundary>
             </Grid>
           )}
         </Grid>
@@ -2049,10 +2065,16 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
   
   if (!osmosisData && (tiwaterData || tiwaterProduct)) {
     const findStatusValue = (codes: string[], status: any[]) => {
-      const found = status?.find((s: any) => 
-        codes.some(code => s.code === code || s.label === code || s.code?.toLowerCase() === code.toLowerCase() || s.label?.toLowerCase() === code.toLowerCase())
+      const found = status?.find((s: any) =>
+        codes.some((code) => {
+          const codeLower = safeLower(code);
+          return (
+            safeLower(s.code) === codeLower ||
+            safeLower(s.label) === codeLower
+          );
+        })
       );
-      return found?.value !== null && found?.value !== undefined ? Number(found.value) : null;
+      return found?.value !== null && found?.value !== undefined ? toFlowNumber(found.value) : null;
     };
     const status = tiwaterProduct?.status || [];
     const produccion = findStatusValue(['Flujo Producción', 'flowrate_speed_1', 'flujo_produccion'], status) || tiwaterData?.caudales?.purificada;
@@ -2071,11 +2093,11 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
     };
     
     const metricConfig = metricsConfig?.find((m: any) => {
-      const metricType = metricTypeMap[metricName] || metricName.toLowerCase();
+      const metricType = metricTypeMap[metricName] || safeLower(metricName);
       return (
-        m.metric_name?.toLowerCase() === metricName.toLowerCase() ||
-        m.sensor_type?.toLowerCase() === metricName.toLowerCase() ||
-        m.metric_type?.toLowerCase() === metricType ||
+        safeLower(m.metric_name) === safeLower(metricName) ||
+        safeLower(m.sensor_type) === safeLower(metricName) ||
+        safeLower(m.metric_type) === metricType ||
         (metricName === 'PRODUCCION' && (m.metric_type === 'produccion' || m.sensor_type === 'flujo_produccion')) ||
         (metricName === 'RECHAZO' && (m.metric_type === 'rechazo' || m.sensor_type === 'flujo_rechazo')) ||
         (metricName === 'EFICIENCIA' && m.metric_type === 'eficiencia')

@@ -17,6 +17,44 @@ export function safeDisplayText(value: unknown, fallback = ''): string {
 }
 
 /** Resolve numeric cliente id from V2 detalle payload (never return a cliente object). */
+export function safeLower(value: unknown): string {
+  return safeDisplayText(value, '').toLowerCase();
+}
+
+/** Match V1 /metrics row by client id (cliente may be number, string, or nested object). */
+export function matchV1MetricsRowForCliente(rows: unknown, clienteId: string): unknown {
+  if (!Array.isArray(rows) || !clienteId) return undefined;
+  return rows.find((m: any) => {
+    const raw = m?.cliente ?? m?.client_id;
+    if (raw != null && typeof raw === 'object') {
+      const id = (raw as Record<string, unknown>).id ?? (raw as Record<string, unknown>)._id;
+      return id != null && String(id) === clienteId;
+    }
+    return raw != null && String(raw) === clienteId;
+  });
+}
+
+/** Normalize V2/region metric configs so rule labels/types are always render-safe strings. */
+export function sanitizeMetricsConfigList(list: unknown): any[] {
+  if (!Array.isArray(list)) return [];
+  return list.map((m: any) => ({
+    ...m,
+    metric_name: safeDisplayText(m?.metric_name, ''),
+    metric_type: safeDisplayText(m?.metric_type, ''),
+    sensor_type: safeDisplayText(m?.sensor_type, ''),
+    sensor_unit: safeDisplayText(m?.sensor_unit, ''),
+    rules: Array.isArray(m?.rules)
+      ? m.rules.map((rule: any) => ({
+          ...rule,
+          label: safeDisplayText(rule?.label, ''),
+          message: safeDisplayText(rule?.message, ''),
+          color: safeDisplayText(rule?.color, ''),
+          severity: safeDisplayText(rule?.severity, ''),
+        }))
+      : [],
+  }));
+}
+
 export function resolveClienteId(
   punto: { cliente?: unknown; clientId?: unknown } | null | undefined
 ): string | undefined {
