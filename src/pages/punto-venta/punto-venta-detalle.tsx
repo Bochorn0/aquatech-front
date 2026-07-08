@@ -21,6 +21,49 @@ import { PressureGauge } from '../charts/pressure-gauge';
 
 import type { MetricsData } from '../types';
 
+/** Coerce API/Tuya values to a React-safe scalar (avoids React #130 on object children). */
+export function safeDisplayText(value: unknown, fallback = ''): string {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'object') {
+    const o = value as Record<string, unknown>;
+    if (o.value != null) return safeDisplayText(o.value, fallback);
+    if (o.val != null) return safeDisplayText(o.val, fallback);
+    if (typeof o.es === 'string') return o.es;
+    if (typeof o.en === 'string') return o.en;
+    if (typeof o.text === 'string') return o.text;
+    if (typeof o.label === 'string') return o.label;
+  }
+  return fallback;
+}
+
+export function toDisplayScalar(value: unknown, fallback: string | number = 'N/A'): string | number {
+  if (value === null || value === undefined || value === '') return fallback;
+  if (typeof value === 'number' && !Number.isNaN(value)) return value;
+  if (typeof value === 'boolean') return value ? 'Sí' : 'No';
+  if (typeof value === 'string') return value;
+  const nested = safeDisplayText(value, '');
+  if (nested) {
+    const n = Number(nested);
+    return Number.isNaN(n) ? nested : n;
+  }
+  const n = Number(value);
+  return Number.isNaN(n) ? fallback : n;
+}
+
+export function toMetricRange(value: unknown): number | 'N/A' {
+  const scalar = toDisplayScalar(value, 'N/A');
+  if (scalar === 'N/A') return 'N/A';
+  const n = Number(scalar);
+  return Number.isNaN(n) ? 'N/A' : n;
+}
+
+function getStatusValue(status: unknown, code: string): unknown {
+  if (!Array.isArray(status)) return null;
+  return status.find((s: any) => s.code === code)?.value ?? null;
+}
+
 export function prepareChartDataTuya(puntoData: any, setChartDataNiveles: any) {
   const productos = puntoData?.productos || [];
   const niveles = productos.filter((p: any) => p.product_type === 'Nivel');
@@ -244,17 +287,18 @@ export function PresionOsmosisSection({ presion, osmosis }: any) {
     <Box>
       {/* 🔹 Sistemas de Osmosis */}
       {osmosis.map((p: any) => {
-        const tds = p.status.find((s: any) => s.code === 'tds_out')?.value;
-        const volumeProd = p.status.find((s: any) => s.code === 'flowrate_total_1')?.value;
-        const volumeReject = p.status.find((s: any) => s.code === 'flowrate_total_2')?.value;
-        const flowRate = p.status.find((s: any) => s.code === 'flowrate_speed_1')?.value;
-        const rejectFlow = p.status.find((s: any) => s.code === 'flowrate_speed_2')?.value;
-        const temp = p.status.find((s: any) => s.code === 'temperature')?.value;
-        const filter1 = p.status.find((s: any) => s.code === 'filter_element_1')?.value;
-        const filter2 = p.status.find((s: any) => s.code === 'filter_element_2')?.value;
-        const filter3 = p.status.find((s: any) => s.code === 'filter_element_3')?.value;
-        const filter4 = p.status.find((s: any) => s.code === 'filter_element_4')?.value;
-        const filter5 = p.status.find((s: any) => s.code === 'filter_element_5')?.value;
+        const tds = toDisplayScalar(getStatusValue(p.status, 'tds_out'));
+        const volumeProd = toDisplayScalar(getStatusValue(p.status, 'flowrate_total_1'));
+        const volumeReject = toDisplayScalar(getStatusValue(p.status, 'flowrate_total_2'));
+        const flowRate = toDisplayScalar(getStatusValue(p.status, 'flowrate_speed_1'));
+        const rejectFlow = toDisplayScalar(getStatusValue(p.status, 'flowrate_speed_2'));
+        const temp = toDisplayScalar(getStatusValue(p.status, 'temperature'));
+        const filter1 = toDisplayScalar(getStatusValue(p.status, 'filter_element_1'));
+        const filter2 = toDisplayScalar(getStatusValue(p.status, 'filter_element_2'));
+        const filter3 = toDisplayScalar(getStatusValue(p.status, 'filter_element_3'));
+        const filter4 = toDisplayScalar(getStatusValue(p.status, 'filter_element_4'));
+        const filter5 = getStatusValue(p.status, 'filter_element_5');
+        const filter5Display = filter5 !== null && filter5 !== undefined ? toDisplayScalar(filter5) : undefined;
 
         return (
           <Box key={p._id} sx={{ mb: 2 }}>
@@ -286,7 +330,7 @@ export function PresionOsmosisSection({ presion, osmosis }: any) {
                       RO
                     </Box>
                   )}
-                  <Typography variant="h6">{p.name}</Typography>
+                  <Typography variant="h6">{safeDisplayText(p.name, 'Osmosis')}</Typography>
                 </Box>
                 <Chip
                   label={p.online ? 'Online' : 'Offline'}
@@ -303,7 +347,7 @@ export function PresionOsmosisSection({ presion, osmosis }: any) {
                     TDS
                   </Typography>
                   <Typography variant="h6">
-                    {tds ?? 'N/A'} <Typography component="span" variant="caption">ppm</Typography>
+                    {tds} <Typography component="span" variant="caption">ppm</Typography>
                   </Typography>
                 </Grid>
                 <Grid item xs={6}>
@@ -311,7 +355,7 @@ export function PresionOsmosisSection({ presion, osmosis }: any) {
                     Temperatura
                   </Typography>
                   <Typography variant="h6">
-                    {temp ?? 'N/A'} <Typography component="span" variant="caption">°C</Typography>
+                    {temp} <Typography component="span" variant="caption">°C</Typography>
                   </Typography>
                 </Grid>
                 <Grid item xs={6}>
@@ -319,7 +363,7 @@ export function PresionOsmosisSection({ presion, osmosis }: any) {
                     Vol. Total Prod.
                   </Typography>
                   <Typography variant="h6">
-                    {volumeProd ?? 'N/A'} <Typography component="span" variant="caption">L</Typography>
+                    {volumeProd} <Typography component="span" variant="caption">L</Typography>
                   </Typography>
                 </Grid>
                 <Grid item xs={6}>
@@ -327,7 +371,7 @@ export function PresionOsmosisSection({ presion, osmosis }: any) {
                     Vol. Rechazo
                   </Typography>
                   <Typography variant="h6">
-                    {volumeReject ?? 'N/A'} <Typography component="span" variant="caption">L</Typography>
+                    {volumeReject} <Typography component="span" variant="caption">L</Typography>
                   </Typography>
                 </Grid>
                 <Grid item xs={6}>
@@ -335,7 +379,7 @@ export function PresionOsmosisSection({ presion, osmosis }: any) {
                     Flujo Caudal
                   </Typography>
                   <Typography variant="h6">
-                    {flowRate ?? 'N/A'} <Typography component="span" variant="caption">L/min</Typography>
+                    {flowRate} <Typography component="span" variant="caption">L/min</Typography>
                   </Typography>
                 </Grid>
                 <Grid item xs={6}>
@@ -343,7 +387,7 @@ export function PresionOsmosisSection({ presion, osmosis }: any) {
                     Flujo Rechazo
                   </Typography>
                   <Typography variant="h6">
-                    {rejectFlow ?? 'N/A'} <Typography component="span" variant="caption">L/min</Typography>
+                    {rejectFlow} <Typography component="span" variant="caption">L/min</Typography>
                   </Typography>
                 </Grid>
               </Grid>
@@ -362,7 +406,7 @@ export function PresionOsmosisSection({ presion, osmosis }: any) {
                       F. Sedimentos
                     </Typography>
                     <Typography variant="body2" fontWeight="bold">
-                      {filter1 ?? 'N/A'} H
+                      {filter1} H
                     </Typography>
                   </Box>
                 </Grid>
@@ -372,7 +416,7 @@ export function PresionOsmosisSection({ presion, osmosis }: any) {
                       F. Carbon Gran.
                     </Typography>
                     <Typography variant="body2" fontWeight="bold">
-                      {filter2 ?? 'N/A'} H
+                      {filter2} H
                     </Typography>
                   </Box>
                 </Grid>
@@ -382,7 +426,7 @@ export function PresionOsmosisSection({ presion, osmosis }: any) {
                       F. Carbon Bloque
                     </Typography>
                     <Typography variant="body2" fontWeight="bold">
-                      {filter3 ?? 'N/A'} H
+                      {filter3} H
                     </Typography>
                   </Box>
                 </Grid>
@@ -392,18 +436,18 @@ export function PresionOsmosisSection({ presion, osmosis }: any) {
                       Membrana
                     </Typography>
                     <Typography variant="body2" fontWeight="bold">
-                      {filter4 ?? 'N/A'} H
+                      {filter4} H
                     </Typography>
                   </Box>
                 </Grid>
-                {filter5 !== undefined && (
+                {filter5Display !== undefined && (
                   <Grid item xs={6} sm={4}>
                     <Box sx={{ p: 1, bgcolor: 'background.neutral', borderRadius: 1, textAlign: 'center' }}>
                       <Typography variant="caption" color="text.secondary">
                         Filtro 5
                       </Typography>
                       <Typography variant="body2" fontWeight="bold">
-                        {filter5 ?? 'N/A'} H
+                        {filter5Display} H
                       </Typography>
                     </Box>
                   </Grid>
@@ -816,21 +860,110 @@ function NivelHistoricoChart({ nivelName, chart }: { nivelName: string; chart: a
 }
 
 /* -------------------------------------------------------------------------- */
+/* 🧱 Tuya osmosis metrics (V1-style ranges) */
+/* -------------------------------------------------------------------------- */
+
+export function TuyaOsmosisMetricsSection({ osmosis = [], metrics = null }: { osmosis?: any[]; metrics?: MetricsData | null }) {
+  if (!osmosis?.length) return null;
+
+  return (
+    <Box sx={{ mt: 4 }}>
+      <Divider sx={{ mb: 2 }} />
+      {osmosis.map((producto: any) => {
+        const getNumber = (code: string) => {
+          const v = getStatusValue(producto.status, code);
+          const scalar = toDisplayScalar(v, 0);
+          const n = Number(scalar);
+          return Number.isNaN(n) ? 0 : n;
+        };
+        const flowProd = getNumber('flowrate_speed_1');
+        const flowReject = getNumber('flowrate_speed_2');
+        const tds = getNumber('tds_out');
+        const volProd = getNumber('flowrate_total_1');
+        const volReject = getNumber('flowrate_total_2');
+        const tdsRange = toMetricRange(metrics?.tds_range);
+        const prodRange = toMetricRange(metrics?.production_volume_range);
+        const rejectRange = toMetricRange(metrics?.rejected_volume_range);
+
+        const eficiencia = (flowProd + flowReject) > 0
+          ? `${((flowProd / (flowProd + flowReject)) * 100).toFixed(2)}%`
+          : 'N/A';
+        const tdsEnRango = (tdsRange !== 'N/A' && tds > 0) ? (tds <= tdsRange ? 'Sí' : 'No') : 'N/A';
+        const prodEnRango = (prodRange !== 'N/A' && volProd > 0) ? (volProd <= prodRange ? 'Sí' : 'No') : 'N/A';
+        const rechEnRango = (rejectRange !== 'N/A' && volReject > 0) ? (volReject <= rejectRange ? 'Sí' : 'No') : 'N/A';
+
+        return (
+          <Card key={producto._id ?? producto.id} variant="outlined" sx={{ mb: 2, p: 2 }}>
+            <Typography variant="subtitle1" sx={{ mb: 2, textAlign: 'center' }}>
+              Metricas de {safeDisplayText(producto.name, 'Osmosis')}
+            </Typography>
+            <Grid container spacing={1.5}>
+              <Grid item xs={6} sm={3}>
+                <Box sx={{ p: 1, bgcolor: 'background.neutral', borderRadius: 1, textAlign: 'center', minHeight: 70, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
+                    Eficiencia
+                  </Typography>
+                  <Typography variant="body1" fontWeight="bold" color="primary">
+                    {eficiencia}
+                  </Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Box sx={{ p: 1, bgcolor: 'background.neutral', borderRadius: 1, textAlign: 'center', minHeight: 70, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
+                    TDS en rango
+                  </Typography>
+                  <Chip label={tdsEnRango} color={tdsEnRango === 'Sí' ? 'success' : tdsEnRango === 'No' ? 'error' : 'default'} size="small" sx={{ mt: 0 }} />
+                  <Typography variant="caption">{tdsRange !== 'N/A' ? `(Máx: ${tdsRange})` : null}</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Box sx={{ p: 1, bgcolor: 'background.neutral', borderRadius: 1, textAlign: 'center', minHeight: 70, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
+                    Producción en rango
+                  </Typography>
+                  <Chip label={prodEnRango} color={prodEnRango === 'Sí' ? 'success' : prodEnRango === 'No' ? 'error' : 'default'} size="small" sx={{ mt: 0 }} />
+                  <Typography variant="caption">{prodRange !== 'N/A' ? `(Máx: ${prodRange})` : null}</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Box sx={{ p: 1, bgcolor: 'background.neutral', borderRadius: 1, textAlign: 'center', minHeight: 70, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
+                    Rechazo en rango
+                  </Typography>
+                  <Chip label={rechEnRango} color={rechEnRango === 'Sí' ? 'success' : rechEnRango === 'No' ? 'error' : 'default'} size="small" sx={{ mt: 0 }} />
+                  <Typography variant="caption">{rejectRange !== 'N/A' ? `(Máx: ${rejectRange})` : null}</Typography>
+                </Box>
+              </Grid>
+            </Grid>
+          </Card>
+        );
+      })}
+    </Box>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* 🧱 Sección 3: Niveles */
 /* -------------------------------------------------------------------------- */
 
 export function TuyaNivelSection({ niveles, chartDataNiveles, osmosis = [], metrics = null, historicoRange = '24h', onHistoricoRangeChange, hidePeriodSelector = false }: any) {
+  const metricsSection = <TuyaOsmosisMetricsSection osmosis={osmosis} metrics={metrics} />;
+
   if (niveles.length === 0) {
     return (
-      <Card variant="outlined" sx={{ p: 2 }}>
-        <Typography variant="h6" gutterBottom>
-          Niveles
-        </Typography>
-        <Divider sx={{ mb: 2 }} />
-        <Typography variant="body2" color="text.secondary">
-          No hay productos de tipo Nivel
-        </Typography>
-      </Card>
+      <Box>
+        <Card variant="outlined" sx={{ p: 2 }}>
+          <Typography variant="h6" gutterBottom>
+            Niveles
+          </Typography>
+          <Divider sx={{ mb: 2 }} />
+          <Typography variant="body2" color="text.secondary">
+            No hay productos de tipo Nivel
+          </Typography>
+        </Card>
+        {metricsSection}
+      </Box>
     );
   }
 
@@ -926,78 +1059,7 @@ export function TuyaNivelSection({ niveles, chartDataNiveles, osmosis = [], metr
         })}
       </Box>
 
-      {/* Sección Métricas con diseño tipo filtros */}
-      {osmosis?.length > 0 && (
-        <Box sx={{ mt: 4 }}>
-          <Divider sx={{ mb: 2 }} />
-          {osmosis.map((producto: any) => {
-            const getNumber = (s: any) => {
-              const v = producto.status.find((x: any) => x.code === s)?.value;
-              return v !== undefined && v !== null && v !== '' ? Number(v) : 0;
-            };
-            const flowProd = getNumber('flowrate_speed_1');
-            const flowReject = getNumber('flowrate_speed_2');
-            const tds = getNumber('tds_out');
-            const volProd = getNumber('flowrate_total_1');
-            const volReject = getNumber('flowrate_total_2');
-            const tdsRange = metrics?.tds_range ?? 'N/A';
-            const prodRange = metrics?.production_volume_range ?? 'N/A';
-            const rejectRange = metrics?.rejected_volume_range ?? 'N/A';
-
-            const eficiencia = (flowProd + flowReject) > 0 
-              ? `${((flowProd / (flowProd + flowReject)) * 100).toFixed(2)}%` 
-              : 'N/A';
-            const tdsEnRango = (tdsRange !== 'N/A' && tds > 0) ? (tds <= tdsRange ? 'Sí' : 'No') : 'N/A';
-            const prodEnRango = (prodRange !== 'N/A' && volProd > 0) ? (volProd <= prodRange ? 'Sí' : 'No') : 'N/A';
-            const rechEnRango = (rejectRange !== 'N/A' && volReject > 0) ? (volReject <= rejectRange ? 'Sí' : 'No') : 'N/A';
-
-            return (
-              <Card key={producto._id} variant="outlined" sx={{ mb: 2, p: 2 }}>
-                <Typography variant="subtitle1" sx={{ mb: 2, textAlign: 'center' }}>Metricas de {producto.name}</Typography>
-                <Grid container spacing={1.5}>
-                  <Grid item xs={6} sm={3}>
-                    <Box sx={{ p: 1, bgcolor: 'background.neutral', borderRadius: 1, textAlign: 'center', minHeight: 70, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                      <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
-                        Eficiencia
-                      </Typography>
-                      <Typography variant="body1" fontWeight="bold" color="primary">
-                        {eficiencia}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={6} sm={3}>
-                    <Box sx={{ p: 1, bgcolor: 'background.neutral', borderRadius: 1, textAlign: 'center', minHeight: 70, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                      <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
-                        TDS en rango
-                      </Typography>
-                      <Chip label={tdsEnRango} color={tdsEnRango==='Sí'?'success': tdsEnRango==='No'?'error':'default'} size="small" sx={{ mt: 0 }} />
-                      <Typography variant="caption">{tdsRange !== 'N/A' && `(Máx: ${tdsRange})`}</Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={6} sm={3}>
-                    <Box sx={{ p: 1, bgcolor: 'background.neutral', borderRadius: 1, textAlign: 'center', minHeight: 70, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                      <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
-                        Producción en rango
-                      </Typography>
-                      <Chip label={prodEnRango} color={prodEnRango==='Sí'?'success': prodEnRango==='No'?'error':'default'} size="small" sx={{ mt: 0 }} />
-                      <Typography variant="caption">{prodRange !== 'N/A' && `(Máx: ${prodRange})`}</Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={6} sm={3}>
-                    <Box sx={{ p: 1, bgcolor: 'background.neutral', borderRadius: 1, textAlign: 'center', minHeight: 70, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                      <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
-                        Rechazo en rango
-                      </Typography>
-                      <Chip label={rechEnRango} color={rechEnRango==='Sí'?'success': rechEnRango==='No'?'error':'default'} size="small" sx={{ mt: 0 }} />
-                      <Typography variant="caption">{rejectRange !== 'N/A' && `(Máx: ${rejectRange})`}</Typography>
-                    </Box>
-                  </Grid>
-                </Grid>
-              </Card>
-            );
-          })}
-        </Box>
-      )}
+      {metricsSection}
     </Box>
   );
 }

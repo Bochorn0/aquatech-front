@@ -42,6 +42,8 @@ import {
   TuyaNivelSection,
   prepareChartDataTuya,
   PresionOsmosisSection,
+  TuyaOsmosisMetricsSection,
+  safeDisplayText,
 } from './punto-venta-detalle';
 import {
   TUYA_RANGE_LABELS,
@@ -401,7 +403,13 @@ export default function PuntoVentaDetalleV2() {
         }
         if (usesTuyaSource(puntoData.source_type) && clienteId) {
           get<MetricsData[]>(`/metrics`, { cliente: String(clienteId) })
-            .then((rows) => setTuyaMetrics(rows?.[0] || null))
+            .then((rows) => {
+              const list = Array.isArray(rows) ? rows : [];
+              const forClient = list.find(
+                (m: any) => String(m.cliente ?? m.client_id) === String(clienteId)
+              );
+              setTuyaMetrics(forClient ?? null);
+            })
             .catch(() => setTuyaMetrics(null));
         }
 
@@ -951,6 +959,9 @@ export default function PuntoVentaDetalleV2() {
                       onHistoricoRangeChange={(r: '24h' | '7d' | '30d') => setHistoricoRange(r)}
                       hidePeriodSelector
                     />
+                  )}
+                  {tuyaNiveles.length === 0 && tuyaOsmosis.length > 0 && (
+                    <TuyaOsmosisMetricsSection osmosis={tuyaOsmosis} metrics={tuyaMetrics} />
                   )}
                 </Grid>
 
@@ -1537,10 +1548,11 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
               }
             }
             
-            const alertMessage = (match.rule.message || '').trim() || null;
+            const alertMessage = safeDisplayText(match.rule.message, '').trim() || null;
+            const ruleLabel = safeDisplayText(match.rule.label, 'valores normales');
             const messageLine = alertMessage
-              ? `${match.rule.label} (${value.toFixed(1)}${nivelMetric.sensor_unit || '%'}) - ${alertMessage}`
-              : `${match.rule.label} (${value.toFixed(1)}${nivelMetric.sensor_unit || '%'})`;
+              ? `${ruleLabel} (${value.toFixed(1)}${nivelMetric.sensor_unit || '%'}) - ${alertMessage}`
+              : `${ruleLabel} (${value.toFixed(1)}${nivelMetric.sensor_unit || '%'})`;
             
             return (
               <Alert 
@@ -1714,10 +1726,11 @@ function AlmacenamientoCard({ niveles, chartDataNiveles, tiwaterData, tiwaterPro
               }
             }
             
-            const alertMessage = (match.rule.message || '').trim() || null;
+            const alertMessage = safeDisplayText(match.rule.message, '').trim() || null;
+            const ruleLabel = safeDisplayText(match.rule.label, 'valores normales');
             const messageLine = alertMessage
-              ? `${match.rule.label} (${value.toFixed(1)}${nivelMetric.sensor_unit || '%'}) - ${alertMessage}`
-              : `${match.rule.label} (${value.toFixed(1)}${nivelMetric.sensor_unit || '%'})`;
+              ? `${ruleLabel} (${value.toFixed(1)}${nivelMetric.sensor_unit || '%'}) - ${alertMessage}`
+              : `${ruleLabel} (${value.toFixed(1)}${nivelMetric.sensor_unit || '%'})`;
             
             return (
               <Alert 
@@ -2041,8 +2054,8 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
     }
     
     return {
-      label: match.label,
-      message: match.message,
+      label: safeDisplayText(match.label, 'valores normales'),
+      message: safeDisplayText(match.message, ''),
       severity,
       bgColor,
       borderColor
@@ -2062,15 +2075,15 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
             {punto.name || 'Tienda'}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {punto.region?.name && `${punto.region.name} · `}
-            {punto.city?.city || punto.ciudad?.name || 'Hermosillo'}, {punto.city?.state || 'Sonora'}
-            {punto.cliente?.name && ` • ${punto.cliente.name}`}
+            {safeDisplayText(punto.region?.name) && `${safeDisplayText(punto.region?.name)} · `}
+            {safeDisplayText(punto.city?.city || punto.ciudad?.name, 'Hermosillo')}, {safeDisplayText(punto.city?.state, 'Sonora')}
+            {safeDisplayText(punto.cliente?.name) && ` • ${safeDisplayText(punto.cliente?.name)}`}
           </Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0.75, mt: 1 }}>
             <Tooltip title="Región asignada al punto de venta. Se usa para métricas por región, reportes y agrupación en el dashboard." arrow placement="top">
               <Chip
                 size="small"
-                label={punto.region?.name ?? 'Sin región'}
+                label={safeDisplayText(punto.region?.name, 'Sin región')}
                 sx={{
                   bgcolor: getRegionColor(punto.region ?? null),
                   color: '#fff',
@@ -2456,8 +2469,8 @@ function MaquinasCard({ tiwaterData, tiwaterProduct, metricsConfig }: any) {
     }
     
     return {
-      label: match.label,
-      message: match.message,
+      label: safeDisplayText(match.label, 'valores normales'),
+      message: safeDisplayText(match.message, ''),
       severity,
       bgColor,
       borderColor
@@ -2753,7 +2766,7 @@ function NivelMiniChart({ chart, title, metricRules }: { chart: any; title: stri
             const max = r.max != null ? Number(r.max) : null;
             return (min === null || value >= min) && (max === null || value <= max);
           });
-          return rule?.label ? `${value.toFixed(1)}% — ${rule.label}` : `${value.toFixed(1)}%`;
+          return safeDisplayText(rule?.label) ? `${value.toFixed(1)}% — ${safeDisplayText(rule?.label)}` : `${value.toFixed(1)}%`;
         },
       },
     },
