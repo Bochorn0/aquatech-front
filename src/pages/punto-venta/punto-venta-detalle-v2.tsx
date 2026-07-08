@@ -29,6 +29,7 @@ import {
 
 import { fNumber } from 'src/utils/format-number';
 import { getDashboardVersion } from 'src/utils/permissions';
+import { toFlowNumber, safeDisplayText } from 'src/utils/safe-display-text';
 import { usesMqttSource , usesTuyaSource, resolveHistoricoResourceId } from 'src/utils/punto-venta-source';
 
 import { get } from 'src/api/axiosHelper';
@@ -43,7 +44,6 @@ import {
   prepareChartDataTuya,
   PresionOsmosisSection,
   TuyaOsmosisMetricsSection,
-  safeDisplayText,
 } from './punto-venta-detalle';
 import {
   TUYA_RANGE_LABELS,
@@ -864,7 +864,7 @@ export default function PuntoVentaDetalleV2() {
 
         {/* Título de la tienda */}
         <Typography variant="h4" align="center" fontWeight="bold" sx={{ mb: 3 }}>
-          {punto.name || 'NOMBRE TIENDA'}
+          {safeDisplayText(punto.name, 'NOMBRE TIENDA')}
         </Typography>
 
         {usingDefaultSensors && (
@@ -936,7 +936,7 @@ export default function PuntoVentaDetalleV2() {
                     <Divider sx={{ mb: 2 }} />
                     <ExportReportButton
                       puntoVentaId={String(punto.id ?? punto._id ?? id)}
-                      puntoVentaName={punto.name}
+                      puntoVentaName={safeDisplayText(punto.name, 'Punto de Venta')}
                     />
                     {tuyaOsmosis.length > 0 && (
                       <>
@@ -1947,8 +1947,8 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
   let osmosisData: any = null;
   if (osmosis && osmosis.length > 0) {
     const p = osmosis[0];
-    const flowRate1 = p.status?.find((s: any) => s.code === 'flowrate_speed_1')?.value;
-    const flowRate2 = p.status?.find((s: any) => s.code === 'flowrate_speed_2')?.value;
+    const flowRate1 = toFlowNumber(p.status?.find((s: any) => s.code === 'flowrate_speed_1')?.value);
+    const flowRate2 = toFlowNumber(p.status?.find((s: any) => s.code === 'flowrate_speed_2')?.value);
     const totalFlujo = (flowRate1 || 0) + (flowRate2 || 0);
     const eficiencia = totalFlujo > 0 ? ((flowRate1 || 0) / totalFlujo * 100).toFixed(1) : null;
     osmosisData = { produccion: flowRate1, rechazo: flowRate2, eficiencia };
@@ -2072,7 +2072,7 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
         <Box>
           <Typography variant="h5" fontWeight="bold" sx={{ mb: 0.5 }}>
-            {punto.name || 'Tienda'}
+            {safeDisplayText(punto.name, 'Tienda')}
           </Typography>
           <Typography variant="caption" color="text.secondary">
             {safeDisplayText(punto.region?.name) && `${safeDisplayText(punto.region?.name)} · `}
@@ -2096,7 +2096,7 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
               <Chip
                 size="small"
                 variant="outlined"
-                label={`Estado: ${punto.city?.state || '—'}`}
+                label={`Estado: ${safeDisplayText(punto.city?.state, '—')}`}
                 sx={{
                   borderColor: 'divider',
                   color: 'text.secondary',
@@ -2964,7 +2964,7 @@ function MetricasSection({ metricas }: any) {
         <Grid container spacing={2}>
           {metricas.map((metrica: any) => {
             const nivel = metrica.status?.find((s: any) => s.code === 'liquid_level_percent')?.value;
-            const nombre = metrica.name || 'Métrica';
+            const nombre = safeDisplayText(metrica.name, 'Métrica');
 
             return (
               <Grid item xs={12} sm={6} key={metrica._id || metrica.id}>

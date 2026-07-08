@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 
 import { fNumber } from 'src/utils/format-number';
+import { safeDisplayText } from 'src/utils/safe-display-text';
 
 import { Iconify } from 'src/components/iconify';
 import { Chart, useChart } from 'src/components/chart';
@@ -105,7 +106,7 @@ export function prepareOsmosisHistoricoCharts(
 
       return {
         productId: String(product._id ?? product.id),
-        productName: product.name || 'Osmosis',
+        productName: safeDisplayText(product.name, 'Osmosis'),
         volumen: {
           categories,
           hours: hourLabels,
@@ -324,7 +325,7 @@ export function TuyaOsmosisHistoricoSection({
       {charts.map((bundle) => (
         <Box key={bundle.productId} sx={{ mb: 3 }}>
           <Typography variant="subtitle1" fontWeight="medium" sx={{ mb: 1 }}>
-            {bundle.productName}
+            {safeDisplayText(bundle.productName, 'Osmosis')}
           </Typography>
           <Grid container spacing={1.5} sx={{ mb: 2 }}>
             <Grid item xs={6} sm={4}>
