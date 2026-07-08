@@ -301,6 +301,8 @@ export interface Controller {
   tipo_sensor?: string;
 }
 
+export type PuntoVentaSourceType = 'mqtt' | 'tuya' | 'hybrid';
+
 export interface PuntosVenta {
     _id?: string;
     id?: string; // For PostgreSQL compatibility
@@ -327,6 +329,10 @@ export interface PuntosVenta {
     last_reading_at?: string | null;
     /** From API: worst metric level — 'critico' | 'preventivo' | 'normal' */
     metric_status?: 'critico' | 'preventivo' | 'normal';
+    /** Data origin: mqtt (default), tuya (Tuya products), hybrid */
+    source_type?: PuntoVentaSourceType;
+    /** From API: count of linked Tuya products (via V1 shadow) */
+    products_count?: number;
     /** From API: when metric_status is critico/preventivo, brief detail for tooltip (from punto or region metrics) */
     metric_status_detail?: {
       metric_name?: string | null;
