@@ -29,8 +29,8 @@ import {
 
 import { fNumber } from 'src/utils/format-number';
 import { getDashboardVersion } from 'src/utils/permissions';
+import { toFlowNumber, safeDisplayText } from 'src/utils/safe-display-text';
 import { usesMqttSource , usesTuyaSource, resolveHistoricoResourceId } from 'src/utils/punto-venta-source';
-import { safeDisplayText, toFlowNumber } from 'src/utils/safe-display-text';
 
 import { get } from 'src/api/axiosHelper';
 import { CONFIG } from 'src/config-global';

@@ -10,6 +10,11 @@ import { Box, Card, Chip, Grid, Paper, Button, Select, Divider, MenuItem, InputL
 import geoData from 'src/utils/states.json';
 import { fNumber } from 'src/utils/format-number';
 import { getDashboardVersion } from 'src/utils/permissions';
+import {
+  toMetricRange,
+  toDisplayScalar,
+  safeDisplayText,
+} from 'src/utils/safe-display-text';
 
 import { get } from 'src/api/axiosHelper';
 import { CONFIG } from 'src/config-global';
@@ -21,13 +26,7 @@ import { PressureGauge } from '../charts/pressure-gauge';
 
 import type { MetricsData } from '../types';
 
-import {
-  safeDisplayText,
-  toDisplayScalar,
-  toMetricRange,
-} from 'src/utils/safe-display-text';
-
-export { safeDisplayText, toDisplayScalar, toMetricRange };
+export { toMetricRange, toDisplayScalar, safeDisplayText };
 
 function getStatusValue(status: unknown, code: string): unknown {
   if (!Array.isArray(status)) return null;
