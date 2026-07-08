@@ -29,8 +29,22 @@ import {
 
 import { fNumber } from 'src/utils/format-number';
 import { getDashboardVersion } from 'src/utils/permissions';
-import { toFlowNumber, safeDisplayText } from 'src/utils/safe-display-text';
 import { usesMqttSource , usesTuyaSource, resolveHistoricoResourceId } from 'src/utils/punto-venta-source';
+import {
+  toFlowNumber,
+  safeDisplayText,
+  resolveClienteId,
+  normalizeV1ClientMetrics,
+} from 'src/utils/safe-display-text';
+import {
+  pvDetalleLog,
+  describeValue,
+  logV1MetricsRow,
+  logTuyaUiScenario,
+  logTuyaProductStatus,
+  logMetricsConfigRules,
+  pvDetalleWarnObjectField,
+} from 'src/utils/punto-venta-detalle-debug';
 
 import { get } from 'src/api/axiosHelper';
 import { CONFIG } from 'src/config-global';
@@ -107,6 +121,50 @@ export default function PuntoVentaDetalleV2() {
   const [tuyaOsmosisCharts, setTuyaOsmosisCharts] = useState<OsmosisChartBundle[]>([]);
   const [tuyaMetrics, setTuyaMetrics] = useState<MetricsData | null>(null);
   const lastHistoricoFetchAtRef = useRef(0);
+
+  useEffect(() => {
+    if (!punto || !usesTuyaSource(punto?.source_type) || !id) return;
+
+    const productos = punto?.productos || [];
+    const osmosisSystems = punto?.osmosisSystems || [];
+    const osmosisFromSystems = osmosisSystems.filter(
+      (s: any) => (s.resourceType || '').toString().toLowerCase() === 'osmosis'
+    );
+    const tuyaOsmosis = productos.filter((p: any) => p.product_type === 'Osmosis');
+    const tuyaNiveles = productos.filter((p: any) => p.product_type === 'Nivel');
+    const tuyaPresion = productos.filter((p: any) => p.product_type === 'Pressure');
+    const isMqttOrigin = usesMqttSource(punto?.source_type);
+    const isTuyaOrigin = usesTuyaSource(punto?.source_type);
+    const clienteId = resolveClienteId(punto);
+
+    logTuyaUiScenario(id, {
+      source_type: punto.source_type,
+      clienteId,
+      tuyaMetrics,
+      chartsLoading,
+      counts: {
+        osmosisSystems: osmosisSystems.length,
+        osmosisFromSystems: osmosisFromSystems.length,
+        tuyaOsmosis: tuyaOsmosis.length,
+        tuyaNiveles: tuyaNiveles.length,
+        tuyaPresion: tuyaPresion.length,
+      },
+      branches: {
+        mqttCards: isMqttOrigin,
+        tuyaSection: isTuyaOrigin,
+        presionOsmosis: isTuyaOrigin && (tuyaPresion.length > 0 || tuyaOsmosis.length > 0),
+        exportReports: isTuyaOrigin,
+        tuyaNivelSection: isTuyaOrigin && tuyaNiveles.length > 0 && !chartsLoading,
+        tuyaOsmosisMetricsStandalone: isTuyaOrigin && tuyaNiveles.length === 0 && tuyaOsmosis.length > 0,
+        tuyaHistorico: isTuyaOrigin && (tuyaOsmosis.length > 0 || tuyaNiveles.length > 0),
+      },
+    });
+  }, [punto, tuyaMetrics, chartsLoading, id]);
+
+  useEffect(() => {
+    if (!metricsConfig.length || !id) return;
+    logMetricsConfigRules(`punto ${id} metricsConfig`, metricsConfig);
+  }, [metricsConfig, id]);
 
   const handleLocationUpdated = () => setRefreshTrigger((t) => t + 1);
 
@@ -197,6 +255,7 @@ export default function PuntoVentaDetalleV2() {
             (m: any) => m.punto_venta_id != null && String(m.punto_venta_id) === String(puntoVentaId)
           );
           if (forThisPunto.length > 0) {
+            logMetricsConfigRules(`fetchMetricsConfig punto ${puntoVentaId}`, forThisPunto);
             setMetricsConfig(forThisPunto);
             return;
           }
@@ -232,6 +291,7 @@ export default function PuntoVentaDetalleV2() {
               regionList = await tryRegionMetrics({ regionId: String(regionId) });
             }
             if (Array.isArray(regionList) && regionList.length > 0) {
+              logMetricsConfigRules(`fetchMetricsConfig region fallback punto ${puntoVentaId}`, regionList);
               setMetricsConfig(regionList);
               return;
             }
@@ -240,6 +300,7 @@ export default function PuntoVentaDetalleV2() {
           }
         }
         if (Array.isArray(list) && list.length > 0) {
+          logMetricsConfigRules(`fetchMetricsConfig client list punto ${puntoVentaId}`, list);
           setMetricsConfig(list);
         }
       } catch (error) {
@@ -389,6 +450,21 @@ export default function PuntoVentaDetalleV2() {
         setPunto(puntoData);
         prepareChartDataNiveles(puntoData, setChartDataNiveles);
 
+        if (usesTuyaSource(puntoData.source_type)) {
+          const productosDbg = puntoData.productos || [];
+          pvDetalleLog('detalle loaded (Tuya)', {
+            puntoId: id,
+            source_type: puntoData.source_type,
+            cliente: describeValue(puntoData.cliente),
+            clientId: describeValue(puntoData.clientId),
+            osmosisSystems: (puntoData.osmosisSystems || []).length,
+            productos: productosDbg.length,
+            osmosisProducts: productosDbg.filter((p: any) => p.product_type === 'Osmosis').length,
+            nivelProducts: productosDbg.filter((p: any) => p.product_type === 'Nivel').length,
+          });
+          logTuyaProductStatus(`punto ${id} productos`, productosDbg);
+        }
+
         const codigoTienda = puntoData.codigo_tienda || id;
         const hasTiwaterSystems = (puntoData?.osmosisSystems || []).some((s: any) => (s.resourceType || '').toString().toLowerCase() === 'tiwater');
         if (codigoTienda && usesMqttSource(puntoData.source_type)) {
@@ -396,21 +472,38 @@ export default function PuntoVentaDetalleV2() {
           fetchLatestSensorData(codigoTienda);
         }
         const puntoVentaId = puntoData.id || puntoData._id;
-        const clienteId = puntoData.cliente?.id ?? puntoData.cliente?._id ?? puntoData.cliente ?? puntoData.clientId;
+        const clienteId = resolveClienteId(puntoData);
         const regionId = puntoData.region?.id ?? puntoData.region_id ?? puntoData.ciudad?.regionId ?? '';
         if (puntoVentaId || clienteId) {
-          fetchMetricsConfig(puntoVentaId, clienteId ? String(clienteId) : undefined, regionId ? String(regionId) : undefined);
+          fetchMetricsConfig(puntoVentaId, clienteId, regionId ? String(regionId) : undefined);
         }
         if (usesTuyaSource(puntoData.source_type) && clienteId) {
-          get<MetricsData[]>(`/metrics`, { cliente: String(clienteId) })
+          pvDetalleLog('V1 /metrics fetch start', { puntoId: id, clienteId });
+          get<MetricsData[]>(`/metrics`, { cliente: clienteId })
             .then((rows) => {
               const list = Array.isArray(rows) ? rows : [];
               const forClient = list.find(
-                (m: any) => String(m.cliente ?? m.client_id) === String(clienteId)
+                (m: any) => String(m.cliente ?? m.client_id) === clienteId
               );
-              setTuyaMetrics(forClient ?? null);
+              logV1MetricsRow(`punto ${id} /metrics response`, forClient);
+              const normalized = normalizeV1ClientMetrics(forClient);
+              pvDetalleLog('V1 /metrics normalized', {
+                puntoId: id,
+                found: Boolean(forClient),
+                normalized,
+              });
+              setTuyaMetrics(normalized);
             })
-            .catch(() => setTuyaMetrics(null));
+            .catch((err) => {
+              console.warn('[PVDetalle] V1 /metrics fetch failed', { puntoId: id, clienteId, err });
+              setTuyaMetrics(null);
+            });
+        } else if (usesTuyaSource(puntoData.source_type)) {
+          pvDetalleLog('V1 /metrics skipped (no clienteId)', {
+            puntoId: id,
+            cliente: describeValue(puntoData.cliente),
+            clientId: describeValue(puntoData.clientId),
+          });
         }
 
         setLoading(false);
@@ -2065,6 +2158,12 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
   const produccionAlert = getMetricAlertInfo(osmosisData?.produccion, 'PRODUCCION');
   const rechazoAlert = getMetricAlertInfo(osmosisData?.rechazo, 'RECHAZO');
   const eficienciaAlert = getMetricAlertInfo(parseFloat(osmosisData?.eficiencia), 'EFICIENCIA');
+
+  if (metricsConfig?.length) {
+    pvDetalleWarnObjectField(`UnifiedOverview punto ${puntoId}`, 'produccionAlert.label', produccionAlert.label);
+    pvDetalleWarnObjectField(`UnifiedOverview punto ${puntoId}`, 'rechazoAlert.label', rechazoAlert.label);
+    pvDetalleWarnObjectField(`UnifiedOverview punto ${puntoId}`, 'eficienciaAlert.label', eficienciaAlert.label);
+  }
   
   return (
     <Card variant="outlined" sx={{ p: 3, border: '2px solid', borderColor: 'divider', borderRadius: 2 }}>
@@ -2174,9 +2273,9 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
                     borderColor: produccionAlert.borderColor
                   }}
                 >
-                  <strong>{produccionAlert.label}</strong>
+                  <strong>{safeDisplayText(produccionAlert.label)}</strong>
                   {osmosisData?.produccion !== null && osmosisData?.produccion !== undefined && ` (${osmosisData.produccion.toFixed(1)} L/MIN)`}
-                  {produccionAlert.message && ` - ${produccionAlert.message}`}
+                  {safeDisplayText(produccionAlert.message) && ` - ${safeDisplayText(produccionAlert.message)}`}
                 </Alert>
               )}
             </Grid>
@@ -2205,9 +2304,9 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
                     borderColor: rechazoAlert.borderColor
                   }}
                 >
-                  <strong>{rechazoAlert.label}</strong>
+                  <strong>{safeDisplayText(rechazoAlert.label)}</strong>
                   {osmosisData?.rechazo !== null && osmosisData?.rechazo !== undefined && ` (${osmosisData.rechazo.toFixed(1)} L/MIN)`}
-                  {rechazoAlert.message && ` - ${rechazoAlert.message}`}
+                  {safeDisplayText(rechazoAlert.message) && ` - ${safeDisplayText(rechazoAlert.message)}`}
                 </Alert>
               )}
             </Grid>
@@ -2236,9 +2335,9 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
                     borderColor: eficienciaAlert.borderColor
                   }}
                 >
-                  <strong>{eficienciaAlert.label}</strong>
+                  <strong>{safeDisplayText(eficienciaAlert.label)}</strong>
                   {osmosisData?.eficiencia !== null && osmosisData?.eficiencia !== undefined && ` (${osmosisData.eficiencia}%)`}
-                  {eficienciaAlert.message && ` - ${eficienciaAlert.message}`}
+                  {safeDisplayText(eficienciaAlert.message) && ` - ${safeDisplayText(eficienciaAlert.message)}`}
                 </Alert>
               )}
             </Grid>
@@ -2278,7 +2377,7 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
               >
                 <MenuItem value="">Sin región</MenuItem>
                 {regions.map((r) => (
-                  <MenuItem key={r.id} value={r.id}>{r.name} ({r.code})</MenuItem>
+                  <MenuItem key={r.id} value={r.id}>{safeDisplayText(r.name)} ({safeDisplayText(r.code)})</MenuItem>
                 ))}
               </Select>
             </FormControl>
@@ -2291,7 +2390,7 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
               >
                 <MenuItem value="">Sin ciudad</MenuItem>
                 {ciudades.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                  <MenuItem key={c.id} value={c.id}>{safeDisplayText(c.name)}</MenuItem>
                 ))}
               </Select>
             </FormControl>
@@ -2541,9 +2640,9 @@ function MaquinasCard({ tiwaterData, tiwaterProduct, metricsConfig }: any) {
                 borderColor: nieveAlert.borderColor
               }}
             >
-              <strong>{nieveAlert.label}</strong>
+              <strong>{safeDisplayText(nieveAlert.label)}</strong>
               {nieveAvg !== null && nieveAvg !== undefined && ` (${nieveAvg.toFixed(2)}A)`}
-              {nieveAlert.message && ` - ${nieveAlert.message}`}
+              {safeDisplayText(nieveAlert.message) && ` - ${safeDisplayText(nieveAlert.message)}`}
             </Alert>
           )}
         </Grid>
@@ -2593,9 +2692,9 @@ function MaquinasCard({ tiwaterData, tiwaterProduct, metricsConfig }: any) {
                 borderColor: frappeAlert.borderColor
               }}
             >
-              <strong>{frappeAlert.label}</strong>
+              <strong>{safeDisplayText(frappeAlert.label)}</strong>
               {frappeAvg !== null && frappeAvg !== undefined && ` (${frappeAvg.toFixed(2)}A)`}
-              {frappeAlert.message && ` - ${frappeAlert.message}`}
+              {safeDisplayText(frappeAlert.message) && ` - ${safeDisplayText(frappeAlert.message)}`}
             </Alert>
           )}
         </Grid>
@@ -2645,9 +2744,9 @@ function MaquinasCard({ tiwaterData, tiwaterProduct, metricsConfig }: any) {
                 borderColor: co2Alert.borderColor
               }}
             >
-              <strong>{co2Alert.label}</strong>
+              <strong>{safeDisplayText(co2Alert.label)}</strong>
               {presionCO2 !== null && presionCO2 !== undefined && ` (${presionCO2.toFixed(0)} PSI)`}
-              {co2Alert.message && ` - ${co2Alert.message}`}
+              {safeDisplayText(co2Alert.message) && ` - ${safeDisplayText(co2Alert.message)}`}
             </Alert>
           )}
         </Grid>

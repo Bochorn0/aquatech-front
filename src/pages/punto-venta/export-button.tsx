@@ -262,9 +262,9 @@ function ExportReportButton({ product, puntoVentaId, puntoVentaName }: ExportRep
       // Generar nombre de archivo según el tipo de reporte
       let fileName: string;
       if (useDateRange && startDate && endDate) {
-        fileName = `Reporte_${product.name}_${startDate.format('DD-MM-YYYY')}_a_${endDate.format('DD-MM-YYYY')}.xlsx`;
+        fileName = `Reporte_${safeDisplayText(product.name, 'Producto')}_${startDate.format('DD-MM-YYYY')}_a_${endDate.format('DD-MM-YYYY')}.xlsx`;
       } else {
-        fileName = `Reporte_${product.name}_${selectedDate?.format('DD-MM-YYYY')}.xlsx`;
+        fileName = `Reporte_${safeDisplayText(product.name, 'Producto')}_${selectedDate?.format('DD-MM-YYYY')}.xlsx`;
       }
 
       saveAs(blob, fileName);
