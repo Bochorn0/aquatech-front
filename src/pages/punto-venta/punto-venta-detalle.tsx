@@ -262,11 +262,30 @@ export function PresionOsmosisSection({ presion, osmosis }: any) {
             <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <img
-                    src={`${CONFIG.ICON_URL}/${p.icon}`}
-                    alt={p.name}
-                    style={{ width: '50px', height: '50px', marginRight: '12px' }}
-                  />
+                  {p.icon ? (
+                    <img
+                      src={`${CONFIG.ICON_URL}/${p.icon}`}
+                      alt={p.name}
+                      style={{ width: '50px', height: '50px', marginRight: '12px' }}
+                    />
+                  ) : (
+                    <Box
+                      sx={{
+                        width: 50,
+                        height: 50,
+                        mr: 1.5,
+                        borderRadius: 1,
+                        bgcolor: 'background.neutral',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        typography: 'caption',
+                        color: 'text.secondary',
+                      }}
+                    >
+                      RO
+                    </Box>
+                  )}
                   <Typography variant="h6">{p.name}</Typography>
                 </Box>
                 <Chip
