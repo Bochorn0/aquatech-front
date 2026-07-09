@@ -1087,6 +1087,8 @@ export default function PuntoVentaDetalleV2() {
                           <TuyaOsmosisHistoricoSection
                             charts={tuyaOsmosisCharts}
                             rangeLabel={TUYA_RANGE_LABELS[historicoRange]}
+                            puntoId={String(id)}
+                            historicoRange={historicoRange}
                           />
                         </PvDetalleErrorBoundary>
                       )
