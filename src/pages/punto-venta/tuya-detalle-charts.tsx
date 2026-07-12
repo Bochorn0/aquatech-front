@@ -78,23 +78,53 @@ function formatHourLabel(hora: string, range: TuyaHistoricoRange): string {
 }
 
 function avgOf(values: number[]): number | null {
-  const nums = values.filter((v) => v != null && !Number.isNaN(v) && v !== 0);
+  const nums = values.filter((v) => Number.isFinite(v) && v > 0);
   if (nums.length === 0) return null;
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
 
-function lastNonZero(values: number[]): number | null {
+/** Median of positive finite samples — better for stable TDS than mean. */
+function medianOf(values: number[]): number | null {
+  const nums = values.filter((v) => Number.isFinite(v) && v > 0).sort((a, b) => a - b);
+  if (nums.length === 0) return null;
+  const mid = Math.floor(nums.length / 2);
+  return nums.length % 2 === 1 ? nums[mid] : (nums[mid - 1] + nums[mid]) / 2;
+}
+
+/** Cumulative meter reading: reject NaN/Inf/absurd spikes from bad aggregation. */
+function isSaneMeterLiters(n: number): boolean {
+  return Number.isFinite(n) && n > 0 && n < 1e8;
+}
+
+function lastSaneMeter(values: number[]): number | null {
   for (let i = values.length - 1; i >= 0; i -= 1) {
-    if (values[i] != null && !Number.isNaN(values[i]) && values[i] !== 0) return values[i];
+    if (isSaneMeterLiters(values[i])) return values[i];
   }
   return null;
 }
 
-function firstNonZero(values: number[]): number | null {
-  for (let i = 0; i < values.length; i += 1) {
-    if (values[i] != null && !Number.isNaN(values[i]) && values[i] !== 0) return values[i];
+/**
+ * Period production from cumulative meter series.
+ * Sums positive hour-to-hour increases so device resets don't invert Δ.
+ */
+function periodDeltaFromCumulative(values: number[]): number | null {
+  let delta = 0;
+  let sawPair = false;
+  for (let i = 1; i < values.length; i += 1) {
+    const prev = values[i - 1];
+    const curr = values[i];
+    if (isSaneMeterLiters(prev) && isSaneMeterLiters(curr)) {
+      sawPair = true;
+      if (curr >= prev) delta += curr - prev;
+    }
   }
-  return null;
+  if (!sawPair) return null;
+  return delta > 0 ? delta : 0;
+}
+
+function toChartNumber(v: unknown): number {
+  const n = Number(v ?? 0);
+  return Number.isFinite(n) ? n : 0;
 }
 
 /** Build osmosis chart bundles from product_logs historico (hours_with_data). */
@@ -109,17 +139,14 @@ export function prepareOsmosisHistoricoCharts(
 
       const hourLabels = hours.map((h: any) => String(h.hora || ''));
       const categories = hourLabels.map((hora) => formatHourLabel(hora, range));
-      const flujoProd = hours.map((h: any) => Number(h.estadisticas?.flujo_produccion_promedio ?? 0));
-      const flujoRech = hours.map((h: any) => Number(h.estadisticas?.flujo_rechazo_promedio ?? 0));
-      const tdsVals = hours.map((h: any) => Number(h.estadisticas?.tds_promedio ?? 0));
-      const prodVol = hours.map((h: any) => Number(h.estadisticas?.production_volume_total ?? 0));
-      const rejVol = hours.map((h: any) => Number(h.estadisticas?.rejected_volume_total ?? 0));
-      const totalLogs = hours.map((h: any) => Number(h.total_logs ?? 0));
-
-      const firstProd = firstNonZero(prodVol);
-      const lastProd = lastNonZero(prodVol);
-      const firstRej = firstNonZero(rejVol);
-      const lastRej = lastNonZero(rejVol);
+      // Flows & TDS: averages per hour (instantaneous / stable)
+      const flujoProd = hours.map((h: any) => toChartNumber(h.estadisticas?.flujo_produccion_promedio));
+      const flujoRech = hours.map((h: any) => toChartNumber(h.estadisticas?.flujo_rechazo_promedio));
+      const tdsVals = hours.map((h: any) => toChartNumber(h.estadisticas?.tds_promedio));
+      // Volumes: cumulative meters (end of hour) — never treat as flux
+      const prodVol = hours.map((h: any) => toChartNumber(h.estadisticas?.production_volume_total));
+      const rejVol = hours.map((h: any) => toChartNumber(h.estadisticas?.rejected_volume_total));
+      const totalLogs = hours.map((h: any) => toChartNumber(h.total_logs));
 
       return {
         productId: String(product._id ?? product.id),
@@ -151,14 +178,13 @@ export function prepareOsmosisHistoricoCharts(
           ],
         },
         summary: {
-          avgFlujoProd: avgOf(flujoProd),
-          avgFlujoRech: avgOf(flujoRech),
-          avgTds: avgOf(tdsVals),
-          lastProdVol: lastProd,
-          lastRejVol: lastRej,
-          deltaProdVol:
-            firstProd != null && lastProd != null ? Math.max(0, lastProd - firstProd) : null,
-          deltaRejVol: firstRej != null && lastRej != null ? Math.max(0, lastRej - firstRej) : null,
+          avgFlujoProd: medianOf(flujoProd) ?? avgOf(flujoProd),
+          avgFlujoRech: medianOf(flujoRech) ?? avgOf(flujoRech),
+          avgTds: medianOf(tdsVals) ?? avgOf(tdsVals),
+          lastProdVol: lastSaneMeter(prodVol),
+          lastRejVol: lastSaneMeter(rejVol),
+          deltaProdVol: periodDeltaFromCumulative(prodVol),
+          deltaRejVol: periodDeltaFromCumulative(rejVol),
           hoursWithData: hours.length,
         },
         rawHours: hours as HistoricoHourRow[],
@@ -486,7 +512,7 @@ export function TuyaOsmosisHistoricoSection({
         Histórico de Producción / Rechazo
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Promedios por hora — {rangeLabel}
+        Volúmenes = lectura acumulada del medidor · Flujos/TDS = mediana del período — {rangeLabel}
       </Typography>
       {charts.map((bundle) => (
         <Box key={bundle.productId} sx={{ mb: 3 }}>
@@ -514,10 +540,10 @@ export function TuyaOsmosisHistoricoSection({
               <SummaryKpi label="Δ Rech. período" value={bundle.summary.deltaRejVol} unit="L" />
             </Grid>
             <Grid item xs={6} sm={4}>
-              <SummaryKpi label="Flujo prod. prom." value={bundle.summary.avgFlujoProd} unit="L/min" />
+              <SummaryKpi label="Flujo prod. (mediana)" value={bundle.summary.avgFlujoProd} unit="L/min" />
             </Grid>
             <Grid item xs={6} sm={4}>
-              <SummaryKpi label="Horas con datos" value={bundle.summary.hoursWithData} unit="h" />
+              <SummaryKpi label="TDS (mediana)" value={bundle.summary.avgTds} unit="ppm" />
             </Grid>
           </Grid>
           <Grid container spacing={2} sx={{ mb: 1 }}>
