@@ -1,3 +1,4 @@
+import dayjs from 'dayjs';
 import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
@@ -31,15 +32,14 @@ import { Chart, useChart } from 'src/components/chart';
 import { ExportReportButton } from './export-button';
 import { PressureGauge } from '../charts/pressure-gauge';
 import {
+  isHistoricoCustomReady,
   type TuyaHistoricoRange,
   type HistoricoCustomWindow,
   TuyaHistoricoPeriodSelector,
   buildTuyaHistoricoQueryParams,
-  isHistoricoCustomReady,
 } from './tuya-detalle-charts';
 
 import type { MetricsData } from '../types';
-import dayjs from 'dayjs';
 
 export { toMetricRange, toDisplayScalar, safeDisplayText };
 
@@ -175,7 +175,7 @@ export default function PuntoVentaDetalle() {
       fetchPuntoVentaDetails();
     }, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
-  }, [id, historicoRange, historicoCustom.start, historicoCustom.end]);
+  }, [id, historicoRange, historicoCustom]);
 
   useEffect(() => {
     const clienteId = punto?.cliente?._id;

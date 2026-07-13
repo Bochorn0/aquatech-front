@@ -1,7 +1,7 @@
+import dayjs from 'dayjs';
 import { Helmet } from 'react-helmet-async';
 import { useParams } from 'react-router-dom';
 import { useRef, useMemo, useState, useEffect } from 'react';
-import dayjs from 'dayjs';
 
 import { useTheme } from '@mui/material/styles';
 import CardHeader from '@mui/material/CardHeader';
@@ -66,14 +66,14 @@ import {
 } from './punto-venta-detalle';
 import {
   formatTuyaRangeLabel,
+  isHistoricoCustomReady,
+  type OsmosisChartBundle,
   type TuyaHistoricoRange,
   type HistoricoCustomWindow,
-  type OsmosisChartBundle,
   TuyaHistoricoPeriodSelector,
   TuyaOsmosisHistoricoSection,
   prepareOsmosisHistoricoCharts,
   buildTuyaHistoricoQueryParams,
-  isHistoricoCustomReady,
 } from './tuya-detalle-charts';
 
 import type { MetricsData } from '../types';
@@ -183,7 +183,7 @@ export default function PuntoVentaDetalleV2() {
 
   useEffect(() => {
     lastHistoricoFetchAtRef.current = 0;
-  }, [id, refreshTrigger, historicoRange, historicoCustom.start, historicoCustom.end]);
+  }, [id, refreshTrigger, historicoRange, historicoCustom]);
 
   useEffect(() => {
     const fetchTiwaterData = async (codigoTienda: string) => {
@@ -610,7 +610,7 @@ export default function PuntoVentaDetalleV2() {
       return () => clearInterval(interval);
     }
     return undefined;
-  }, [id, refreshTrigger, historicoRange, historicoCustom.start, historicoCustom.end]);
+  }, [id, refreshTrigger, historicoRange, historicoCustom]);
 
   if (loading) {
     return (
