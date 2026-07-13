@@ -372,6 +372,50 @@ export function PresionOsmosisSection({ presion, osmosis }: any) {
                     {rejectFlow} <Typography component="span" variant="caption">L/min</Typography>
                   </Typography>
                 </Grid>
+                {(() => {
+                  const rules = Array.isArray(p.tuya_logs_routine_config?.custom_rules)
+                    ? p.tuya_logs_routine_config.custom_rules
+                    : [];
+                  const labels =
+                    p.historico?.product?.custom_field_labels ||
+                    Object.fromEntries(
+                      rules
+                        .filter((r: any) => r?.db_column === 'campo_personalizado_1' || r?.db_column === 'campo_personalizado_2')
+                        .map((r: any) => [r.db_column, r.name || r.store_as || r.db_column])
+                    );
+                  const hours = p.historico?.hours_with_data;
+                  const lastStats =
+                    Array.isArray(hours) && hours.length
+                      ? hours[hours.length - 1]?.estadisticas
+                      : null;
+                  const c1 =
+                    lastStats?.campo_personalizado_1_ultimo ??
+                    lastStats?.campo_personalizado_1_promedio;
+                  const c2 =
+                    lastStats?.campo_personalizado_2_ultimo ??
+                    lastStats?.campo_personalizado_2_promedio;
+                  if (c1 == null && c2 == null) return null;
+                  return (
+                    <>
+                      {c1 != null && (
+                        <Grid item xs={6}>
+                          <Typography variant="body2" color="text.secondary">
+                            {labels.campo_personalizado_1 || 'Campo personalizado 1'}
+                          </Typography>
+                          <Typography variant="h6">{toDisplayScalar(c1)}</Typography>
+                        </Grid>
+                      )}
+                      {c2 != null && (
+                        <Grid item xs={6}>
+                          <Typography variant="body2" color="text.secondary">
+                            {labels.campo_personalizado_2 || 'Campo personalizado 2'}
+                          </Typography>
+                          <Typography variant="h6">{toDisplayScalar(c2)}</Typography>
+                        </Grid>
+                      )}
+                    </>
+                  );
+                })()}
               </Grid>
             </Card>
 

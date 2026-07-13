@@ -39,6 +39,8 @@ export type OsmosisChartBundle = {
   volumen: ChartSeriesBlock;
   flujo: ChartSeriesBlock;
   tds: ChartSeriesBlock;
+  custom?: ChartSeriesBlock | null;
+  customLabels?: { campo_personalizado_1: string; campo_personalizado_2: string };
   summary: {
     avgFlujoProd: number | null;
     avgFlujoRech: number | null;
@@ -47,6 +49,10 @@ export type OsmosisChartBundle = {
     lastRejVol: number | null;
     deltaProdVol: number | null;
     deltaRejVol: number | null;
+    lastCustom1: number | null;
+    lastCustom2: number | null;
+    avgCustom1: number | null;
+    avgCustom2: number | null;
     hoursWithData: number;
   };
   /** Raw hours_with_data from API (may lack *_agrupado when fast-aggregated). */
@@ -78,23 +84,67 @@ function formatHourLabel(hora: string, range: TuyaHistoricoRange): string {
 }
 
 function avgOf(values: number[]): number | null {
-  const nums = values.filter((v) => v != null && !Number.isNaN(v) && v !== 0);
+  const nums = values.filter((v) => Number.isFinite(v) && v > 0);
   if (nums.length === 0) return null;
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
 
-function lastNonZero(values: number[]): number | null {
+/** Median of positive finite samples — better for stable TDS than mean. */
+function medianOf(values: number[]): number | null {
+  const nums = values.filter((v) => Number.isFinite(v) && v > 0).sort((a, b) => a - b);
+  if (nums.length === 0) return null;
+  const mid = Math.floor(nums.length / 2);
+  return nums.length % 2 === 1 ? nums[mid] : (nums[mid - 1] + nums[mid]) / 2;
+}
+
+/** Cumulative meter reading: reject NaN/Inf/absurd spikes from bad aggregation. */
+function isSaneMeterLiters(n: number): boolean {
+  return Number.isFinite(n) && n > 0 && n < 1e8;
+}
+
+function lastSaneMeter(values: number[]): number | null {
   for (let i = values.length - 1; i >= 0; i -= 1) {
-    if (values[i] != null && !Number.isNaN(values[i]) && values[i] !== 0) return values[i];
+    if (isSaneMeterLiters(values[i])) return values[i];
   }
   return null;
 }
 
-function firstNonZero(values: number[]): number | null {
-  for (let i = 0; i < values.length; i += 1) {
-    if (values[i] != null && !Number.isNaN(values[i]) && values[i] !== 0) return values[i];
+/** Last finite value for custom fields (0 / negatives allowed). */
+function lastFiniteValue(values: number[]): number | null {
+  for (let i = values.length - 1; i >= 0; i -= 1) {
+    if (Number.isFinite(values[i])) return values[i];
   }
   return null;
+}
+
+function avgFiniteInclZero(values: number[]): number | null {
+  const nums = values.filter((v) => Number.isFinite(v));
+  if (nums.length === 0) return null;
+  return nums.reduce((a, b) => a + b, 0) / nums.length;
+}
+
+/**
+ * Period production from cumulative meter series.
+ * Sums positive hour-to-hour increases so device resets don't invert Δ.
+ */
+function periodDeltaFromCumulative(values: number[]): number | null {
+  let delta = 0;
+  let sawPair = false;
+  for (let i = 1; i < values.length; i += 1) {
+    const prev = values[i - 1];
+    const curr = values[i];
+    if (isSaneMeterLiters(prev) && isSaneMeterLiters(curr)) {
+      sawPair = true;
+      if (curr >= prev) delta += curr - prev;
+    }
+  }
+  if (!sawPair) return null;
+  return delta > 0 ? delta : 0;
+}
+
+function toChartNumber(v: unknown): number {
+  const n = Number(v ?? 0);
+  return Number.isFinite(n) ? n : 0;
 }
 
 /** Build osmosis chart bundles from product_logs historico (hours_with_data). */
@@ -109,17 +159,41 @@ export function prepareOsmosisHistoricoCharts(
 
       const hourLabels = hours.map((h: any) => String(h.hora || ''));
       const categories = hourLabels.map((hora) => formatHourLabel(hora, range));
-      const flujoProd = hours.map((h: any) => Number(h.estadisticas?.flujo_produccion_promedio ?? 0));
-      const flujoRech = hours.map((h: any) => Number(h.estadisticas?.flujo_rechazo_promedio ?? 0));
-      const tdsVals = hours.map((h: any) => Number(h.estadisticas?.tds_promedio ?? 0));
-      const prodVol = hours.map((h: any) => Number(h.estadisticas?.production_volume_total ?? 0));
-      const rejVol = hours.map((h: any) => Number(h.estadisticas?.rejected_volume_total ?? 0));
-      const totalLogs = hours.map((h: any) => Number(h.total_logs ?? 0));
+      // Flows & TDS: averages per hour (instantaneous / stable)
+      const flujoProd = hours.map((h: any) => toChartNumber(h.estadisticas?.flujo_produccion_promedio));
+      const flujoRech = hours.map((h: any) => toChartNumber(h.estadisticas?.flujo_rechazo_promedio));
+      const tdsVals = hours.map((h: any) => toChartNumber(h.estadisticas?.tds_promedio));
+      // Volumes: cumulative meters (end of hour) — never treat as flux
+      const prodVol = hours.map((h: any) => toChartNumber(h.estadisticas?.production_volume_total));
+      const rejVol = hours.map((h: any) => toChartNumber(h.estadisticas?.rejected_volume_total));
+      const totalLogs = hours.map((h: any) => toChartNumber(h.total_logs));
 
-      const firstProd = firstNonZero(prodVol);
-      const lastProd = lastNonZero(prodVol);
-      const firstRej = firstNonZero(rejVol);
-      const lastRej = lastNonZero(rejVol);
+      const customLabels = {
+        campo_personalizado_1:
+          product?.historico?.product?.custom_field_labels?.campo_personalizado_1 ||
+          product?.tuya_logs_routine_config?.custom_rules?.find((r: any) => r.db_column === 'campo_personalizado_1')?.name ||
+          'Campo personalizado 1',
+        campo_personalizado_2:
+          product?.historico?.product?.custom_field_labels?.campo_personalizado_2 ||
+          product?.tuya_logs_routine_config?.custom_rules?.find((r: any) => r.db_column === 'campo_personalizado_2')?.name ||
+          'Campo personalizado 2',
+      };
+
+      const custom1 = hours.map((h: any) =>
+        toChartNumber(
+          h.estadisticas?.campo_personalizado_1_ultimo ?? h.estadisticas?.campo_personalizado_1_promedio
+        )
+      );
+      const custom2 = hours.map((h: any) =>
+        toChartNumber(
+          h.estadisticas?.campo_personalizado_2_ultimo ?? h.estadisticas?.campo_personalizado_2_promedio
+        )
+      );
+      const hasCustom =
+        custom1.some((v) => v !== 0) ||
+        custom2.some((v) => v !== 0) ||
+        Boolean(product?.historico?.product?.has_custom_fields) ||
+        Boolean(product?.tuya_logs_routine_config?.custom_rules?.length);
 
       return {
         productId: String(product._id ?? product.id),
@@ -150,15 +224,29 @@ export function prepareOsmosisHistoricoCharts(
             { name: 'Muestras en hora', data: totalLogs },
           ],
         },
+        custom: hasCustom
+          ? {
+              categories,
+              hours: hourLabels,
+              series: [
+                { name: customLabels.campo_personalizado_1, data: custom1 },
+                { name: customLabels.campo_personalizado_2, data: custom2 },
+              ],
+            }
+          : null,
+        customLabels,
         summary: {
-          avgFlujoProd: avgOf(flujoProd),
-          avgFlujoRech: avgOf(flujoRech),
-          avgTds: avgOf(tdsVals),
-          lastProdVol: lastProd,
-          lastRejVol: lastRej,
-          deltaProdVol:
-            firstProd != null && lastProd != null ? Math.max(0, lastProd - firstProd) : null,
-          deltaRejVol: firstRej != null && lastRej != null ? Math.max(0, lastRej - firstRej) : null,
+          avgFlujoProd: medianOf(flujoProd) ?? avgOf(flujoProd),
+          avgFlujoRech: medianOf(flujoRech) ?? avgOf(flujoRech),
+          avgTds: medianOf(tdsVals) ?? avgOf(tdsVals),
+          lastProdVol: lastSaneMeter(prodVol),
+          lastRejVol: lastSaneMeter(rejVol),
+          deltaProdVol: periodDeltaFromCumulative(prodVol),
+          deltaRejVol: periodDeltaFromCumulative(rejVol),
+          lastCustom1: lastFiniteValue(custom1),
+          lastCustom2: lastFiniteValue(custom2),
+          avgCustom1: avgFiniteInclZero(custom1),
+          avgCustom2: avgFiniteInclZero(custom2),
           hoursWithData: hours.length,
         },
         rawHours: hours as HistoricoHourRow[],
@@ -486,7 +574,7 @@ export function TuyaOsmosisHistoricoSection({
         Histórico de Producción / Rechazo
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Promedios por hora — {rangeLabel}
+        Volúmenes = lectura acumulada del medidor · Flujos/TDS = mediana del período — {rangeLabel}
       </Typography>
       {charts.map((bundle) => (
         <Box key={bundle.productId} sx={{ mb: 3 }}>
@@ -514,11 +602,32 @@ export function TuyaOsmosisHistoricoSection({
               <SummaryKpi label="Δ Rech. período" value={bundle.summary.deltaRejVol} unit="L" />
             </Grid>
             <Grid item xs={6} sm={4}>
-              <SummaryKpi label="Flujo prod. prom." value={bundle.summary.avgFlujoProd} unit="L/min" />
+              <SummaryKpi label="Flujo prod. (mediana)" value={bundle.summary.avgFlujoProd} unit="L/min" />
             </Grid>
             <Grid item xs={6} sm={4}>
-              <SummaryKpi label="Horas con datos" value={bundle.summary.hoursWithData} unit="h" />
+              <SummaryKpi label="Flujo rech. (mediana)" value={bundle.summary.avgFlujoRech} unit="L/min" />
             </Grid>
+            <Grid item xs={6} sm={4}>
+              <SummaryKpi label="TDS (mediana)" value={bundle.summary.avgTds} unit="ppm" />
+            </Grid>
+            {bundle.custom && (
+              <>
+                <Grid item xs={6} sm={4}>
+                  <SummaryKpi
+                    label={`${bundle.customLabels?.campo_personalizado_1 || 'Campo 1'} (últ.)`}
+                    value={bundle.summary.lastCustom1}
+                    unit=""
+                  />
+                </Grid>
+                <Grid item xs={6} sm={4}>
+                  <SummaryKpi
+                    label={`${bundle.customLabels?.campo_personalizado_2 || 'Campo 2'} (últ.)`}
+                    value={bundle.summary.lastCustom2}
+                    unit=""
+                  />
+                </Grid>
+              </>
+            )}
           </Grid>
           <Grid container spacing={2} sx={{ mb: 1 }}>
             <Grid item xs={12} md={6}>
@@ -533,7 +642,7 @@ export function TuyaOsmosisHistoricoSection({
             <Grid item xs={12} md={6}>
               <TuyaLineChart
                 title="Flujos por hora"
-                subheader="Cuando hay muestras de caudales"
+                subheader="flowrate_speed_1 / flowrate_speed_2 (L/min)"
                 chart={bundle.flujo}
                 yTitle="L/min"
                 yMin={0}
@@ -548,6 +657,17 @@ export function TuyaOsmosisHistoricoSection({
                 colors={['#2e7d32']}
               />
             </Grid>
+            {bundle.custom && (
+              <Grid item xs={12} md={6}>
+                <TuyaLineChart
+                  title="Campos personalizados por hora"
+                  subheader="Valores derivados de las reglas de la rutina de logs"
+                  chart={bundle.custom}
+                  yTitle=""
+                  colors={['#1565c0', '#ef6c00']}
+                />
+              </Grid>
+            )}
           </Grid>
           <Divider sx={{ mt: 1 }} />
         </Box>

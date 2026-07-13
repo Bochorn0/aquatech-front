@@ -34,6 +34,11 @@ interface Status {
   last_updated_display?: number;
   /** When true, product is included in the Tuya logs routine (cron). Admin-configurable in Personalización > Productos rutina logs. */
   tuya_logs_routine_enabled?: boolean;
+  /** Per-product field/rules config for fetchLogsRoutine. Null/undefined = defaults by product_type. */
+  tuya_logs_routine_config?: {
+    enabled_fields?: Record<string, { enabled?: boolean; db_column?: string | null; scale?: number }>;
+    custom_rules?: unknown[];
+  } | null;
   /** Device ids whose archived flow totals were folded into this row (bloqueo de equipos). Puede venir vacío en la fila viva tras sync aunque exista archivo `_…`. */
   merged_from_device_ids?: string[];
   /** Desglose volúmenes si hay fila `_…` enlazada al id vivo de Tuya (no depende de merged_from en la fila viva). */

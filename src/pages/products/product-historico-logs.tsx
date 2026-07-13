@@ -333,13 +333,14 @@ const ProductHistoricoLogs: React.FC<ProductHistoricoLogsProps> = ({ routineEnab
     <Box sx={{ p: 0, pt: 2 }}>
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
-          Histórico Tuya (totales + TDS)
+          Histórico Tuya (totales, flujos y TDS)
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           La tabla muestra <strong>datos ya guardados en la base</strong> (<code>product_logs</code>) en el rango elegido:
           sin llamar a Tuya. <strong>Obtener datos locales</strong> solo consulta la base.{' '}
           <strong>Obtener de Tuya</strong> llama a la nube (códigos <code>flowrate_total_1</code>,{' '}
-          <code>flowrate_total_2</code>, <code>tds_out</code>), guarda lo nuevo y muestra el mismo rango desde la base.
+          <code>flowrate_total_2</code>, <code>flowrate_speed_1</code>, <code>flowrate_speed_2</code>,{' '}
+          <code>tds_out</code>), guarda lo nuevo y muestra el mismo rango desde la base.
           Ventana inicial: últimos {DEFAULT_HISTORICO_RANGE_MINUTES} minutos.
         </Typography>
 
@@ -624,6 +625,8 @@ const ProductHistoricoLogs: React.FC<ProductHistoricoLogsProps> = ({ routineEnab
                   <TableCell>TDS (ppm)</TableCell>
                   <TableCell>Volumen producción (L)</TableCell>
                   <TableCell>Volumen rechazo (L)</TableCell>
+                  <TableCell>Flujo prod. (L/min)</TableCell>
+                  <TableCell>Flujo rech. (L/min)</TableCell>
                   <TableCell>Origen</TableCell>
                 </>
               ) : (
@@ -633,6 +636,8 @@ const ProductHistoricoLogs: React.FC<ProductHistoricoLogsProps> = ({ routineEnab
                   <TableCell>TDS</TableCell>
                   <TableCell>Volumen producción</TableCell>
                   <TableCell>Volumen rechazo</TableCell>
+                  <TableCell>Flujo prod.</TableCell>
+                  <TableCell>Flujo rech.</TableCell>
                   <TableCell>Detalle</TableCell>
                 </>
               )}
@@ -684,6 +689,22 @@ const ProductHistoricoLogs: React.FC<ProductHistoricoLogsProps> = ({ routineEnab
                               size="small"
                             />
                           </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={row.flujoProdSummary}
+                              color="info"
+                              size="small"
+                              variant="outlined"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={row.flujoRechSummary}
+                              color="warning"
+                              size="small"
+                              variant="outlined"
+                            />
+                          </TableCell>
                           <TableCell>{orig.source || '—'}</TableCell>
                         </>
                       ) : (
@@ -699,6 +720,12 @@ const ProductHistoricoLogs: React.FC<ProductHistoricoLogsProps> = ({ routineEnab
                             <Typography variant="body2">{row.rejectionSummary}</Typography>
                           </TableCell>
                           <TableCell>
+                            <Typography variant="body2">{row.flujoProdSummary}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">{row.flujoRechSummary}</Typography>
+                          </TableCell>
+                          <TableCell>
                             <Typography variant="caption" color="text.secondary">
                               {row.detail ?? '—'}
                             </Typography>
@@ -712,7 +739,7 @@ const ProductHistoricoLogs: React.FC<ProductHistoricoLogsProps> = ({ routineEnab
             ) : (
               !loading && (
                 <TableRow>
-                  <TableCell colSpan={viewMode === 'raw' ? 5 : 6} align="center">
+                  <TableCell colSpan={viewMode === 'raw' ? 7 : 8} align="center">
                     No hay registros para el rango seleccionado
                   </TableCell>
                 </TableRow>

@@ -5,6 +5,7 @@ import { Helmet } from "react-helmet-async";
 import { useMemo, useState, useEffect, useCallback } from "react";
 
 import Autocomplete from '@mui/material/Autocomplete';
+import SettingsIcon from '@mui/icons-material/Settings';
 import {
   Box,
   Chip,
@@ -31,6 +32,7 @@ import {
   DialogActions,
   DialogContent,
   CircularProgress,
+  Tooltip,
 } from "@mui/material";
 
 import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
@@ -40,6 +42,8 @@ import { get as getV2 } from "src/api/axiosHelperV2";
 import { get, post, patch, remove } from "src/api/axiosHelper";
 
 import { SvgColor } from 'src/components/svg-color';
+
+import { TuyaLogsRoutineRulesPanel } from './tuya-logs-routine-rules-panel';
 
 import type { City, User, Metric, Product, Cliente, PuntosVenta } from './types';
 
@@ -101,7 +105,8 @@ const defaultMetric = { _id: '', cliente: '', client_name: '', product_type: '',
 const defaultPv = { _id: '', name: '' , client_name:'', cliente: defaultclient, city: defaultCity, city_name: '', productos: []}
 
 /** Tuya / API device_id for routes; avoid Postgres numeric _id so lock & PATCH target the real device. */
-function getProductDeviceKey(p: Product & { _id?: string; device_id?: string }) {
+function getProductDeviceKey(p: (Product & { _id?: string; device_id?: string }) | null | undefined) {
+  if (!p) return '';
   const id = (p as { device_id?: string }).device_id ?? p.id;
   if (id != null && String(id)) return String(id);
   return p._id != null ? String(p._id) : '';
@@ -1145,6 +1150,14 @@ const handlePvProductosChange = (e: any) => {
     }
   };
 
+  const [logsRulesProduct, setLogsRulesProduct] = useState<(Product & { _id?: string }) | null>(null);
+
+  const openLogsRulesEditor = (product: Product & { _id?: string }) => {
+    setLogsRulesProduct(product);
+  };
+
+  const closeLogsRulesEditor = () => setLogsRulesProduct(null);
+
   return (
     <>
       <Helmet>
@@ -1164,7 +1177,7 @@ const handlePvProductosChange = (e: any) => {
           <CustomTab label="Equipos" />
           {isAdmin && <CustomTab label="Productos rutina logs" />}
           {isAdmin && <CustomTab label="Productos mezclados" />}
-      </CustomTabs>
+        </CustomTabs>
         {tabIndex === 0 && (
           <Grid container spacing={2}>
             <Grid item xs={12}>
@@ -1519,7 +1532,7 @@ const handlePvProductosChange = (e: any) => {
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
-                Productos incluidos en la rutina que obtiene logs de Tuya en lotes (cron). Solo los equipos activados aquí se procesan.
+                Activa equipos para la rutina de logs Tuya (cron) y edita por producto qué campos se obtienen y qué reglas derivadas se calculan.
               </Typography>
               <Box sx={{ overflowX: 'auto' }}>
                 <Grid container alignItems="center" spacing={2} sx={{ p: 2 }}>
@@ -1550,14 +1563,20 @@ const handlePvProductosChange = (e: any) => {
                           <StyledTableCellHeader>Ciudad</StyledTableCellHeader>
                           <StyledTableCellHeader>Tipo</StyledTableCellHeader>
                           <StyledTableCellHeader>Rutina logs Tuya</StyledTableCellHeader>
+                          <StyledTableCellHeader align="center">Configurar</StyledTableCellHeader>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {filteredProducts.map((product) => {
-                          const prod = product as Product & { _id?: string; tuya_logs_routine_enabled?: boolean };
+                          const prod = product as Product & {
+                            _id?: string;
+                            tuya_logs_routine_enabled?: boolean;
+                            tuya_logs_routine_config?: unknown;
+                          };
                           const productId = getProductDeviceKey(prod);
                           const clientName = typeof prod.cliente === 'object' && prod.cliente !== null ? prod.cliente.name : '-';
                           const enabled = Boolean(prod.tuya_logs_routine_enabled);
+                          const hasCustomRules = prod.tuya_logs_routine_config != null;
                           return (
                             <StyledTableRow key={productId}>
                               <StyledTableCell>{prod.name}</StyledTableCell>
@@ -1572,6 +1591,24 @@ const handlePvProductosChange = (e: any) => {
                                   color="primary"
                                 />
                               </StyledTableCell>
+                              <StyledTableCell align="center">
+                                <Tooltip title={hasCustomRules ? 'Editar reglas de este producto' : 'Configurar reglas de este producto'}>
+                                  <span>
+                                    <IconButton
+                                      onClick={() => openLogsRulesEditor(prod)}
+                                      disabled={loading || !productId}
+                                      color={hasCustomRules ? 'primary' : 'default'}
+                                      size="small"
+                                      aria-label="Configurar reglas de logs"
+                                    >
+                                      <SettingsIcon />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                                {hasCustomRules && (
+                                  <Chip size="small" label="custom" color="primary" variant="outlined" sx={{ ml: 0.5 }} />
+                                )}
+                              </StyledTableCell>
                             </StyledTableRow>
                           );
                         })}
@@ -1583,6 +1620,42 @@ const handlePvProductosChange = (e: any) => {
             </Grid>
           </Grid>
         )}
+
+        <Dialog
+          open={Boolean(logsRulesProduct)}
+          onClose={closeLogsRulesEditor}
+          fullWidth
+          maxWidth="md"
+        >
+          {logsRulesProduct ? (
+            <>
+              <DialogTitle>
+                Reglas de logs — {logsRulesProduct.name || getProductDeviceKey(logsRulesProduct)}
+              </DialogTitle>
+              <DialogContent dividers>
+                <TuyaLogsRoutineRulesPanel
+                  productId={getProductDeviceKey(logsRulesProduct)}
+                  productName={logsRulesProduct.name}
+                  productType={logsRulesProduct.product_type || 'Osmosis'}
+                  disabled={loading}
+                  onSaved={(cfg) => {
+                    const pid = getProductDeviceKey(logsRulesProduct);
+                    setProducts((prev) =>
+                      prev.map((p) => {
+                        const id = getProductDeviceKey(p as Product & { _id?: string });
+                        if (id === pid) return { ...p, tuya_logs_routine_config: cfg };
+                        return p;
+                      })
+                    );
+                  }}
+                />
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={closeLogsRulesEditor}>Cerrar</Button>
+              </DialogActions>
+            </>
+          ) : null}
+        </Dialog>
 
         {isAdmin && tabIndex === 6 && (
           <Grid container spacing={2}>

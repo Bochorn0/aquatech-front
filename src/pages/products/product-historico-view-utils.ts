@@ -9,6 +9,8 @@ export type HistoricoTableRowModel = {
   tdsSummary: string;
   productionSummary: string;
   rejectionSummary: string;
+  flujoProdSummary: string;
+  flujoRechSummary: string;
   detail?: string;
 };
 
@@ -18,6 +20,8 @@ export type HistoricoViewInputLog = {
   tds?: number | null;
   production_volume?: number | null;
   rejected_volume?: number | null;
+  flujo_produccion?: number | null;
+  flujo_rechazo?: number | null;
   source?: string;
 };
 
@@ -27,6 +31,14 @@ function ts(d: string | Date): number {
 
 function sortAsc(rows: HistoricoViewInputLog[]): HistoricoViewInputLog[] {
   return [...rows].sort((a, b) => ts(a.date) - ts(b.date));
+}
+
+/** Raw Tuya speed in DB → L/min (same ÷10 as PV charts). */
+export function flujoToLmin(raw: number | null | undefined): number | null {
+  if (raw == null || Number.isNaN(Number(raw))) return null;
+  const n = Number(raw);
+  if (n === 0) return null;
+  return n / 10;
 }
 
 function volumeDelta(rows: HistoricoViewInputLog[]): {
@@ -88,9 +100,25 @@ function formatTdsAgg(st: ReturnType<typeof tdsStats>): string {
   return parts.length ? parts.join(' · ') : 'N/A';
 }
 
+function flujoAvgLmin(
+  rows: HistoricoViewInputLog[],
+  field: 'flujo_produccion' | 'flujo_rechazo'
+): number | null {
+  const vals = rows
+    .map((r) => flujoToLmin(r[field]))
+    .filter((v): v is number => v != null && v > 0);
+  if (!vals.length) return null;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+function formatFlujoAvg(avg: number | null): string {
+  return avg != null ? `prom. ${avg.toFixed(2)} L/min` : 'N/A';
+}
+
 /**
  * Construye filas para la tabla según la vista. Volúmenes agregados = Δ del contador acumulado
  * (última muestra − primera en el bucket), coherente con flowrate_total_* en product_logs.
+ * Flujos = promedio de speed en L/min (÷10).
  */
 export function buildHistoricoTableRows(
   logs: HistoricoViewInputLog[],
@@ -98,17 +126,23 @@ export function buildHistoricoTableRows(
 ): HistoricoTableRowModel[] {
   const base = logs.filter((l) => l != null);
   if (mode === 'raw') {
-    return base.map((l, idx) => ({
-      key: String(l._id ?? `${ts(l.date)}-${idx}`),
-      periodLabel: new Date(l.date).toLocaleString(),
-      samples: 1,
-      tdsSummary: l.tds != null ? `${Number(l.tds).toFixed(2)} ppm` : 'N/A',
-      productionSummary:
-        l.production_volume != null ? `${Number(l.production_volume).toFixed(2)} L` : 'N/A',
-      rejectionSummary:
-        l.rejected_volume != null ? `${Number(l.rejected_volume).toFixed(2)} L` : 'N/A',
-      detail: l.source ?? '',
-    }));
+    return base.map((l, idx) => {
+      const fp = flujoToLmin(l.flujo_produccion);
+      const fr = flujoToLmin(l.flujo_rechazo);
+      return {
+        key: String(l._id ?? `${ts(l.date)}-${idx}`),
+        periodLabel: new Date(l.date).toLocaleString(),
+        samples: 1,
+        tdsSummary: l.tds != null ? `${Number(l.tds).toFixed(2)} ppm` : 'N/A',
+        productionSummary:
+          l.production_volume != null ? `${Number(l.production_volume).toFixed(2)} L` : 'N/A',
+        rejectionSummary:
+          l.rejected_volume != null ? `${Number(l.rejected_volume).toFixed(2)} L` : 'N/A',
+        flujoProdSummary: fp != null ? `${fp.toFixed(2)} L/min` : 'N/A',
+        flujoRechSummary: fr != null ? `${fr.toFixed(2)} L/min` : 'N/A',
+        detail: l.source ?? '',
+      };
+    });
   }
 
   if (mode === 'first_last') {
@@ -125,6 +159,8 @@ export function buildHistoricoTableRows(
         productionSummary:
           vd.prod != null ? `Δ ${vd.prod.toFixed(2)} L (acumulado)` : 'N/A',
         rejectionSummary: vd.rej != null ? `Δ ${vd.rej.toFixed(2)} L (acumulado)` : 'N/A',
+        flujoProdSummary: formatFlujoAvg(flujoAvgLmin(s, 'flujo_produccion')),
+        flujoRechSummary: formatFlujoAvg(flujoAvgLmin(s, 'flujo_rechazo')),
         detail: 'Δ = último acum. − primero acum. en las filas cargadas',
       },
     ];
@@ -157,6 +193,8 @@ export function buildHistoricoTableRows(
       tdsSummary: formatTdsAgg(st),
       productionSummary: vd.prod != null ? `Δ ${vd.prod.toFixed(2)} L` : 'N/A',
       rejectionSummary: vd.rej != null ? `Δ ${vd.rej.toFixed(2)} L` : 'N/A',
+      flujoProdSummary: formatFlujoAvg(flujoAvgLmin(rows, 'flujo_produccion')),
+      flujoRechSummary: formatFlujoAvg(flujoAvgLmin(rows, 'flujo_rechazo')),
       detail: `${rows.length} muestras`,
     };
   });
