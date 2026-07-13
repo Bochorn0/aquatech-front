@@ -572,11 +572,17 @@ const ProductHistoricoLogs: React.FC<ProductHistoricoLogsProps> = ({ routineEnab
                       daysHelperRows.slice(0, 45).map((row) => (
                         <TableRow key={row.day}>
                           <TableCell>
-                            {new Date(row.day).toLocaleDateString('es-MX', {
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric',
-                            })}
+                            {(() => {
+                              const s = String(row.day || '').slice(0, 10);
+                              const [y, m, d] = s.split('-').map(Number);
+                              if (!y || !m || !d) return String(row.day);
+                              // Parse as local calendar date (avoid UTC midnight → previous day in MX)
+                              return new Date(y, m - 1, d).toLocaleDateString('es-MX', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                              });
+                            })()}
                           </TableCell>
                           <TableCell align="right">
                             {Number(row.logs_count || 0).toLocaleString('es-MX')}
