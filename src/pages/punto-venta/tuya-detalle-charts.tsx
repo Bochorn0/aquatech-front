@@ -1,7 +1,12 @@
+import type { Dayjs } from 'dayjs';
+
+import dayjs from 'dayjs';
 import { useState } from 'react';
 
 import { useTheme } from '@mui/material/styles';
 import CardHeader from '@mui/material/CardHeader';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import {
   Box,
   Card,
@@ -23,7 +28,57 @@ import { CONFIG } from 'src/config-global';
 
 import { Chart, useChart } from 'src/components/chart';
 
-export type TuyaHistoricoRange = '24h' | '7d' | '30d';
+export type TuyaHistoricoRange = '24h' | '3d' | '7d' | '30d' | 'custom';
+
+export type HistoricoCustomWindow = {
+  start: Dayjs | null;
+  end: Dayjs | null;
+};
+
+/** Query string for GET historico (`range` or `historicoRange`). */
+export function buildTuyaHistoricoQueryParams(
+  range: TuyaHistoricoRange,
+  custom?: HistoricoCustomWindow,
+  opts?: { rangeKey?: 'range' | 'historicoRange' }
+): string {
+  const params = new URLSearchParams();
+  params.set(opts?.rangeKey ?? 'range', range);
+  if (range === 'custom' && custom?.start?.isValid() && custom?.end?.isValid()) {
+    params.set('startDate', custom.start.startOf('day').toISOString());
+    params.set('endDate', custom.end.endOf('day').toISOString());
+  }
+  return params.toString();
+}
+
+export function isHistoricoCustomReady(
+  range: TuyaHistoricoRange,
+  custom?: HistoricoCustomWindow
+): boolean {
+  if (range !== 'custom') return true;
+  return !!(
+    custom?.start?.isValid() &&
+    custom?.end?.isValid() &&
+    !custom.end.isBefore(custom.start, 'day')
+  );
+}
+
+export const TUYA_RANGE_LABELS: Record<TuyaHistoricoRange, string> = {
+  '24h': 'últimas 24 horas',
+  '3d': 'últimos 3 días',
+  '7d': 'última semana',
+  '30d': 'último mes',
+  custom: 'período personalizado',
+};
+
+export function formatTuyaRangeLabel(
+  range: TuyaHistoricoRange,
+  custom?: HistoricoCustomWindow
+): string {
+  if (range === 'custom' && custom?.start?.isValid() && custom?.end?.isValid()) {
+    return `${custom.start.format('DD/MM/YYYY')} – ${custom.end.format('DD/MM/YYYY')}`;
+  }
+  return TUYA_RANGE_LABELS[range] ?? range;
+}
 
 export type ChartSeriesBlock = {
   /** Short labels for the chart axis */
@@ -412,9 +467,11 @@ export function downloadHistoricoDetailCsv(
 async function fetchHistoricoDetailHours(
   puntoId: string,
   productId: string,
-  range: TuyaHistoricoRange
+  range: TuyaHistoricoRange,
+  custom?: HistoricoCustomWindow
 ): Promise<HistoricoHourRow[]> {
-  const url = `${CONFIG.API_BASE_URL_V2}/puntoVentas/${puntoId}/historico?productId=${encodeURIComponent(productId)}&range=${range}&detail=1`;
+  const qs = buildTuyaHistoricoQueryParams(range, custom);
+  const url = `${CONFIG.API_BASE_URL_V2}/puntoVentas/${puntoId}/historico?productId=${encodeURIComponent(productId)}&${qs}&detail=1`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
   });
@@ -427,10 +484,12 @@ function HistoricoDetailCsvButton({
   bundle,
   puntoId,
   historicoRange,
+  historicoCustom,
 }: {
   bundle: OsmosisChartBundle;
   puntoId: string;
   historicoRange: TuyaHistoricoRange;
+  historicoCustom?: HistoricoCustomWindow;
 }) {
   const [loading, setLoading] = useState(false);
 
@@ -439,7 +498,12 @@ function HistoricoDetailCsvButton({
     try {
       let hours = bundle.rawHours ?? [];
       if (!hourHasDetailSamples(hours)) {
-        hours = await fetchHistoricoDetailHours(puntoId, bundle.productId, historicoRange);
+        hours = await fetchHistoricoDetailHours(
+          puntoId,
+          bundle.productId,
+          historicoRange,
+          historicoCustom
+        );
       }
       if (!hours.length) {
         alert('No hay registros para exportar en este período.');
@@ -549,11 +613,13 @@ export function TuyaOsmosisHistoricoSection({
   rangeLabel,
   puntoId,
   historicoRange,
+  historicoCustom,
 }: {
   charts: OsmosisChartBundle[];
   rangeLabel: string;
   puntoId: string;
   historicoRange: TuyaHistoricoRange;
+  historicoCustom?: HistoricoCustomWindow;
 }) {
   if (!charts.length) {
     return (
@@ -586,6 +652,7 @@ export function TuyaOsmosisHistoricoSection({
               bundle={bundle}
               puntoId={puntoId}
               historicoRange={historicoRange}
+              historicoCustom={historicoCustom}
             />
           </Box>
           <Grid container spacing={1.5} sx={{ mb: 2 }}>
@@ -676,34 +743,59 @@ export function TuyaOsmosisHistoricoSection({
   );
 }
 
-export const TUYA_RANGE_LABELS: Record<TuyaHistoricoRange, string> = {
-  '24h': 'últimas 24 horas',
-  '7d': 'última semana',
-  '30d': 'último mes',
-};
-
 export function TuyaHistoricoPeriodSelector({
   value,
   onChange,
+  customWindow,
+  onCustomWindowChange,
 }: {
   value: TuyaHistoricoRange;
   onChange: (range: TuyaHistoricoRange) => void;
+  customWindow?: HistoricoCustomWindow;
+  onCustomWindowChange?: (window: HistoricoCustomWindow) => void;
 }) {
   return (
-    <FormControl size="small" sx={{ minWidth: 200, mb: 2 }}>
-      <InputLabel id="tuya-historico-range-label" shrink>
-        Período histórico
-      </InputLabel>
-      <Select
-        labelId="tuya-historico-range-label"
-        value={value}
-        label="Período histórico"
-        onChange={(e) => onChange(e.target.value as TuyaHistoricoRange)}
-      >
-        <MenuItem value="24h">Últimas 24 horas</MenuItem>
-        <MenuItem value="7d">Última semana</MenuItem>
-        <MenuItem value="30d">Último mes</MenuItem>
-      </Select>
-    </FormControl>
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-start', mb: 2 }}>
+      <FormControl size="small" sx={{ minWidth: 200 }}>
+        <InputLabel id="tuya-historico-range-label" shrink>
+          Período histórico
+        </InputLabel>
+        <Select
+          labelId="tuya-historico-range-label"
+          value={value}
+          label="Período histórico"
+          onChange={(e) => onChange(e.target.value as TuyaHistoricoRange)}
+        >
+          <MenuItem value="24h">Últimas 24 horas</MenuItem>
+          <MenuItem value="3d">Últimos 3 días</MenuItem>
+          <MenuItem value="7d">Última semana</MenuItem>
+          <MenuItem value="30d">Último mes</MenuItem>
+          <MenuItem value="custom">Personalizado</MenuItem>
+        </Select>
+      </FormControl>
+      {value === 'custom' && onCustomWindowChange && (
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+          <DatePicker
+            label="Desde"
+            value={customWindow?.start ?? null}
+            onChange={(v) =>
+              onCustomWindowChange({ start: v, end: customWindow?.end ?? null })
+            }
+            maxDate={customWindow?.end ?? dayjs()}
+            slotProps={{ textField: { size: 'small', sx: { minWidth: 160 } } }}
+          />
+          <DatePicker
+            label="Hasta"
+            value={customWindow?.end ?? null}
+            onChange={(v) =>
+              onCustomWindowChange({ start: customWindow?.start ?? null, end: v })
+            }
+            minDate={customWindow?.start ?? undefined}
+            maxDate={dayjs()}
+            slotProps={{ textField: { size: 'small', sx: { minWidth: 160 } } }}
+          />
+        </LocalizationProvider>
+      )}
+    </Box>
   );
 }
