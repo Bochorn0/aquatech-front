@@ -1,6 +1,7 @@
 import { Helmet } from 'react-helmet-async';
 import { useParams } from 'react-router-dom';
 import { useRef, useMemo, useState, useEffect } from 'react';
+import dayjs from 'dayjs';
 
 import { useTheme } from '@mui/material/styles';
 import CardHeader from '@mui/material/CardHeader';
@@ -64,11 +65,15 @@ import {
   TuyaOsmosisMetricsSection,
 } from './punto-venta-detalle';
 import {
-  TUYA_RANGE_LABELS,
+  formatTuyaRangeLabel,
+  type TuyaHistoricoRange,
+  type HistoricoCustomWindow,
   type OsmosisChartBundle,
   TuyaHistoricoPeriodSelector,
   TuyaOsmosisHistoricoSection,
   prepareOsmosisHistoricoCharts,
+  buildTuyaHistoricoQueryParams,
+  isHistoricoCustomReady,
 } from './tuya-detalle-charts';
 
 import type { MetricsData } from '../types';
@@ -120,7 +125,11 @@ export default function PuntoVentaDetalleV2() {
   const [customSensorValue, setCustomSensorValue] = useState<string>('');
   const [generatingCustom, setGeneratingCustom] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [historicoRange, setHistoricoRange] = useState<'24h' | '7d' | '30d'>('24h');
+  const [historicoRange, setHistoricoRange] = useState<TuyaHistoricoRange>('24h');
+  const [historicoCustom, setHistoricoCustom] = useState<HistoricoCustomWindow>({
+    start: dayjs().subtract(3, 'day').startOf('day'),
+    end: dayjs(),
+  });
   const [tuyaChartDataNiveles, setTuyaChartDataNiveles] = useState<any>(null);
   const [tuyaOsmosisCharts, setTuyaOsmosisCharts] = useState<OsmosisChartBundle[]>([]);
   const [tuyaMetrics, setTuyaMetrics] = useState<MetricsData | null>(null);
@@ -174,7 +183,7 @@ export default function PuntoVentaDetalleV2() {
 
   useEffect(() => {
     lastHistoricoFetchAtRef.current = 0;
-  }, [id, refreshTrigger, historicoRange]);
+  }, [id, refreshTrigger, historicoRange, historicoCustom.start, historicoCustom.end]);
 
   useEffect(() => {
     const fetchTiwaterData = async (codigoTienda: string) => {
@@ -313,6 +322,10 @@ export default function PuntoVentaDetalleV2() {
     };
 
     const fetchHistoricoForCharts = async (puntoData: any) => {
+      if (!isHistoricoCustomReady(historicoRange, historicoCustom)) {
+        setChartsLoading(false);
+        return;
+      }
       if (usesTuyaSource(puntoData?.source_type)) {
         try {
           const historicoProducts = (puntoData.productos || []).filter(
@@ -329,8 +342,9 @@ export default function PuntoVentaDetalleV2() {
               // Prefer numeric DB id (_id); product.id is often the Tuya device_id string
               const pid = prod._id ?? prod.id;
               if (!pid) return;
+              const qs = buildTuyaHistoricoQueryParams(historicoRange, historicoCustom);
               const r = await fetch(
-                `${CONFIG.API_BASE_URL_V2}/puntoVentas/${id}/historico?productId=${encodeURIComponent(String(pid))}&range=${historicoRange}`,
+                `${CONFIG.API_BASE_URL_V2}/puntoVentas/${id}/historico?productId=${encodeURIComponent(String(pid))}&${qs}`,
                 { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
               );
               if (!r.ok) return;
@@ -596,7 +610,7 @@ export default function PuntoVentaDetalleV2() {
       return () => clearInterval(interval);
     }
     return undefined;
-  }, [id, refreshTrigger, historicoRange]);
+  }, [id, refreshTrigger, historicoRange, historicoCustom.start, historicoCustom.end]);
 
   if (loading) {
     return (
@@ -1062,7 +1076,9 @@ export default function PuntoVentaDetalleV2() {
                       osmosis={tuyaOsmosis}
                       metrics={tuyaMetrics}
                       historicoRange={historicoRange}
-                      onHistoricoRangeChange={(r: '24h' | '7d' | '30d') => setHistoricoRange(r)}
+                      onHistoricoRangeChange={setHistoricoRange}
+                      historicoCustom={historicoCustom}
+                      onHistoricoCustomChange={setHistoricoCustom}
                       hidePeriodSelector
                     />
                   )}
@@ -1075,7 +1091,9 @@ export default function PuntoVentaDetalleV2() {
                   <Grid item xs={12}>
                     <TuyaHistoricoPeriodSelector
                       value={historicoRange}
-                      onChange={(r) => setHistoricoRange(r)}
+                      onChange={setHistoricoRange}
+                      customWindow={historicoCustom}
+                      onCustomWindowChange={setHistoricoCustom}
                     />
                     {chartsLoading ? (
                       <Box display="flex" justifyContent="center" py={3}>
@@ -1086,9 +1104,10 @@ export default function PuntoVentaDetalleV2() {
                         <PvDetalleErrorBoundary name="Histórico Tuya">
                           <TuyaOsmosisHistoricoSection
                             charts={tuyaOsmosisCharts}
-                            rangeLabel={TUYA_RANGE_LABELS[historicoRange]}
+                            rangeLabel={formatTuyaRangeLabel(historicoRange, historicoCustom)}
                             puntoId={String(id)}
                             historicoRange={historicoRange}
+                            historicoCustom={historicoCustom}
                           />
                         </PvDetalleErrorBoundary>
                       )

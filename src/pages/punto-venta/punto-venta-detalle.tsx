@@ -5,7 +5,7 @@ import { Marker, Geography, Geographies, ComposableMap } from 'react-simple-maps
 
 import { useTheme } from '@mui/material/styles';
 import CardHeader from '@mui/material/CardHeader';
-import { Box, Card, Chip, Grid, Paper, Button, Select, Divider, MenuItem, InputLabel, Typography, FormControl, CircularProgress } from '@mui/material';
+import { Box, Card, Chip, Grid, Paper, Button, Divider, Typography, CircularProgress } from '@mui/material';
 
 import geoData from 'src/utils/states.json';
 import { fNumber } from 'src/utils/format-number';
@@ -30,8 +30,16 @@ import { Chart, useChart } from 'src/components/chart';
 
 import { ExportReportButton } from './export-button';
 import { PressureGauge } from '../charts/pressure-gauge';
+import {
+  type TuyaHistoricoRange,
+  type HistoricoCustomWindow,
+  TuyaHistoricoPeriodSelector,
+  buildTuyaHistoricoQueryParams,
+  isHistoricoCustomReady,
+} from './tuya-detalle-charts';
 
 import type { MetricsData } from '../types';
+import dayjs from 'dayjs';
 
 export { toMetricRange, toDisplayScalar, safeDisplayText };
 
@@ -139,12 +147,21 @@ export default function PuntoVentaDetalle() {
   const [loading, setLoading] = useState<boolean>(true);
   const [chartDataNiveles, setChartDataNiveles] = useState<any>(null);
   const [metrics, setMetrics] = useState<MetricsData | null>(null);
-  const [historicoRange, setHistoricoRange] = useState<'24h' | '7d' | '30d'>('24h');
+  const [historicoRange, setHistoricoRange] = useState<TuyaHistoricoRange>('24h');
+  const [historicoCustom, setHistoricoCustom] = useState<HistoricoCustomWindow>({
+    start: dayjs().subtract(3, 'day').startOf('day'),
+    end: dayjs(),
+  });
 
   useEffect(() => {
+    if (!isHistoricoCustomReady(historicoRange, historicoCustom)) return undefined;
+
     const fetchPuntoVentaDetails = async () => {
       try {
-        const response = await get<any>(`/puntoVentas/${id}?historicoRange=${historicoRange}`);
+        const qs = buildTuyaHistoricoQueryParams(historicoRange, historicoCustom, {
+          rangeKey: 'historicoRange',
+        });
+        const response = await get<any>(`/puntoVentas/${id}?${qs}`);
         setPunto(response);
         prepareChartDataTuya(response, setChartDataNiveles);
         setLoading(false);
@@ -158,7 +175,7 @@ export default function PuntoVentaDetalle() {
       fetchPuntoVentaDetails();
     }, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
-  }, [id, historicoRange]);
+  }, [id, historicoRange, historicoCustom.start, historicoCustom.end]);
 
   useEffect(() => {
     const clienteId = punto?.cliente?._id;
@@ -252,6 +269,8 @@ export default function PuntoVentaDetalle() {
               metrics={metrics}
               historicoRange={historicoRange}
               onHistoricoRangeChange={setHistoricoRange}
+              historicoCustom={historicoCustom}
+              onHistoricoCustomChange={setHistoricoCustom}
             />
           </Grid>
         </Grid>
@@ -984,7 +1003,17 @@ export function TuyaOsmosisMetricsSection({ osmosis = [], metrics = null }: { os
 /* 🧱 Sección 3: Niveles */
 /* -------------------------------------------------------------------------- */
 
-export function TuyaNivelSection({ niveles, chartDataNiveles, osmosis = [], metrics = null, historicoRange = '24h', onHistoricoRangeChange, hidePeriodSelector = false }: any) {
+export function TuyaNivelSection({
+  niveles,
+  chartDataNiveles,
+  osmosis = [],
+  metrics = null,
+  historicoRange = '24h',
+  onHistoricoRangeChange,
+  historicoCustom,
+  onHistoricoCustomChange,
+  hidePeriodSelector = false,
+}: any) {
   const metricsSection = <TuyaOsmosisMetricsSection osmosis={osmosis} metrics={metrics} />;
 
   if (niveles.length === 0) {
@@ -1007,19 +1036,12 @@ export function TuyaNivelSection({ niveles, chartDataNiveles, osmosis = [], metr
   return (
     <Box>
       {!hidePeriodSelector && (
-        <FormControl size="small" sx={{ minWidth: 180, mb: 2 }}>
-          <InputLabel id="historico-range-label" shrink>Período histórico</InputLabel>
-          <Select
-            labelId="historico-range-label"
-            value={historicoRange}
-            label="Período histórico"
-            onChange={(e) => onHistoricoRangeChange?.(e.target.value as '24h' | '7d' | '30d')}
-          >
-            <MenuItem value="24h">Últimas 24 horas</MenuItem>
-            <MenuItem value="7d">Última semana</MenuItem>
-            <MenuItem value="30d">Último mes</MenuItem>
-          </Select>
-        </FormControl>
+        <TuyaHistoricoPeriodSelector
+          value={historicoRange}
+          onChange={onHistoricoRangeChange}
+          customWindow={historicoCustom}
+          onCustomWindowChange={onHistoricoCustomChange}
+        />
       )}
       {/* Card con información de todos los niveles - COMENTADO */}
       {/* <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
