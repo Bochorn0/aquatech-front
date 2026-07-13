@@ -1600,7 +1600,7 @@ const handlePvProductosChange = (e: any) => {
                                       size="small"
                                       aria-label="Configurar reglas de logs"
                                     >
-                                      {/* SvgColor (not @mui/icons-material): default MUI icon imports can be module objects in prod → React #130 */}
+                                      {/* SvgColor avoids React #130 from @mui/icons-material default import in prod */}
                                       <SvgColor src="./assets/icons/navbar/ic-configuration.svg" />
                                     </IconButton>
                                   </span>
