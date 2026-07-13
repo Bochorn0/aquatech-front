@@ -5,7 +5,6 @@ import { Helmet } from "react-helmet-async";
 import { useMemo, useState, useEffect, useCallback } from "react";
 
 import Autocomplete from '@mui/material/Autocomplete';
-import SettingsIcon from '@mui/icons-material/Settings';
 import {
   Box,
   Chip,
@@ -1601,7 +1600,8 @@ const handlePvProductosChange = (e: any) => {
                                       size="small"
                                       aria-label="Configurar reglas de logs"
                                     >
-                                      <SettingsIcon />
+                                      {/* SvgColor (not @mui/icons-material): default MUI icon imports can be module objects in prod → React #130 */}
+                                      <SvgColor src="./assets/icons/navbar/ic-configuration.svg" />
                                     </IconButton>
                                   </span>
                                 </Tooltip>
