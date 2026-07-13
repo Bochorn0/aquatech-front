@@ -278,7 +278,16 @@ export function TuyaLogsRoutineRulesPanel({
       const res = await post<{
         success?: boolean;
         message?: string;
-        routine_result?: { logsInserted?: number; totalLogsFromTuya?: number; codesFetched?: number };
+        routine_result?: {
+          logsInserted?: number;
+          logsSkippedDuplicates?: number;
+          logsToSave?: number;
+          logsGrouped?: number;
+          totalLogsFromTuya?: number;
+          codesFetched?: number;
+          previous_hour_hits?: number;
+          previous_hour_misses?: number;
+        };
         recent_logs?: Array<{
           date?: string;
           production_volume?: number;
@@ -292,6 +301,10 @@ export function TuyaLogsRoutineRulesPanel({
 
       const inserted = res?.routine_result?.logsInserted ?? 0;
       const fromTuya = res?.routine_result?.totalLogsFromTuya ?? 0;
+      const skipped = res?.routine_result?.logsSkippedDuplicates ?? 0;
+      const toSave = res?.routine_result?.logsToSave ?? 0;
+      const prevHits = res?.routine_result?.previous_hour_hits ?? 0;
+      const prevMisses = res?.routine_result?.previous_hour_misses ?? 0;
       const sample = (res?.recent_logs || [])
         .slice(0, 3)
         .map(
@@ -304,7 +317,10 @@ export function TuyaLogsRoutineRulesPanel({
         icon: res?.success ? 'success' : 'warning',
         title: res?.success ? 'Rutina ejecutada' : 'Rutina con problemas',
         html: `${res?.message || ''}<br/><br/>
-          Insertados: <strong>${inserted}</strong> · Logs Tuya: <strong>${fromTuya}</strong><br/>
+          Insertados: <strong>${inserted}</strong> · Omitidos (mismo timestamp): <strong>${skipped}</strong><br/>
+          Logs Tuya: <strong>${fromTuya}</strong> · Filas a guardar: <strong>${toSave}</strong><br/>
+          previous_hour: hits <strong>${prevHits}</strong> · misses <strong>${prevMisses}</strong>
+          ${prevMisses > 0 ? '<br/><em>Sin registro ≥1h antes: la regla usa 0 a la derecha (delta ≈ total actual, no producción de la hora).</em>' : ''}<br/>
           Códigos: ${(res?.config_used?.enabled_codes || []).join(', ') || '-'}<br/>
           Reglas: ${res?.config_used?.custom_rules?.length ?? 0}<br/><br/>
           <strong>Últimos logs</strong><br/>${sample || '(sin muestra)'}`,
