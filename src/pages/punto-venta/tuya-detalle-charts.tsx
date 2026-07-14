@@ -85,7 +85,7 @@ export type ChartSeriesBlock = {
   categories: string[];
   /** Full hour stamps for CSV (e.g. YYYY-MM-DD HH:00) */
   hours: string[];
-  series: { name: string; data: number[] }[];
+  series: { name: string; data: (number | null)[] }[];
 };
 
 export type OsmosisChartBundle = {
@@ -157,23 +157,25 @@ function isSaneMeterLiters(n: number): boolean {
   return Number.isFinite(n) && n > 0 && n < 1e8;
 }
 
-function lastSaneMeter(values: number[]): number | null {
+function lastSaneMeter(values: (number | null | undefined)[]): number | null {
   for (let i = values.length - 1; i >= 0; i -= 1) {
-    if (isSaneMeterLiters(values[i])) return values[i];
+    const v = values[i];
+    if (v != null && isSaneMeterLiters(v)) return v;
   }
   return null;
 }
 
 /** Last finite value for custom fields (0 / negatives allowed). */
-function lastFiniteValue(values: number[]): number | null {
+function lastFiniteValue(values: (number | null | undefined)[]): number | null {
   for (let i = values.length - 1; i >= 0; i -= 1) {
-    if (Number.isFinite(values[i])) return values[i];
+    const v = values[i];
+    if (v != null && Number.isFinite(v)) return v;
   }
   return null;
 }
 
-function avgFiniteInclZero(values: number[]): number | null {
-  const nums = values.filter((v) => Number.isFinite(v));
+function avgFiniteInclZero(values: (number | null | undefined)[]): number | null {
+  const nums = values.filter((v): v is number => v != null && Number.isFinite(v));
   if (nums.length === 0) return null;
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
@@ -182,13 +184,13 @@ function avgFiniteInclZero(values: number[]): number | null {
  * Period production from cumulative meter series.
  * Sums positive hour-to-hour increases so device resets don't invert Δ.
  */
-function periodDeltaFromCumulative(values: number[]): number | null {
+function periodDeltaFromCumulative(values: (number | null | undefined)[]): number | null {
   let delta = 0;
   let sawPair = false;
   for (let i = 1; i < values.length; i += 1) {
     const prev = values[i - 1];
     const curr = values[i];
-    if (isSaneMeterLiters(prev) && isSaneMeterLiters(curr)) {
+    if (prev != null && curr != null && isSaneMeterLiters(prev) && isSaneMeterLiters(curr)) {
       sawPair = true;
       if (curr >= prev) delta += curr - prev;
     }
@@ -200,6 +202,196 @@ function periodDeltaFromCumulative(values: number[]): number | null {
 function toChartNumber(v: unknown): number {
   const n = Number(v ?? 0);
   return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Custom-field chart points: missing / invalid → null (gap), not 0.
+ * Also drops ±meter-total garbage so adaptive Y isn't forced by spikes.
+ */
+function toCustomChartValue(v: unknown): number | null {
+  if (v == null || v === '') return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isFinite(n)) return null;
+  if (Math.abs(n) > 20000) return null;
+  return n;
+}
+
+/** Cumulative meters: missing/0 → null so ApexCharts gaps instead of false cliffs to 0. */
+function toMeterChartValue(v: unknown): number | null {
+  if (v == null || v === '') return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
+/** Collect finite chart samples in order (skips null / undefined holes). */
+function finiteSeriesValues(data: (number | null | undefined)[] | undefined): number[] {
+  if (!Array.isArray(data) || data.length === 0) return [];
+  return data.filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+}
+
+/**
+ * First N step sizes between successive non-null points (null hours are skipped).
+ * Outliers reset the chain so a ±62k spike doesn't invent a fake increment.
+ */
+function earlyAdjacentIncrements(
+  data: (number | null | undefined)[] | undefined,
+  maxIncrements = 3,
+  outlierCap = 20000
+): number[] {
+  if (!Array.isArray(data) || data.length < 2) return [];
+  const incs: number[] = [];
+  let prev: number | null = null;
+  for (let i = 0; i < data.length && incs.length < maxIncrements; i += 1) {
+    const v = data[i];
+    const isUsable = typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= outlierCap;
+    if (!isUsable) {
+      if (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) > outlierCap) {
+        prev = null;
+      }
+    } else {
+      if (prev != null) {
+        incs.push(Math.abs(v - prev));
+      }
+      prev = v;
+    }
+  }
+  return incs;
+}
+
+/** Y bounds around series so small day deltas (~hundreds of L on a ~60k meter) are visible. */
+function fitYAxisBounds(
+  series: { name: string; data: (number | null)[] }[],
+  preferNameIncludes?: string
+): { min?: number; max?: number } {
+  const list = Array.isArray(series) ? series : [];
+  const preferred =
+    preferNameIncludes != null
+      ? list.filter((s) => s?.name?.toLowerCase?.().includes(preferNameIncludes.toLowerCase()))
+      : list;
+  const use =
+    preferred.length > 0 && preferred.some((s) => finiteSeriesValues(s?.data).length > 0)
+      ? preferred
+      : list;
+  const vals = use.flatMap((s) => finiteSeriesValues(s?.data));
+  if (vals.length === 0) return {};
+  const min = Math.min(...vals);
+  const max = Math.max(...vals);
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return {};
+  const span = max - min;
+  const pad = Math.max(span * 0.2, Math.abs(max) * 0.002, 5);
+  return {
+    min: Math.max(0, min - pad),
+    max: max + pad,
+  };
+}
+
+const ADAPTIVE_Y_DEFAULT_MAX = 10000;
+
+/** Nice step size from observed magnitude (tens / hundreds / thousands…). */
+function pickYStep(magnitude: number): number {
+  const m = Math.abs(magnitude) || 1;
+  if (m <= 50) return 5;
+  if (m <= 100) return 10;
+  if (m <= 500) return 50;
+  if (m <= 2000) return 100;
+  if (m <= 10000) return 500;
+  if (m <= 50000) return 2000;
+  return 5000;
+}
+
+function niceCeil(n: number, step: number): number {
+  if (!Number.isFinite(n) || step <= 0) return Number.isFinite(n) ? n : ADAPTIVE_Y_DEFAULT_MAX;
+  return Math.ceil(n / step) * step;
+}
+
+function medianOfNumbers(nums: number[]): number {
+  if (!nums.length) return 0;
+  const s = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 === 1 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+/**
+ * Per-product Y scale: default 0-10000, then tighten/expand from the first 2-3
+ * available adjacent steps. Sparse / missing hours fall back to the default scale.
+ */
+function adaptiveYAxisBounds(
+  series: { name: string; data: (number | null)[] }[] | null | undefined
+): { min: number; max: number; tickAmount: number } {
+  const defaultMax = ADAPTIVE_Y_DEFAULT_MAX;
+  const outlierCap = defaultMax * 2;
+  const fallback = { min: 0, max: defaultMax, tickAmount: 5 };
+
+  const list = Array.isArray(series) ? series.filter(Boolean) : [];
+  if (list.length === 0) return fallback;
+
+  const primaryData = list[0]?.data;
+  const cleanPrimary = finiteSeriesValues(primaryData).filter((v) => Math.abs(v) <= outlierCap);
+  const cleanOthers = list
+    .slice(1)
+    .flatMap((s) => finiteSeriesValues(s?.data))
+    .filter((v) => Math.abs(v) <= outlierCap);
+  const cleanAll = [...cleanPrimary, ...cleanOthers];
+
+  // No usable points → keep standard scale
+  if (cleanAll.length === 0) return fallback;
+
+  const earlyIncs = earlyAdjacentIncrements(primaryData, 3, outlierCap).filter(
+    (d) => Number.isFinite(d) && d <= defaultMax
+  );
+  const typicalInc = earlyIncs.length > 0 ? medianOfNumbers(earlyIncs) : 0;
+
+  const dataMin = Math.min(...cleanAll);
+  const dataMax = Math.max(...cleanAll);
+  if (!Number.isFinite(dataMin) || !Number.isFinite(dataMax)) return fallback;
+
+  // Single point or no early steps: still scale from magnitude, else stay near default
+  const earlyPeak =
+    cleanPrimary.length > 0
+      ? Math.max(...cleanPrimary.slice(0, Math.min(3, cleanPrimary.length)).map((v) => Math.abs(v)))
+      : Math.max(Math.abs(dataMin), Math.abs(dataMax));
+
+  const suggested = Math.max(
+    Math.abs(dataMax),
+    Math.abs(dataMin),
+    earlyPeak,
+    typicalInc > 0 ? typicalInc * 8 : 0,
+    1
+  );
+
+  let targetMax = defaultMax;
+  let targetMin = 0;
+
+  if (suggested <= 80) {
+    targetMax = niceCeil(Math.max(suggested * 1.4, typicalInc * 6 || 0, 20), pickYStep(suggested));
+  } else if (suggested <= 800) {
+    targetMax = niceCeil(Math.max(suggested * 1.3, 100), 100);
+  } else if (suggested <= defaultMax) {
+    targetMax =
+      suggested <= defaultMax * 0.75
+        ? niceCeil(Math.max(suggested * 1.2, typicalInc * 10 || suggested), 100)
+        : defaultMax;
+  } else {
+    targetMax = niceCeil(suggested * 1.15, pickYStep(suggested));
+  }
+
+  if (dataMax > targetMax) {
+    targetMax = niceCeil(dataMax * 1.1, pickYStep(dataMax));
+  }
+  if (dataMin < 0) {
+    targetMin = -niceCeil(Math.abs(dataMin) * 1.15, pickYStep(Math.abs(dataMin)));
+  }
+
+  if (!Number.isFinite(targetMin) || !Number.isFinite(targetMax) || targetMax <= targetMin) {
+    return fallback;
+  }
+
+  const span = Math.max(targetMax - targetMin, 1);
+  const step = pickYStep(span);
+  const tickAmount = Math.max(4, Math.min(10, Math.round(span / step) || 5));
+
+  return { min: targetMin, max: targetMax, tickAmount };
 }
 
 /** Build osmosis chart bundles from product_logs historico (hours_with_data). */
@@ -219,8 +411,8 @@ export function prepareOsmosisHistoricoCharts(
       const flujoRech = hours.map((h: any) => toChartNumber(h.estadisticas?.flujo_rechazo_promedio));
       const tdsVals = hours.map((h: any) => toChartNumber(h.estadisticas?.tds_promedio));
       // Volumes: cumulative meters (end of hour) — never treat as flux
-      const prodVol = hours.map((h: any) => toChartNumber(h.estadisticas?.production_volume_total));
-      const rejVol = hours.map((h: any) => toChartNumber(h.estadisticas?.rejected_volume_total));
+      const prodVol = hours.map((h: any) => toMeterChartValue(h.estadisticas?.production_volume_total));
+      const rejVol = hours.map((h: any) => toMeterChartValue(h.estadisticas?.rejected_volume_total));
       const totalLogs = hours.map((h: any) => toChartNumber(h.total_logs));
 
       const customLabels = {
@@ -235,18 +427,18 @@ export function prepareOsmosisHistoricoCharts(
       };
 
       const custom1 = hours.map((h: any) =>
-        toChartNumber(
+        toCustomChartValue(
           h.estadisticas?.campo_personalizado_1_ultimo ?? h.estadisticas?.campo_personalizado_1_promedio
         )
       );
       const custom2 = hours.map((h: any) =>
-        toChartNumber(
+        toCustomChartValue(
           h.estadisticas?.campo_personalizado_2_ultimo ?? h.estadisticas?.campo_personalizado_2_promedio
         )
       );
       const hasCustom =
-        custom1.some((v) => v !== 0) ||
-        custom2.some((v) => v !== 0) ||
+        custom1.some((v) => v != null && v !== 0) ||
+        custom2.some((v) => v != null && v !== 0) ||
         Boolean(product?.historico?.product?.has_custom_fields) ||
         Boolean(product?.tuya_logs_routine_config?.custom_rules?.length);
 
@@ -526,7 +718,7 @@ function HistoricoDetailCsvButton({
 }
 
 /** Series drawn on the chart (exclude helper CSV-only columns). */
-function chartDisplaySeries(series: { name: string; data: number[] }[]) {
+function chartDisplaySeries(series: { name: string; data: (number | null)[] }[]) {
   return (series || []).filter((s) => s.name !== 'Muestras en hora');
 }
 
@@ -537,6 +729,9 @@ function TuyaLineChart({
   yTitle,
   yMin,
   yMax,
+  fitYToData,
+  fitPreferSeries,
+  adaptiveY,
   colors,
 }: {
   title: string;
@@ -545,11 +740,30 @@ function TuyaLineChart({
   yTitle: string;
   yMin?: number;
   yMax?: number;
+  /** Zoom Y around data so small deltas on large cumulative meters are visible */
+  fitYToData?: boolean;
+  /** When fitting Y, prefer this series name substring (e.g. "Producción") */
+  fitPreferSeries?: string;
+  /**
+   * Per-product scale: default 0-10000, adjust from first 2-3 increments
+   * (small units vs high-throughput osmosis).
+   */
+  adaptiveY?: boolean;
   colors?: string[];
 }) {
   const theme = useTheme();
   const displaySeries = chartDisplaySeries(chart?.series || []);
-  const hasData = chart?.categories?.length > 0 && displaySeries.some((s) => s.data?.length > 0);
+  const hasData =
+    (chart?.categories?.length ?? 0) > 0 &&
+    displaySeries.some((s) => finiteSeriesValues(s?.data).length > 0);
+  const fitted = fitYToData ? fitYAxisBounds(displaySeries, fitPreferSeries) : {};
+  const adapted = adaptiveY ? adaptiveYAxisBounds(displaySeries) : null;
+  // Always define Y when adaptive; otherwise leave Apex auto if no fit/bounds.
+  const axisMin = yMin ?? adapted?.min ?? fitted.min ?? (adaptiveY ? 0 : undefined);
+  const axisMax =
+    yMax ?? adapted?.max ?? fitted.max ?? (adaptiveY ? ADAPTIVE_Y_DEFAULT_MAX : undefined);
+  const tickAmount = adapted?.tickAmount ?? (adaptiveY ? 5 : undefined);
+  const forceNiceScale = adaptiveY ? true : !fitYToData;
 
   const chartOptions = useChart({
     chart: { type: 'line', toolbar: { show: false }, zoom: { enabled: false } },
@@ -562,13 +776,15 @@ function TuyaLineChart({
     },
     yaxis: {
       title: { text: yTitle },
-      min: yMin,
-      max: yMax,
+      min: axisMin,
+      max: axisMax,
+      ...(tickAmount != null ? { tickAmount } : {}),
+      forceNiceScale,
     },
     tooltip: {
       shared: true,
       intersect: false,
-      y: { formatter: (value: number) => fNumber(value) },
+      y: { formatter: (value: number) => (value == null ? '—' : fNumber(value)) },
     },
     legend: { position: 'top', horizontalAlign: 'right' },
     grid: { strokeDashArray: 3 },
@@ -700,10 +916,11 @@ export function TuyaOsmosisHistoricoSection({
             <Grid item xs={12} md={6}>
               <TuyaLineChart
                 title="Volúmenes acumulados por hora"
-                subheader="Lectura del medidor (fin de cada hora)"
+                subheader="Lectura del medidor (fin de cada hora) — eje zoom al rango real"
                 chart={bundle.volumen}
                 yTitle="L"
-                yMin={0}
+                fitYToData
+                fitPreferSeries="Producción"
               />
             </Grid>
             <Grid item xs={12} md={6}>
@@ -728,9 +945,10 @@ export function TuyaOsmosisHistoricoSection({
               <Grid item xs={12} md={6}>
                 <TuyaLineChart
                   title="Campos personalizados por hora"
-                  subheader="Valores derivados de las reglas de la rutina de logs"
+                  subheader="Eje Y adaptativo (base 0-10000; se ajusta con los primeros incrementos del producto)"
                   chart={bundle.custom}
                   yTitle=""
+                  adaptiveY
                   colors={['#1565c0', '#ef6c00']}
                 />
               </Grid>

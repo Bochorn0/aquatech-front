@@ -320,7 +320,7 @@ export function TuyaLogsRoutineRulesPanel({
           Insertados: <strong>${inserted}</strong> · Omitidos (mismo timestamp): <strong>${skipped}</strong><br/>
           Logs Tuya: <strong>${fromTuya}</strong> · Filas a guardar: <strong>${toSave}</strong><br/>
           previous_hour: hits <strong>${prevHits}</strong> · misses <strong>${prevMisses}</strong>
-          ${prevMisses > 0 ? '<br/><em>Sin registro ≥1h antes: la regla usa 0 a la derecha (delta ≈ total actual, no producción de la hora).</em>' : ''}<br/>
+          ${prevMisses > 0 ? '<br/><em>Sin registro usable ≥1h antes (o solo filas con volumen 0): esa regla se omite en esos timestamps (ya no se usa 0 → evita deltas ≈ ±contador total).</em>' : ''}<br/>
           Códigos: ${(res?.config_used?.enabled_codes || []).join(', ') || '-'}<br/>
           Reglas: ${res?.config_used?.custom_rules?.length ?? 0}<br/><br/>
           <strong>Últimos logs</strong><br/>${sample || '(sin muestra)'}`,
