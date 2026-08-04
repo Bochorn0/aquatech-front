@@ -306,7 +306,7 @@ export interface Controller {
   tipo_sensor?: string;
 }
 
-export type PuntoVentaSourceType = 'mqtt' | 'tuya' | 'hybrid';
+export type PuntoVentaSourceType = 'mqtt' | 'tuya' | 'hybrid' | 'external';
 
 export interface PuntosVenta {
     _id?: string;
