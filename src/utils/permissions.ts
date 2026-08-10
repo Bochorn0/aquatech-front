@@ -2,8 +2,32 @@
 // ----------------------------------------------------------------------
 
 /**
+ * Paths that must be checked on the role explicitly.
+ * They are NEVER granted by the legacy rule "empty/missing permissions = all access".
+ */
+export const EXPLICIT_ONLY_PERMISSIONS = ['/meter-platform'];
+
+/**
+ * Normaliza una ruta para comparación (convierte a minúsculas y asegura que empiece con /)
+ * @param routePath - Ruta a normalizar
+ * @returns Ruta normalizada
+ */
+function normalizeRoute(routePath: string): string {
+  // Asegurar que empiece con /
+  let normalized = routePath.startsWith('/') ? routePath : `/${routePath}`;
+  // Convertir a minúsculas
+  normalized = normalized.toLowerCase();
+  return normalized;
+}
+
+function isExplicitOnlyPath(routePath: string): boolean {
+  const n = normalizeRoute(routePath);
+  return EXPLICIT_ONLY_PERMISSIONS.some((p) => normalizeRoute(p) === n);
+}
+
+/**
  * Obtiene los permisos del usuario actual desde localStorage
- * @returns Array de rutas permitidas o null si no hay usuario
+ * @returns Array de rutas permitidas o null si no hay restricciones (legacy all-access)
  */
 export function getUserPermissions(): string[] | null {
   try {
@@ -14,7 +38,7 @@ export function getUserPermissions(): string[] | null {
     }
 
     const user = JSON.parse(userStr);
-    const {role} = user;
+    const { role } = user;
 
     // Debug: Log para verificar estructura
     console.log('[Permissions] User object:', user);
@@ -71,35 +95,27 @@ export function getDashboardVersion(): 'v1' | 'v2' | 'both' | null {
 }
 
 /**
- * Normaliza una ruta para comparación (convierte a minúsculas y asegura que empiece con /)
- * @param routePath - Ruta a normalizar
- * @returns Ruta normalizada
- */
-function normalizeRoute(routePath: string): string {
-  // Asegurar que empiece con /
-  let normalized = routePath.startsWith('/') ? routePath : `/${routePath}`;
-  // Convertir a minúsculas
-  normalized = normalized.toLowerCase();
-  return normalized;
-}
-
-/**
  * Verifica si el usuario tiene permiso para acceder a una ruta
  * @param routePath - Ruta a verificar (ej: '/equipos' o 'Equipos')
  * @returns true si tiene permiso o si no hay restricciones, false si no tiene permiso
  */
 export function hasPermission(routePath: string): boolean {
   const permissions = getUserPermissions();
+  const normalizedRoute = normalizeRoute(routePath);
+
+  // Opt-in routes: never accessible until explicitly checked on the role
+  if (isExplicitOnlyPath(normalizedRoute)) {
+    if (!permissions || !Array.isArray(permissions) || permissions.length === 0) {
+      return false;
+    }
+    return permissions.map(normalizeRoute).includes(normalizedRoute);
+  }
 
   // Si no hay permisos definidos, permitir acceso (comportamiento por defecto)
   if (permissions === null) {
     return true;
   }
 
-  // Normalizar la ruta a verificar
-  const normalizedRoute = normalizeRoute(routePath);
-
-  // Verificar si la ruta normalizada está en la lista de permisos (también normalizados)
   const normalizedPermissions = permissions.map(normalizeRoute);
   return normalizedPermissions.includes(normalizedRoute);
 }
@@ -118,24 +134,44 @@ export function hasAnyPermission(routePaths: string[]): boolean {
  * @param menuItems - Array de items del menú con propiedad 'path' y opcionalmente 'subItems'
  * @returns Array filtrado de items del menú
  */
-export function filterMenuByPermissions<T extends { path: string; requiredPath?: string; submenu?: boolean; subItems?: Array<{ path: string; requiredPath: string; title?: string }> }>(menuItems: T[]): T[] {
+export function filterMenuByPermissions<
+  T extends {
+    path: string;
+    requiredPath?: string;
+    submenu?: boolean;
+    subItems?: Array<{ path: string; requiredPath: string; title?: string }>;
+  },
+>(menuItems: T[]): T[] {
   const permissions = getUserPermissions();
-
-  // Si no hay permisos definidos, retornar todos los items (comportamiento por defecto)
-  if (permissions === null) {
-    console.log('[Menu Filter] No permissions, showing all items');
-    return menuItems;
-  }
-
-  const normalizedPermissions = permissions.map(normalizeRoute);
+  const normalizedPermissions = permissions ? permissions.map(normalizeRoute) : null;
 
   const result = menuItems.flatMap((item): T[] => {
+    const gatePath = item.requiredPath || item.path;
+
+    // Opt-in items: hide unless explicitly granted (even when role has "all access")
+    if (isExplicitOnlyPath(gatePath)) {
+      if (!normalizedPermissions?.includes(normalizeRoute(gatePath))) {
+        console.log(
+          `[Menu Filter] Filtering out opt-in item: ${item.path} (needs explicit ${gatePath})`
+        );
+        return [];
+      }
+      return [item];
+    }
+
+    // Si no hay permisos definidos, mostrar items no-opt-in (comportamiento por defecto)
+    if (normalizedPermissions === null) {
+      return [item];
+    }
+
     // Items with submenu: filter subItems by permission; collapse to single link when only one
     if (item.submenu && item.subItems) {
       if (item.requiredPath) {
         const normalizedParentPath = normalizeRoute(item.requiredPath);
         if (!normalizedPermissions.includes(normalizedParentPath)) {
-          console.log(`[Menu Filter] Filtering out submenu: ${item.path} (parent permission ${item.requiredPath} not granted)`);
+          console.log(
+            `[Menu Filter] Filtering out submenu: ${item.path} (parent permission ${item.requiredPath} not granted)`
+          );
           return [];
         }
       }
@@ -145,7 +181,9 @@ export function filterMenuByPermissions<T extends { path: string; requiredPath?:
       );
 
       if (allowedSubItems.length === 0) {
-        console.log(`[Menu Filter] Filtering out submenu: ${item.path} (no sub-items have permission)`);
+        console.log(
+          `[Menu Filter] Filtering out submenu: ${item.path} (no sub-items have permission)`
+        );
         return [];
       }
 
@@ -171,7 +209,9 @@ export function filterMenuByPermissions<T extends { path: string; requiredPath?:
     if (item.requiredPath) {
       const hasAccess = normalizedPermissions.includes(normalizeRoute(item.requiredPath));
       if (!hasAccess) {
-        console.log(`[Menu Filter] Filtering out: ${item.path} (requiredPath ${item.requiredPath} not in permissions)`);
+        console.log(
+          `[Menu Filter] Filtering out: ${item.path} (requiredPath ${item.requiredPath} not in permissions)`
+        );
         return [];
       }
       return [item];
@@ -188,4 +228,3 @@ export function filterMenuByPermissions<T extends { path: string; requiredPath?:
   console.log(`[Menu Filter] Filtered menu: ${result.length} of ${menuItems.length} items`);
   return result;
 }
-

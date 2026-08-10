@@ -113,5 +113,6 @@ export const allNavItems = [
     path: '/meter-platform',
     icon: icon('ic-products'),
     requiredPath: '/meter-platform',
+    /** Hidden until role checklist includes /meter-platform (see EXPLICIT_ONLY_PERMISSIONS) */
   },
 ];
