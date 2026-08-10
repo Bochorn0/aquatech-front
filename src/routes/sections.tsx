@@ -39,6 +39,8 @@ export const MQTTDocumentationPage = lazy(() => import('src/pages/mqtt-documenta
 export const NotificationsDashboardPage = lazy(() => import('src/pages/notifications-dashboard'));
 export const TIWaterCatalogPage = lazy(() => import('src/pages/tiwater-catalog'));
 export const TIWaterCatalogProductPage = lazy(() => import('src/pages/tiwater-catalog/tiwater-catalog-product'));
+export const MeterPlatformListPage = lazy(() => import('src/pages/meter-platform'));
+export const MeterPlatformDetailPage = lazy(() => import('src/pages/meter-platform/meter-platform-detail'));
 export const Page404 = lazy(() => import('src/pages/not_fund'));
 export const Logout =  function handleTokenLogout() {
   localStorage.removeItem('token');
@@ -345,6 +347,26 @@ export function Router() {
             </TokenProtectedRoute>
           ),
           path: 'tiwater-catalog/:id',
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <PermissionProtectedRoute requiredPath={['/', '/dashboard', '/dashboard/v1', '/dashboard/v2']}>
+                <MeterPlatformListPage />
+              </PermissionProtectedRoute>
+            </TokenProtectedRoute>
+          ),
+          path: 'meter-platform',
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <PermissionProtectedRoute requiredPath={['/', '/dashboard', '/dashboard/v1', '/dashboard/v2']}>
+                <MeterPlatformDetailPage />
+              </PermissionProtectedRoute>
+            </TokenProtectedRoute>
+          ),
+          path: 'meter-platform/:deviceCode',
         },
         {
           element: (
