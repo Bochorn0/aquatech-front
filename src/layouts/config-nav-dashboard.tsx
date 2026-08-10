@@ -112,6 +112,6 @@ export const allNavItems = [
     title: 'Medidores (prueba)',
     path: '/meter-platform',
     icon: icon('ic-products'),
-    requiredPath: '/dashboard',
+    requiredPath: '/meter-platform',
   },
 ];

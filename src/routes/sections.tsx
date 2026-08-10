@@ -351,7 +351,7 @@ export function Router() {
         {
           element: (
             <TokenProtectedRoute>
-              <PermissionProtectedRoute requiredPath={['/', '/dashboard', '/dashboard/v1', '/dashboard/v2']}>
+              <PermissionProtectedRoute requiredPath="/meter-platform">
                 <MeterPlatformListPage />
               </PermissionProtectedRoute>
             </TokenProtectedRoute>
@@ -361,7 +361,7 @@ export function Router() {
         {
           element: (
             <TokenProtectedRoute>
-              <PermissionProtectedRoute requiredPath={['/', '/dashboard', '/dashboard/v1', '/dashboard/v2']}>
+              <PermissionProtectedRoute requiredPath="/meter-platform">
                 <MeterPlatformDetailPage />
               </PermissionProtectedRoute>
             </TokenProtectedRoute>
