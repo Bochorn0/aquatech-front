@@ -48,6 +48,24 @@ type DetailData = {
   } | null;
   normalizeError?: string | null;
   fetchErrors?: Record<string, string | null>;
+  usageBreakdown?: {
+    unit?: string;
+    explanation?: string;
+    last5DaysDailyUsageRaw?: string | null;
+    last5DaysParsed?: {
+      startDate: string;
+      days: number;
+      entries: Array<{ date: string; raw: number; m3: number; liters: number }>;
+    } | null;
+    dailyUsageMap?: Record<string, number> | null;
+    dailyUsageEnriched?: Array<{
+      date: string;
+      m3: number;
+      liters: number;
+      deltaM3: number | null;
+      deltaLiters: number | null;
+    }> | null;
+  } | null;
 };
 
 type DetailResponse = {
