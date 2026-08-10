@@ -69,6 +69,7 @@ export default function UserRoleManagement() {
     { path: '/controladores', label: 'Controladores' },
     { path: '/tiwater-catalog', label: 'Catálogo TI Water' },
     { path: '/api-ti-water', label: 'API TI Water' },
+    { path: '/meter-platform', label: 'Medidores plataforma (prueba)' },
     { path: '/calidad-agua', label: 'Calidad de Agua (Mapa)' },
     // Puntos De Venta - Parent and versions
     { path: '/puntoVenta', label: 'Puntos De Venta (Parent - Required for submenu)' },

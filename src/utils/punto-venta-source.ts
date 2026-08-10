@@ -4,6 +4,7 @@ const SOURCE_LABELS: Record<PuntoVentaSourceType, string> = {
   mqtt: 'MQTT',
   tuya: 'Tuya',
   hybrid: 'Híbrido',
+  external: 'Externo',
 };
 
 export function getSourceTypeLabel(sourceType?: string | null): string {
@@ -11,14 +12,20 @@ export function getSourceTypeLabel(sourceType?: string | null): string {
   return SOURCE_LABELS[key] || SOURCE_LABELS.mqtt;
 }
 
+/** MQTT gateway and/or external provider pushes stored in sensores*. */
 export function usesMqttSource(sourceType?: string | null): boolean {
   const s = (sourceType || 'mqtt').toLowerCase();
-  return s === 'mqtt' || s === 'hybrid';
+  return s === 'mqtt' || s === 'hybrid' || s === 'external';
 }
 
 export function usesTuyaSource(sourceType?: string | null): boolean {
   const s = (sourceType || 'mqtt').toLowerCase();
   return s === 'tuya' || s === 'hybrid';
+}
+
+export function usesExternalSource(sourceType?: string | null): boolean {
+  const s = (sourceType || 'mqtt').toLowerCase();
+  return s === 'external';
 }
 
 /** Prefer tiwater resource for historico; fall back to Tuya osmosis resourceId. */

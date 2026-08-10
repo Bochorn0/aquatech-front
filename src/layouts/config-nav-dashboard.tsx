@@ -108,4 +108,11 @@ export const allNavItems = [
     path: '/api-ti-water',
     icon: icon('ic-configuration'),
   },
+  {
+    title: 'Medidores (prueba)',
+    path: '/meter-platform',
+    icon: icon('ic-products'),
+    requiredPath: '/meter-platform',
+    /** Hidden until role checklist includes /meter-platform (see EXPLICIT_ONLY_PERMISSIONS) */
+  },
 ];

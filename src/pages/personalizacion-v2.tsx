@@ -3518,6 +3518,7 @@ export function CustomizationPageV2() {
                     <MenuItem value="mqtt">MQTT (sensores)</MenuItem>
                     <MenuItem value="tuya">Tuya (productos)</MenuItem>
                     <MenuItem value="hybrid">Híbrido (MQTT + Tuya)</MenuItem>
+                    <MenuItem value="external">Externo (medidores / push API)</MenuItem>
                   </Select>
                 </FormControl>
                 {usesMqttSource(pvFormData.source_type) && (
@@ -3528,7 +3529,7 @@ export function CustomizationPageV2() {
                   value={pvFormData.codigo_tienda || ""}
                   onChange={handlePvChange}
                   fullWidth
-                  helperText="Identificador MQTT (requerido para origen MQTT o híbrido)"
+                  helperText="Identificador de tienda (requerido para MQTT, híbrido o externo)"
                 />
                 )}
                 {!usesMqttSource(pvFormData.source_type) && (
