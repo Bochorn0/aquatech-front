@@ -204,6 +204,7 @@ export default function MeterPlatformDetailPage() {
 
   const reportRequest = latestReport?.analyticalParsed?.meterReportRequest || null;
   const dailyMap = reportRequest?.dailyUsageMap || data?.normalized?.rawMeta?.dailyUsageMap || null;
+  const usage = data?.usageBreakdown;
 
   return (
     <>
@@ -314,6 +315,112 @@ export default function MeterPlatformDetailPage() {
             </Section>
 
             <Section
+              title="Uso diario (last5Days / dailyUsageMap)"
+              subtitle="Unidad: m³ (protocolo ×1000). No son pulsos ni flujo instantáneo."
+            >
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <Typography variant="body2" component="div">
+                  <strong>last5DaysDailyUsage</strong> es hex empaquetado del objeto protocolo{' '}
+                  <code>1101H</code>: fecha inicio (BCD) + N días × 4 bytes. Cada entero va{' '}
+                  <strong>×1000 → m³</strong> (igual que el volumen acumulado). Conversión:{' '}
+                  <code>m³ = raw / 1000</code>, <code>litros = raw</code>.
+                  <br />
+                  <strong>dailyUsageMap</strong> ya viene en m³. En el ejemplo del PDF los valores suben
+                  hasta el total del medidor → parecen <em>totales al cierre del día</em>; el consumo del
+                  día ≈ diferencia entre días consecutivos (columna Δ).
+                </Typography>
+              </Alert>
+
+              {usage?.last5DaysParsed?.entries?.length ? (
+                <>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Decodificado last5Days — inicio {usage.last5DaysParsed.startDate} (
+                    {usage.last5DaysParsed.days} días)
+                  </Typography>
+                  <StyledTableContainer sx={{ mb: 2 }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <StyledTableCellHeader>Fecha</StyledTableCellHeader>
+                          <StyledTableCellHeader align="right">raw (×1000)</StyledTableCellHeader>
+                          <StyledTableCellHeader align="right">m³</StyledTableCellHeader>
+                          <StyledTableCellHeader align="right">Litros</StyledTableCellHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {usage.last5DaysParsed.entries.map((row: any) => (
+                          <StyledTableRow key={row.date}>
+                            <StyledTableCell>{row.date}</StyledTableCell>
+                            <StyledTableCell align="right">{row.raw}</StyledTableCell>
+                            <StyledTableCell align="right">{row.m3}</StyledTableCell>
+                            <StyledTableCell align="right">{row.liters?.toLocaleString?.() ?? row.liters}</StyledTableCell>
+                          </StyledTableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </StyledTableContainer>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+                    Raw hex: {String(usage.last5DaysDailyUsageRaw || '')}
+                  </Typography>
+                </>
+              ) : (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Sin last5Days parseable ({String(data.extend?.last5DaysDailyUsage || '—')})
+                </Typography>
+              )}
+
+              {(usage?.dailyUsageEnriched?.length || (dailyMap && Object.keys(dailyMap).length)) ? (
+                <>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    dailyUsageMap (m³) + Δ día
+                  </Typography>
+                  <StyledTableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <StyledTableCellHeader>Fecha</StyledTableCellHeader>
+                          <StyledTableCellHeader align="right">m³</StyledTableCellHeader>
+                          <StyledTableCellHeader align="right">Litros</StyledTableCellHeader>
+                          <StyledTableCellHeader align="right">Δ m³</StyledTableCellHeader>
+                          <StyledTableCellHeader align="right">Δ L</StyledTableCellHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {(usage?.dailyUsageEnriched
+                          || Object.entries(dailyMap || {}).map(([date, m3]) => ({
+                            date,
+                            m3,
+                            liters: Number(m3) * 1000,
+                            deltaM3: null,
+                            deltaLiters: null,
+                          }))
+                        ).map((row: any) => (
+                          <StyledTableRow key={row.date}>
+                            <StyledTableCell>{row.date}</StyledTableCell>
+                            <StyledTableCell align="right">{row.m3}</StyledTableCell>
+                            <StyledTableCell align="right">
+                              {Number(row.liters).toLocaleString()}
+                            </StyledTableCell>
+                            <StyledTableCell align="right">
+                              {row.deltaM3 == null ? '—' : row.deltaM3}
+                            </StyledTableCell>
+                            <StyledTableCell align="right">
+                              {row.deltaLiters == null ? '—' : Number(row.deltaLiters).toLocaleString()}
+                            </StyledTableCell>
+                          </StyledTableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </StyledTableContainer>
+                </>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  Sin dailyUsageMap en el último report.
+                </Typography>
+              )}
+            </Section>
+
+            <Section
               title="Último report (conn record)"
               subtitle="GET /device/deviceConnRecord/list — client/report + analyticalBody"
             >
@@ -338,27 +445,6 @@ export default function MeterPlatformDetailPage() {
                       'powerType',
                     ]}
                   />
-                  {dailyMap && typeof dailyMap === 'object' && (
-                    <>
-                      <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
-                        dailyUsageMap
-                      </Typography>
-                      <Grid container spacing={1}>
-                        {Object.entries(dailyMap as Record<string, number>).map(([day, usage]) => (
-                          <Grid item xs={6} sm={4} md={2} key={day}>
-                            <Paper variant="outlined" sx={{ p: 1, textAlign: 'center' }}>
-                              <Typography variant="caption" color="text.secondary">
-                                {day}
-                              </Typography>
-                              <Typography variant="body2" fontWeight={600}>
-                                {usage} m³
-                              </Typography>
-                            </Paper>
-                          </Grid>
-                        ))}
-                      </Grid>
-                    </>
-                  )}
                 </>
               ) : (
                 <Typography variant="body2" color="text.secondary">
