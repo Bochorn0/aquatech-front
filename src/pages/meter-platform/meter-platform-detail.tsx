@@ -1,25 +1,31 @@
 import type { ReactNode } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   Box,
+  Card,
   Chip,
   Grid,
-  Paper,
   Table,
   Alert,
   Stack,
   Button,
   Divider,
   TableRow,
+  Accordion,
   TableBody,
   TableHead,
   Typography,
+  CardHeader,
+  CardContent,
   CircularProgress,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
 
+import { fNumber } from 'src/utils/format-number';
 import {
   StyledTableRow,
   StyledTableCell,
@@ -27,12 +33,14 @@ import {
   StyledTableCellHeader,
 } from 'src/utils/styles';
 import { get } from 'src/api/axiosHelperV2';
+import { CONFIG } from 'src/config-global';
+import { Iconify } from 'src/components/iconify';
 
 type Metric = { name: string; type: string; value: number; unit: string };
 
 type DetailData = {
   deviceCode: string;
-  listRow: Record<string, unknown> | null;
+  listRow: Record<string, any> | null;
   extend: Record<string, any> | null;
   profile: Record<string, unknown> | null;
   connRecords: {
@@ -50,7 +58,6 @@ type DetailData = {
   fetchErrors?: Record<string, string | null>;
   usageBreakdown?: {
     unit?: string;
-    explanation?: string;
     last5DaysDailyUsageRaw?: string | null;
     last5DaysParsed?: {
       startDate: string;
@@ -74,102 +81,48 @@ type DetailResponse = {
   data?: DetailData;
 };
 
-function Section({
+function metricValue(metrics: Metric[] | undefined, name: string) {
+  return metrics?.find((m) => m.name === name)?.value;
+}
+
+function formatWhen(raw?: string | Date | null) {
+  if (!raw) return '—';
+  const d = raw instanceof Date ? raw : new Date(String(raw).replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return String(raw);
+  return d.toLocaleString('es-MX', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function Kpi({
   title,
-  subtitle,
-  children,
+  value,
+  hint,
 }: {
   title: string;
-  subtitle?: string;
-  children: ReactNode;
+  value: ReactNode;
+  hint?: string;
 }) {
   return (
-    <Paper
-      elevation={0}
-      sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 2, overflow: 'hidden' }}
-    >
-      <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
-        <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 700 }}>
+    <Card variant="outlined" sx={{ height: '100%' }}>
+      <CardContent>
+        <Typography variant="caption" color="text.secondary">
           {title}
         </Typography>
-        {subtitle && (
+        <Typography variant="h5" sx={{ fontWeight: 700, mt: 0.5 }}>
+          {value}
+        </Typography>
+        {hint && (
           <Typography variant="caption" color="text.secondary">
-            {subtitle}
+            {hint}
           </Typography>
         )}
-      </Box>
-      <Box sx={{ p: 2 }}>{children}</Box>
-    </Paper>
-  );
-}
-
-function KvGrid({ data, preferKeys }: { data: Record<string, unknown> | null | undefined; preferKeys?: string[] }) {
-  if (!data || typeof data !== 'object') {
-    return (
-      <Typography variant="body2" color="text.secondary">
-        Sin datos
-      </Typography>
-    );
-  }
-
-  const entries = Object.entries(data).filter(([, v]) => {
-    if (v == null) return false;
-    if (typeof v === 'object') return false; // nested shown elsewhere / raw JSON
-    return true;
-  });
-
-  const ordered = preferKeys?.length
-    ? [
-        ...preferKeys
-          .map((k) => entries.find(([ek]) => ek === k))
-          .filter(Boolean) as [string, unknown][],
-        ...entries.filter(([k]) => !preferKeys.includes(k)),
-      ]
-    : entries;
-
-  if (!ordered.length) {
-    return (
-      <Typography variant="body2" color="text.secondary">
-        Sin campos planos (ver JSON crudo abajo)
-      </Typography>
-    );
-  }
-
-  return (
-    <Grid container spacing={1.5}>
-      {ordered.map(([key, value]) => (
-        <Grid item xs={12} sm={6} md={4} key={key}>
-          <Typography variant="caption" color="text.secondary" display="block">
-            {key}
-          </Typography>
-          <Typography variant="body2" sx={{ wordBreak: 'break-word', fontFamily: 'ui-monospace, monospace' }}>
-            {String(value)}
-          </Typography>
-        </Grid>
-      ))}
-    </Grid>
-  );
-}
-
-function JsonBlock({ value }: { value: unknown }) {
-  return (
-    <Box
-      component="pre"
-      sx={{
-        m: 0,
-        p: 1.5,
-        maxHeight: 360,
-        overflow: 'auto',
-        bgcolor: 'grey.50',
-        borderRadius: 1,
-        fontSize: 12,
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-        border: '1px solid',
-        borderColor: 'divider',
-      }}
-    >
-      {JSON.stringify(value, null, 2)}
-    </Box>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -208,7 +161,6 @@ export default function MeterPlatformDetailPage() {
     load();
   }, [load]);
 
-  const deviceInfo = data?.extend?.deviceInfo || null;
   const latestReport = useMemo(() => {
     const rows = data?.connRecords?.rows || [];
     return (
@@ -221,23 +173,44 @@ export default function MeterPlatformDetailPage() {
   }, [data]);
 
   const reportRequest = latestReport?.analyticalParsed?.meterReportRequest || null;
-  const dailyMap = reportRequest?.dailyUsageMap || data?.normalized?.rawMeta?.dailyUsageMap || null;
+  const metrics = data?.normalized?.metrics;
+  const litersFwd = metricValue(metrics, 'volume_positive');
+  const litersRev = metricValue(metrics, 'volume_reverse');
+  const valve = metricValue(metrics, 'valve_status');
+  const online = metricValue(metrics, 'online');
+  const voltage = metricValue(metrics, 'voltage_meter');
+  const observedAt = data?.normalized?.observedAt || latestReport?.createTime;
+  const deviceType = data?.listRow?.deviceType || data?.extend?.deviceInfo?.deviceType;
   const usage = data?.usageBreakdown;
+  const dailyRows = usage?.dailyUsageEnriched || usage?.last5DaysParsed?.entries || [];
+
+  const stale =
+    online !== 1
+    || (observedAt
+      && Date.now() - new Date(String(observedAt).replace(' ', 'T')).getTime() > 24 * 60 * 60 * 1000);
 
   return (
     <>
       <Helmet>
-        <title>{deviceCode ? `Medidor ${deviceCode}` : 'Detalle medidor'}</title>
+        <title>{deviceCode ? `Sitio ${deviceCode}` : 'Sitio medidor'} - {CONFIG.appName}</title>
       </Helmet>
 
       <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1200, mx: 'auto' }}>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap">
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" sx={{ mb: 2 }}>
           <Button size="small" onClick={() => navigate('/meter-platform')}>
-            ← Lista
+            ← Sitios
           </Button>
-          <Typography variant="h4" sx={{ fontWeight: 700, flex: 1 }}>
-            {deviceCode}
-          </Typography>
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="overline" color="text.secondary">
+              Demo · origen externo · no Tuya
+            </Typography>
+            <Typography variant="h4" sx={{ fontWeight: 700, fontFamily: 'ui-monospace, monospace' }}>
+              {deviceCode}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {deviceType || 'Medidor'} · equivalente operativo a un punto de venta
+            </Typography>
+          </Box>
           <Button variant="outlined" onClick={load} disabled={loading}>
             Actualizar
           </Button>
@@ -255,311 +228,196 @@ export default function MeterPlatformDetailPage() {
           </Box>
         ) : data ? (
           <>
-            <Section title="Resumen normalizado" subtitle="Vista Aquatech a partir de extend + último report">
-              {data.normalized ? (
-                <>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                    Observado: {new Date(data.normalized.observedAt).toLocaleString()}
-                  </Typography>
-                  <Grid container spacing={1.5}>
-                    {data.normalized.metrics.map((m) => (
-                      <Grid item xs={6} sm={4} md={3} key={m.name}>
-                        <Paper variant="outlined" sx={{ p: 1.5, height: '100%' }}>
-                          <Typography variant="caption" color="text.secondary">
-                            {m.name}
-                          </Typography>
-                          <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-                            {typeof m.value === 'number' ? m.value.toLocaleString() : m.value}
-                            {m.unit ? (
-                              <Typography component="span" variant="caption" sx={{ ml: 0.5 }}>
-                                {m.unit}
-                              </Typography>
-                            ) : null}
-                          </Typography>
-                        </Paper>
-                      </Grid>
-                    ))}
-                  </Grid>
-                </>
-              ) : (
-                <Alert severity="warning">{data.normalizeError || 'Sin métricas normalizadas'}</Alert>
-              )}
-            </Section>
-
-            <Section title="Perfil en lista / deviceInfo" subtitle="getDeviceInfoList + GET /device/deviceInfo/{id}">
-              <KvGrid
-                data={(data.profile || data.listRow || deviceInfo) as Record<string, unknown>}
-                preferKeys={[
-                  'deviceCode',
-                  'deviceType',
-                  'isOnline',
-                  'valveStatus',
-                  'totalMetering',
-                  'lastConnTime',
-                  'companyId',
-                  'accessProtocol',
-                  'installAddress',
-                ]}
+            <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
+              <Chip
+                size="small"
+                color={online === 1 ? 'success' : 'warning'}
+                label={online === 1 ? 'En línea' : stale ? 'Sin actualizar' : 'Desconectado'}
               />
-              {deviceInfo && (
-                <>
-                  <Divider sx={{ my: 2 }} />
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    deviceInfo (desde deviceExtend)
-                  </Typography>
-                  <KvGrid data={deviceInfo} />
-                </>
-              )}
-            </Section>
-
-            <Section title="deviceExtend" subtitle="GET /device/deviceInfo/deviceExtend/{deviceCode}">
-              <KvGrid
-                data={data.extend as Record<string, unknown>}
-                preferKeys={[
-                  'meterNo',
-                  'meterStatus',
-                  'valveDesc',
-                  'updateTime',
-                  'terminalClock',
-                  'address',
-                  'last5DaysDailyUsage',
-                  'yesterdayHourlyUsage',
-                ]}
+              <Chip size="small" variant="outlined" label="Externo" />
+              <Chip
+                size="small"
+                variant="outlined"
+                label={valve === 0 ? 'Válvula abierta' : valve === 1 ? 'Válvula cerrada' : 'Válvula —'}
               />
-              <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
-                JSON completo
-              </Typography>
-              <JsonBlock value={data.extend} />
-            </Section>
+            </Stack>
 
-            <Section
-              title="Uso diario (last5Days / dailyUsageMap)"
-              subtitle="Unidad: m³ (protocolo ×1000). No son pulsos ni flujo instantáneo."
-            >
-              <Alert severity="info" sx={{ mb: 2 }}>
-                <Typography variant="body2" component="div">
-                  <strong>last5DaysDailyUsage</strong> es hex empaquetado del objeto protocolo{' '}
-                  <code>1101H</code>: fecha inicio (BCD) + N días × 4 bytes. Cada entero va{' '}
-                  <strong>×1000 → m³</strong> (igual que el volumen acumulado). Conversión:{' '}
-                  <code>m³ = raw / 1000</code>, <code>litros = raw</code>.
-                  <br />
-                  <strong>dailyUsageMap</strong> ya viene en m³. En el ejemplo del PDF los valores suben
-                  hasta el total del medidor → parecen <em>totales al cierre del día</em>; el consumo del
-                  día ≈ diferencia entre días consecutivos (columna Δ).
-                </Typography>
-              </Alert>
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+              <Grid item xs={12} sm={6} md={3}>
+                <Kpi
+                  title="Litros acumulados"
+                  value={litersFwd != null ? fNumber(litersFwd) : '—'}
+                  hint={litersFwd != null ? 'Forward · m³ × 1000' : 'Sin report de volumen'}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Kpi
+                  title="Reverse (L)"
+                  value={litersRev != null ? fNumber(litersRev) : '—'}
+                  hint="Flujo inverso acumulado"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Kpi title="Último reporte" value={formatWhen(observedAt)} hint="Conn record / extend" />
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Kpi
+                  title="Batería"
+                  value={voltage != null ? `${voltage.toFixed(3)} V` : '—'}
+                  hint="Cuando el payload lo trae"
+                />
+              </Grid>
+            </Grid>
 
-              {usage?.last5DaysParsed?.entries?.length ? (
-                <>
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    Decodificado last5Days — inicio {usage.last5DaysParsed.startDate} (
-                    {usage.last5DaysParsed.days} días)
-                  </Typography>
-                  <StyledTableContainer sx={{ mb: 2 }}>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <StyledTableCellHeader>Fecha</StyledTableCellHeader>
-                          <StyledTableCellHeader align="right">raw (×1000)</StyledTableCellHeader>
-                          <StyledTableCellHeader align="right">m³</StyledTableCellHeader>
-                          <StyledTableCellHeader align="right">Litros</StyledTableCellHeader>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {usage.last5DaysParsed.entries.map((row: any) => (
-                          <StyledTableRow key={row.date}>
-                            <StyledTableCell>{row.date}</StyledTableCell>
-                            <StyledTableCell align="right">{row.raw}</StyledTableCell>
-                            <StyledTableCell align="right">{row.m3}</StyledTableCell>
-                            <StyledTableCell align="right">{row.liters?.toLocaleString?.() ?? row.liters}</StyledTableCell>
-                          </StyledTableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </StyledTableContainer>
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
-                    Raw hex: {String(usage.last5DaysDailyUsageRaw || '')}
-                  </Typography>
-                </>
-              ) : (
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Sin last5Days parseable ({String(data.extend?.last5DaysDailyUsage || '—')})
-                </Typography>
-              )}
-
-              {(usage?.dailyUsageEnriched?.length || (dailyMap && Object.keys(dailyMap).length)) ? (
-                <>
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    dailyUsageMap (m³) + Δ día
-                  </Typography>
-                  <StyledTableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <StyledTableCellHeader>Fecha</StyledTableCellHeader>
-                          <StyledTableCellHeader align="right">m³</StyledTableCellHeader>
-                          <StyledTableCellHeader align="right">Litros</StyledTableCellHeader>
-                          <StyledTableCellHeader align="right">Δ m³</StyledTableCellHeader>
-                          <StyledTableCellHeader align="right">Δ L</StyledTableCellHeader>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {(usage?.dailyUsageEnriched
-                          || Object.entries(dailyMap || {}).map(([date, m3]) => ({
-                            date,
-                            m3,
-                            liters: Number(m3) * 1000,
-                            deltaM3: null,
-                            deltaLiters: null,
-                          }))
-                        ).map((row: any) => (
-                          <StyledTableRow key={row.date}>
-                            <StyledTableCell>{row.date}</StyledTableCell>
-                            <StyledTableCell align="right">{row.m3}</StyledTableCell>
-                            <StyledTableCell align="right">
-                              {Number(row.liters).toLocaleString()}
-                            </StyledTableCell>
-                            <StyledTableCell align="right">
-                              {row.deltaM3 == null ? '—' : row.deltaM3}
-                            </StyledTableCell>
-                            <StyledTableCell align="right">
-                              {row.deltaLiters == null ? '—' : Number(row.deltaLiters).toLocaleString()}
-                            </StyledTableCell>
-                          </StyledTableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </StyledTableContainer>
-                </>
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  Sin dailyUsageMap en el último report.
-                </Typography>
-              )}
-            </Section>
-
-            <Section
-              title="Último report (conn record)"
-              subtitle="GET /device/deviceConnRecord/list — client/report + analyticalBody"
-            >
-              {reportRequest ? (
-                <>
-                  <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} flexWrap="wrap">
-                    <Chip size="small" label={`type: ${latestReport?.type}`} />
-                    <Chip size="small" label={String(latestReport?.createTime || '')} />
-                  </Stack>
-                  <KvGrid
-                    data={reportRequest}
-                    preferKeys={[
-                      'meterNo',
-                      'terminalClock',
-                      'currentForwardUsage',
-                      'reverseUsage',
-                      'batteryVoltage',
-                      'signalStrength',
-                      'valveDesc',
-                      'meterStatus',
-                      'reportType',
-                      'powerType',
-                    ]}
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+              <Grid item xs={12} md={7}>
+                <Card variant="outlined">
+                  <CardHeader
+                    title="Consumo diario"
+                    subheader="dailyUsageMap / last5Days (si el medidor lo reporta)"
                   />
-                </>
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  No hay report client parseable en los últimos registros.
-                </Typography>
-              )}
-            </Section>
+                  <CardContent>
+                    {dailyRows.length ? (
+                      <StyledTableContainer>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <StyledTableCellHeader>Fecha</StyledTableCellHeader>
+                              <StyledTableCellHeader align="right">Litros</StyledTableCellHeader>
+                              <StyledTableCellHeader align="right">Δ L</StyledTableCellHeader>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {dailyRows.map((row: any) => (
+                              <StyledTableRow key={row.date}>
+                                <StyledTableCell>{row.date}</StyledTableCell>
+                                <StyledTableCell align="right">
+                                  {fNumber(row.liters)}
+                                </StyledTableCell>
+                                <StyledTableCell align="right">
+                                  {row.deltaLiters == null ? '—' : fNumber(row.deltaLiters)}
+                                </StyledTableCell>
+                              </StyledTableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </StyledTableContainer>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        Este dispositivo no envía mapa diario (p. ej. el NB {deviceCode} solo trae
+                        acumulado en el report). La UI queda lista para cuando exista.
+                      </Typography>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} md={5}>
+                <Card variant="outlined" sx={{ mb: 2, opacity: 0.85 }}>
+                  <CardHeader title="Alertas" subheader="Próximamente" />
+                  <CardContent>
+                    <Typography variant="body2" color="text.secondary">
+                      Aquí irán umbrales (sin actualizar, reverse, batería baja), igual que el estado
+                      preventivo/crítico de un punto de venta. No implementado en esta demo.
+                    </Typography>
+                  </CardContent>
+                </Card>
+                <Card variant="outlined" sx={{ opacity: 0.85 }}>
+                  <CardHeader title="Personalización" subheader="Próximamente" />
+                  <CardContent>
+                    <Typography variant="body2" color="text.secondary">
+                      Binding a tienda, nombre de sitio y reglas por cliente. Por ahora el id del
+                      sitio es el <code>deviceCode</code> del proveedor.
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
 
-            <Section title="Historial de comunicación" subtitle={`${data.connRecords?.total ?? 0} registros`}>
-              <StyledTableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <StyledTableCellHeader>Hora</StyledTableCellHeader>
-                      <StyledTableCellHeader>Dir</StyledTableCellHeader>
-                      <StyledTableCellHeader>Tipo</StyledTableCellHeader>
-                      <StyledTableCellHeader>Resumen parseado</StyledTableCellHeader>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {(data.connRecords?.rows || []).map((row) => {
-                      const parsed = row.analyticalParsed;
-                      const mr = parsed?.meterReportRequest;
-                      const summary = mr
-                        ? `fwd=${mr.currentForwardUsage} rev=${mr.reverseUsage} bat=${mr.batteryVoltage} valve=${mr.valveDesc || ''}`
-                        : parsed
-                          ? Object.keys(parsed).slice(0, 4).join(', ')
-                          : (row.analyticalBody || '').toString().slice(0, 80);
-                      return (
-                        <StyledTableRow key={String(row.id || `${row.createTime}-${row.type}`)}>
-                          <StyledTableCell>{String(row.createTime || '—')}</StyledTableCell>
-                          <StyledTableCell>{String(row.direction || '—')}</StyledTableCell>
-                          <StyledTableCell>{String(row.type || '—')}</StyledTableCell>
-                          <StyledTableCell>
-                            <Typography variant="caption" sx={{ fontFamily: 'ui-monospace, monospace' }}>
-                              {summary || '—'}
-                            </Typography>
-                          </StyledTableCell>
-                        </StyledTableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </StyledTableContainer>
-            </Section>
-
-            <Section title="Reportes diarios (static/list)" subtitle="GET /device/static/list">
-              {(data.staticReports || []).length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  Sin filas static para este device (o el filtro del vendor no devolvió match).
-                </Typography>
-              ) : (
+            <Card variant="outlined" sx={{ mb: 2 }}>
+              <CardHeader
+                title="Historial de comunicación"
+                subheader={`${data.connRecords?.total ?? 0} registros del proveedor`}
+              />
+              <CardContent>
                 <StyledTableContainer>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <StyledTableCellHeader>Fecha</StyledTableCellHeader>
-                        <StyledTableCellHeader>Campos</StyledTableCellHeader>
+                        <StyledTableCellHeader>Hora</StyledTableCellHeader>
+                        <StyledTableCellHeader>Dir</StyledTableCellHeader>
+                        <StyledTableCellHeader>Tipo</StyledTableCellHeader>
+                        <StyledTableCellHeader>Resumen</StyledTableCellHeader>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {data.staticReports.map((row, idx) => (
-                        <StyledTableRow key={idx}>
-                          <StyledTableCell>
-                            {String(
-                              (row as any).createTime
-                                || (row as any).reportDate
-                                || (row as any).day
-                                || '—'
-                            )}
-                          </StyledTableCell>
-                          <StyledTableCell>
-                            <Typography variant="caption" component="div" sx={{ fontFamily: 'ui-monospace, monospace' }}>
-                              {Object.entries(row)
-                                .filter(([, v]) => v != null && typeof v !== 'object')
-                                .slice(0, 12)
-                                .map(([k, v]) => `${k}=${v}`)
-                                .join(' · ')}
-                            </Typography>
-                          </StyledTableCell>
-                        </StyledTableRow>
-                      ))}
+                      {(data.connRecords?.rows || []).slice(0, 12).map((row) => {
+                        const mr = row.analyticalParsed?.meterReportRequest;
+                        const summary = mr
+                          ? `${mr.currentForwardUsage ?? '—'} m³ · rev ${mr.reverseUsage ?? '—'}`
+                          : '—';
+                        return (
+                          <StyledTableRow key={String(row.id || `${row.createTime}-${row.type}`)}>
+                            <StyledTableCell>{String(row.createTime || '—')}</StyledTableCell>
+                            <StyledTableCell>{String(row.direction || '—')}</StyledTableCell>
+                            <StyledTableCell>{String(row.type || '—')}</StyledTableCell>
+                            <StyledTableCell>
+                              <Typography variant="caption" sx={{ fontFamily: 'ui-monospace, monospace' }}>
+                                {summary}
+                              </Typography>
+                            </StyledTableCell>
+                          </StyledTableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </StyledTableContainer>
-              )}
-            </Section>
+              </CardContent>
+            </Card>
 
-            {(data.fetchErrors && Object.values(data.fetchErrors).some(Boolean)) && (
-              <Alert severity="info" sx={{ mb: 2 }}>
-                Algunos fetches parciales fallaron:{' '}
-                {Object.entries(data.fetchErrors)
-                  .filter(([, v]) => v)
-                  .map(([k, v]) => `${k}: ${v}`)
-                  .join(' | ')}
-              </Alert>
-            )}
+            <Accordion>
+              <AccordionSummary expandIcon={<Iconify icon="solar:alt-arrow-down-bold-duotone" width={24} />}>
+                <Typography variant="subtitle2">Datos técnicos (API proveedor)</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                {reportRequest && (
+                  <>
+                    <Typography variant="caption" color="text.secondary">
+                      Último meterReportRequest
+                    </Typography>
+                    <Box
+                      component="pre"
+                      sx={{
+                        p: 1.5,
+                        maxHeight: 240,
+                        overflow: 'auto',
+                        bgcolor: 'grey.50',
+                        fontSize: 12,
+                        borderRadius: 1,
+                      }}
+                    >
+                      {JSON.stringify(reportRequest, null, 2)}
+                    </Box>
+                    <Divider sx={{ my: 2 }} />
+                  </>
+                )}
+                <Typography variant="caption" color="text.secondary">
+                  deviceExtend
+                </Typography>
+                <Box
+                  component="pre"
+                  sx={{
+                    p: 1.5,
+                    maxHeight: 280,
+                    overflow: 'auto',
+                    bgcolor: 'grey.50',
+                    fontSize: 12,
+                    borderRadius: 1,
+                  }}
+                >
+                  {JSON.stringify(data.extend, null, 2)}
+                </Box>
+              </AccordionDetails>
+            </Accordion>
           </>
         ) : null}
       </Box>
