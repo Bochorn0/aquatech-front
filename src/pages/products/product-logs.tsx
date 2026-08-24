@@ -10,6 +10,7 @@ import { DateTimePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { Box, Chip, Grid, Table, Paper, Button, TableRow, TextField, TableCell, TableBody, TableHead, Typography, TableContainer, TablePagination, CircularProgress } from '@mui/material';
 
 import { get } from 'src/api/axiosHelper';
+import { isSensorFlujoType } from 'src/utils/product-types';
 
 import type { Log } from '../types';
 
@@ -21,6 +22,7 @@ const ProductLogs: React.FC<ProductLogsProps> = ({ productType = 'Osmosis' }) =>
   const { id } = useParams<{ id: string }>();
   const [logs, setLogs] = useState<Log[]>([]);
   const isNivel = productType === 'Nivel' || productType === 'nivel';
+  const isFlujo = isSensorFlujoType(productType);
   const [loading, setLoading] = useState(true);
   const [startDate, setStartDate] = useState<Dayjs | null>(dayjs().startOf('day'));
   const [endDate, setEndDate] = useState<Dayjs | null>(dayjs());
@@ -121,7 +123,8 @@ const ProductLogs: React.FC<ProductLogsProps> = ({ productType = 'Osmosis' }) =>
           </Grid>
         </LocalizationProvider>
         <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
-          Cambia las fechas y pulsa &quot;Actualizar logs&quot; para consultar. Evita solicitudes frecuentes a Tuya.
+          Cambia las fechas y pulsa &quot;Actualizar logs&quot; para consultar.
+          {isFlujo ? ' Los datos salen de product_logs (ESP32), no de Tuya.' : ' Evita solicitudes frecuentes a Tuya.'}
         </Typography>
 
         <TextField
@@ -135,7 +138,7 @@ const ProductLogs: React.FC<ProductLogsProps> = ({ productType = 'Osmosis' }) =>
 
       <TableContainer component={Paper}>
         <Typography variant="h5" sx={{ p: 2 }}>
-          {isNivel ? 'Logs de Nivel' : 'Product Logs'}
+          {isNivel ? 'Logs de Nivel' : isFlujo ? 'Logs de sensor de flujo' : 'Product Logs'}
         </Typography>
         <Table>
           <TableHead>
@@ -145,6 +148,12 @@ const ProductLogs: React.FC<ProductLogsProps> = ({ productType = 'Osmosis' }) =>
                 <>
                   <TableCell>Nivel (%)</TableCell>
                   <TableCell>Profundidad (cm)</TableCell>
+                </>
+              ) : isFlujo ? (
+                <>
+                  <TableCell>Caudal (L/min)</TableCell>
+                  <TableCell>Volumen (L)</TableCell>
+                  <TableCell>Volumen (m³)</TableCell>
                 </>
               ) : (
                 <>
@@ -178,6 +187,32 @@ const ProductLogs: React.FC<ProductLogsProps> = ({ productType = 'Osmosis' }) =>
                         <Chip
                           label={log.flujo_produccion != null ? `${Number(log.flujo_produccion).toFixed(1)} cm` : 'N/A'}
                           color="default"
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>{log.source || 'N/A'}</TableCell>
+                    </TableRow>
+                  ) : isFlujo ? (
+                    <TableRow key={log._id}>
+                      <TableCell>{new Date(log.date).toLocaleString()}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={log.flujo_produccion != null ? `${Number(log.flujo_produccion).toFixed(3)} L/min` : 'N/A'}
+                          color="success"
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={log.production_volume != null ? `${Number(log.production_volume).toFixed(2)} L` : 'N/A'}
+                          color="primary"
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={log.production_volume != null ? `${(Number(log.production_volume) / 1000).toFixed(5)} m³` : 'N/A'}
+                          color="info"
                           size="small"
                         />
                       </TableCell>
@@ -233,7 +268,7 @@ const ProductLogs: React.FC<ProductLogsProps> = ({ productType = 'Osmosis' }) =>
                 ))
             ) : (
               <TableRow>
-                <TableCell colSpan={isNivel ? 4 : 8} align="center">
+                <TableCell colSpan={isNivel || isFlujo ? 5 : 8} align="center">
                   No hay logs disponibles
                 </TableCell>
               </TableRow>
