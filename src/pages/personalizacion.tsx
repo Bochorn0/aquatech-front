@@ -35,6 +35,7 @@ import {
 } from "@mui/material";
 
 import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
+import { mergeProductTypeOptions } from 'src/utils/product-types';
 
 import { CONFIG } from "src/config-global";
 import { get as getV2 } from "src/api/axiosHelperV2";
@@ -89,8 +90,6 @@ const estados = [
   'Yucatan',
   'Zacatecas',
 ];
-
-const ProductTypes = ['Osmosis', 'Nivel', 'Apagador']
 
 const defaultCity: City = {
     state: "",
@@ -163,6 +162,11 @@ export function CustomizationPage() {
     product_type: '',
   });
   const [bulkProductModalOpen, setBulkProductModalOpen] = useState(false);
+
+  const productTypeOptions = useMemo(
+    () => mergeProductTypeOptions(products.map((p) => p.product_type)),
+    [products]
+  );
 
   type MergeVolumeLiters = {
     production_liters: number | null;
@@ -1745,7 +1749,7 @@ const handlePvProductosChange = (e: any) => {
               <FormControl fullWidth>
                 <InputLabel shrink>Tipo de Producto</InputLabel>
                 <Select value={formData.product_type} name="product_type" onChange={handleChange} fullWidth>
-                  {ProductTypes.map((type) => (
+                  {productTypeOptions.map((type) => (
                     <MenuItem key={type} value={type}>{type}</MenuItem>
                   ))}
                 </Select>
@@ -1970,21 +1974,26 @@ const handlePvProductosChange = (e: any) => {
                   ))}
                 </Select>
               </FormControl>
-              <FormControl fullWidth>
-                <InputLabel shrink>Tipo de producto</InputLabel>
-                <Select
-                  value={productFormData.product_type || 'Osmosis'}
-                  name="product_type"
-                  onChange={handleProductChange}
-                  fullWidth
-                >
-                  {ProductTypes.map((type) => (
-                    <MenuItem key={type} value={type}>
-                      {type}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Autocomplete
+                freeSolo
+                options={productTypeOptions}
+                value={productFormData.product_type || 'Osmosis'}
+                onChange={(_, value) => {
+                  setProductFormData((prev) => ({ ...prev, product_type: (value || '').trim() || 'Osmosis' }));
+                }}
+                onInputChange={(_, value, reason) => {
+                  if (reason === 'input') {
+                    setProductFormData((prev) => ({ ...prev, product_type: value }));
+                  }
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Tipo de producto"
+                    helperText="Elige uno o escribe un tipo nuevo. sensor_flujo = medidor Equysis (sin Tuya)."
+                  />
+                )}
+              />
             </Box>
           </DialogContent>
           <DialogActions>
@@ -2041,22 +2050,26 @@ const handlePvProductosChange = (e: any) => {
                   ))}
                 </Select>
               </FormControl>
-              <FormControl fullWidth>
-                <InputLabel shrink>Tipo de producto</InputLabel>
-                <Select
-                  value={bulkProductFormData.product_type || ''}
-                  name="product_type"
-                  onChange={handleBulkProductChange}
-                  fullWidth
-                >
-                  <MenuItem value="">(sin cambiar)</MenuItem>
-                  {ProductTypes.map((type) => (
-                    <MenuItem key={type} value={type}>
-                      {type}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Autocomplete
+                freeSolo
+                options={productTypeOptions}
+                value={bulkProductFormData.product_type || ''}
+                onChange={(_, value) => {
+                  setBulkProductFormData((prev) => ({ ...prev, product_type: (value || '').trim() }));
+                }}
+                onInputChange={(_, value, reason) => {
+                  if (reason === 'input') {
+                    setBulkProductFormData((prev) => ({ ...prev, product_type: value }));
+                  }
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Tipo de producto"
+                    helperText="Vacío = no cambiar. Puedes escribir un tipo nuevo."
+                  />
+                )}
+              />
             </Box>
           </DialogContent>
           <DialogActions>

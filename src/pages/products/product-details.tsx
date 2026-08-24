@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types';
 import { Helmet } from 'react-helmet-async';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
 import {
@@ -22,10 +22,13 @@ import {
   TableHead,
   Typography,
   CardContent,
+  ToggleButton,
+  ToggleButtonGroup,
   CircularProgress,
 } from '@mui/material';
 
 import { normalizeProductTypeFromStatus } from 'src/utils/product-apagador';
+import { isSensorFlujoType } from 'src/utils/product-types';
 
 import { get } from 'src/api/axiosHelper';
 import { CONFIG } from 'src/config-global';
@@ -33,8 +36,9 @@ import { CONFIG } from 'src/config-global';
 import ProductLogs from './product-logs';
 import ProductHistoricoLogs from './product-historico-logs';
 import { MultipleBarChart } from '../charts/multiple-bar-chart';
+import { SensorFlujoHistoricoChart } from '../charts/sensor-flujo-historico-chart';
 
-import type { Product, MetricCardProps, MergedVolumeBreakdown } from '../types';
+import type { Log, Product, MetricCardProps, MergedVolumeBreakdown } from '../types';
 
 
 // Separate MetricCard Component
@@ -229,6 +233,142 @@ function MergedVolumesSection({
   );
 }
 
+function statusValue(product: Product, code: string): number | null {
+  const raw = product.status?.find((s) => s.code === code)?.value;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function formatLogTime(value: string | number | Date): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+}
+
+function SensorFlujoPanel({ product }: { product: Product }) {
+  const { id } = useParams<{ id: string }>();
+  const [logs, setLogs] = useState<Log[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [rangeHours, setRangeHours] = useState<6 | 24 | 168>(24);
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      if (!id) return;
+      setLoading(true);
+      try {
+        const end = Date.now();
+        const start = end - rangeHours * 60 * 60 * 1000;
+        const response = await get<{ success: boolean; data: Log[] }>(`/products/${id}/logs`, {
+          params: { id, start_date: start, end_date: end, limit: 1000 },
+        });
+        setLogs(response?.success && Array.isArray(response.data) ? response.data : []);
+      } catch (error) {
+        console.error('Error fetching sensor_flujo logs:', error);
+        setLogs([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLogs();
+    const interval = setInterval(fetchLogs, 15000);
+    return () => clearInterval(interval);
+  }, [id, rangeHours]);
+
+  const sorted = useMemo(
+    () =>
+      [...logs].sort(
+        (a, b) => new Date(a.date || a.createdAt).getTime() - new Date(b.date || b.createdAt).getTime()
+      ),
+    [logs]
+  );
+
+  const categories = sorted.map((log) => formatLogTime(log.date || log.createdAt));
+  const m3Series = sorted.map((log) => {
+    const litros = Number(log.production_volume);
+    return Number.isFinite(litros) ? litros / 1000 : 0;
+  });
+  const lpmSeries = sorted.map((log) => {
+    const lpm = Number(log.flujo_produccion);
+    return Number.isFinite(lpm) ? lpm : 0;
+  });
+
+  const last = sorted[sorted.length - 1];
+  const m3 =
+    statusValue(product, 'm3') ??
+    (last?.production_volume != null ? Number(last.production_volume) / 1000 : null);
+  const litros =
+    statusValue(product, 'litros') ??
+    statusValue(product, 'production_volume') ??
+    (last?.production_volume != null ? Number(last.production_volume) : null);
+  const lpm = statusValue(product, 'flowrate_speed_1') ?? (last?.flujo_produccion ?? null);
+  const pulsos = statusValue(product, 'pulsos_total');
+
+  return (
+    <>
+      <Grid container spacing={3} mb={4}>
+        <Grid item xs={12} sm={6} md={3}>
+          <MetricCard title="Volumen (m³)" value={m3 != null ? m3.toFixed(5) : 'N/A'} unit="m³" />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <MetricCard title="Volumen (L)" value={litros != null ? litros.toFixed(2) : 'N/A'} unit="L" />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <MetricCard title="Caudal" value={lpm != null ? lpm.toFixed(3) : 'N/A'} unit="L/min" />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <MetricCard title="Pulsos" value={pulsos != null ? pulsos : 'N/A'} />
+        </Grid>
+      </Grid>
+
+      <Paper sx={{ p: 3, mb: 4 }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={2} mb={2}>
+          <Typography variant="h6">Histórico de medidas</Typography>
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={rangeHours}
+            onChange={(_e, value: 6 | 24 | 168 | null) => {
+              if (value) setRangeHours(value);
+            }}
+          >
+            <ToggleButton value={6}>6 h</ToggleButton>
+            <ToggleButton value={24}>24 h</ToggleButton>
+            <ToggleButton value={168}>7 días</ToggleButton>
+          </ToggleButtonGroup>
+        </Stack>
+        {loading ? (
+          <Box display="flex" justifyContent="center" py={6}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <SensorFlujoHistoricoChart
+                title="Volumen acumulado"
+                subheader="m³ según product_logs"
+                categories={categories}
+                series={[{ name: 'm³', data: m3Series }]}
+                yTitle="m³"
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <SensorFlujoHistoricoChart
+                title="Caudal instantáneo"
+                subheader="L/min reportado por el ESP32"
+                categories={categories}
+                series={[{ name: 'L/min', data: lpmSeries }]}
+                yTitle="L/min"
+              />
+            </Grid>
+          </Grid>
+        )}
+      </Paper>
+
+      <ProductLogs productType="sensor_flujo" />
+    </>
+  );
+}
+
 const ProductDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   
@@ -351,11 +491,17 @@ const ProductDetail: React.FC = () => {
           </Typography>
           <Grid container spacing={3}>
             <Grid item xs={12} sm={4} textAlign='center'>
-              <img
-                src={`${CONFIG.ICON_URL}/${product.icon}`}
-                alt={product.name}
-                style={{ width: '150px', height: '150px', marginRight: '10px' }}
-              />
+              {product.icon ? (
+                <img
+                  src={`${CONFIG.ICON_URL}/${product.icon}`}
+                  alt={product.name}
+                  style={{ width: '150px', height: '150px', marginRight: '10px' }}
+                />
+              ) : (
+                <Typography variant="subtitle1" color="text.secondary" sx={{ py: 6 }}>
+                  {isSensorFlujoType(product.product_type) ? 'Sensor de flujo' : 'Sin icono'}
+                </Typography>
+              )}
             </Grid>
             <Grid item xs={12} sm={4}>
               <Typography variant="body1">
@@ -402,6 +548,7 @@ const ProductDetail: React.FC = () => {
             </Grid>
           </Grid>
         </Paper>
+        {isSensorFlujoType(product.product_type) && <SensorFlujoPanel product={product} />}
         {product.product_type === 'Nivel' && charData && (
           <Paper sx={{ p: 3, mb: 4 }}>
           <MultipleBarChart

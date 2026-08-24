@@ -18,7 +18,7 @@ export function isApagadorProduct(product: Pick<Product, 'product_type' | 'statu
   const t = (product.product_type || '').trim().toLowerCase();
   if (t === 'apagador') return true;
   if (!productHasSwitch1Status(product)) return false;
-  const keep = ['nivel', 'metrica', 'pressure', 'tiwater'];
+  const keep = ['nivel', 'metrica', 'pressure', 'tiwater', 'sensor_flujo'];
   return !keep.includes(t);
 }
 
@@ -27,7 +27,7 @@ export function normalizeProductTypeFromStatus<T extends Pick<Product, 'product_
   const t = (product.product_type || '').trim().toLowerCase();
   if (t === 'apagador') return product;
   if (!productHasSwitch1Status(product)) return product;
-  const keep = ['nivel', 'metrica', 'pressure', 'tiwater'];
+  const keep = ['nivel', 'metrica', 'pressure', 'tiwater', 'sensor_flujo'];
   if (keep.includes(t)) return product;
   return { ...product, product_type: 'Apagador' };
 }
