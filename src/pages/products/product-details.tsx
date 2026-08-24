@@ -283,9 +283,9 @@ function SensorFlujoPanel({ product }: { product: Product }) {
   );
 
   const categories = sorted.map((log) => formatLogTime(log.date || log.createdAt));
-  const m3Series = sorted.map((log) => {
+  const litrosSeries = sorted.map((log) => {
     const litros = Number(log.production_volume);
-    return Number.isFinite(litros) ? litros / 1000 : 0;
+    return Number.isFinite(litros) ? litros : 0;
   });
   const lpmSeries = sorted.map((log) => {
     const lpm = Number(log.flujo_produccion);
@@ -345,10 +345,12 @@ function SensorFlujoPanel({ product }: { product: Product }) {
             <Grid item xs={12} md={6}>
               <SensorFlujoHistoricoChart
                 title="Volumen acumulado"
-                subheader="m³ según product_logs"
+                subheader="Litros según product_logs (production_volume)"
                 categories={categories}
-                series={[{ name: 'm³', data: m3Series }]}
-                yTitle="m³"
+                series={[{ name: 'Litros', data: litrosSeries }]}
+                yTitle="L"
+                decimalsInFloat={2}
+                fromZero={false}
               />
             </Grid>
             <Grid item xs={12} md={6}>
@@ -358,6 +360,7 @@ function SensorFlujoPanel({ product }: { product: Product }) {
                 categories={categories}
                 series={[{ name: 'L/min', data: lpmSeries }]}
                 yTitle="L/min"
+                decimalsInFloat={3}
               />
             </Grid>
           </Grid>
