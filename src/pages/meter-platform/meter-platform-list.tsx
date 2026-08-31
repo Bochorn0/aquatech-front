@@ -30,6 +30,7 @@ import {
 } from 'src/utils/styles';
 import { get } from 'src/api/axiosHelperV2';
 import { CONFIG } from 'src/config-global';
+import { toLatinDisplay } from './latin-display';
 
 export type MeterSnapshot = {
   deviceCode?: string;
@@ -172,7 +173,7 @@ export default function MeterPlatformListPage() {
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 720 }}>
           Vista previa de un sitio (equivalente a punto de venta) alimentado por medidor pull, no Tuya.
-          Métricas: litros acumulados, último reporte y estado de enlace. Alertas y personalización vendrán después.
+          El detalle incluye maqueta de gráficas, rangos y alertas preventivo/correo para presentación.
         </Typography>
 
         {error && (
@@ -262,7 +263,7 @@ export default function MeterPlatformListPage() {
                               {code}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
-                              {row.deviceType || 'Medidor'}
+                              {toLatinDisplay(row.deviceType, 'Medidor')}
                             </Typography>
                           </StyledTableCell>
                           <StyledTableCell>
