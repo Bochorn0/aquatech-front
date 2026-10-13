@@ -18,6 +18,12 @@ import {
   Typography,
   CardHeader,
   CardContent,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Tabs,
+  Tab,
   CircularProgress,
 } from '@mui/material';
 
@@ -41,7 +47,10 @@ import {
   evaluateMetric,
   historyForDevice,
   ruleToAlert,
+  buildReadingTrace,
+  scaledTemperature,
   toLiters,
+  volumeScaleLabel,
   type MeterReportPoint,
   type MetricAlert,
 } from './meter-platform-demo';
@@ -111,27 +120,6 @@ function valveLabel(raw?: string | number | null) {
   return toLatinDisplay(s);
 }
 
-function MetricAlertBanner({ alert, valueText }: { alert: MetricAlert; valueText?: string }) {
-  return (
-    <Alert
-      severity={alert.severity}
-      icon={false}
-      sx={{
-        mt: 1,
-        py: 0.5,
-        fontSize: '0.8rem',
-        bgcolor: alert.bgColor,
-        borderLeft: '4px solid',
-        borderColor: alert.borderColor,
-      }}
-    >
-      <strong>{alert.label}</strong>
-      {valueText ? ` (${valueText})` : ''}
-      {alert.message ? ` — ${alert.message}` : ''}
-    </Alert>
-  );
-}
-
 function MetricBox({
   title,
   value,
@@ -143,29 +131,32 @@ function MetricBox({
   unit: string;
   alert: MetricAlert;
 }) {
+  const accent =
+    alert.severity === 'error' ? 'error.main' : alert.severity === 'warning' ? 'warning.main' : 'success.main';
   return (
-    <Grid item xs={12} sm={6} md={4}>
-      <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: 'grey.100', textAlign: 'center' }}>
+    <Grid item xs={6} sm={4} md={2}>
+      <Box
+        sx={{
+          p: 1.75,
+          height: '100%',
+          borderRadius: 2,
+          bgcolor: 'background.paper',
+          border: '1px solid',
+          borderColor: 'divider',
+          borderTop: '3px solid',
+          borderTopColor: accent,
+        }}
+      >
         <Typography variant="caption" color="text.secondary" display="block">
           {title}
         </Typography>
-        <Typography variant="h5" fontWeight={700}>
+        <Typography variant="h5" fontWeight={700} sx={{ my: 0.25, lineHeight: 1.2 }}>
           {value}
         </Typography>
         <Typography variant="caption" color="text.secondary">
           {unit}
         </Typography>
       </Box>
-      <MetricAlertBanner alert={alert} />
-      {alert.channel !== 'none' && (
-        <Chip
-          size="small"
-          color={alert.channel === 'correo' ? 'error' : 'warning'}
-          variant="outlined"
-          label={channelLabel(alert.channel)}
-          sx={{ mt: 0.75 }}
-        />
-      )}
     </Grid>
   );
 }
@@ -183,6 +174,8 @@ export default function MeterPlatformDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<DetailData | null>(null);
+  const [jsonOpen, setJsonOpen] = useState(false);
+  const [section, setSection] = useState<'lectura' | 'historico' | 'traza'>('lectura');
 
   const load = useCallback(async () => {
     if (!deviceCode) return;
@@ -228,8 +221,9 @@ export default function MeterPlatformDetailPage() {
   const reverseL = toLiters(latest?.reverseM3) ?? 0;
   const voltage = latest?.voltage && latest.voltage > 1 ? latest.voltage : null;
   const remaining = latest?.remainingPower && latest.remainingPower > 0 ? latest.remainingPower : null;
-  const reportPct = latest && latest.total > 0 ? (latest.success / latest.total) * 100 : null;
   const dailyL = lastDelta?.deltaForwardL ?? 0;
+  const temperature = scaledTemperature(latest?.temperatureRaw);
+  const trace = useMemo(() => buildReadingTrace(latest), [latest]);
   const reverseExceedsForward = reverseL > 0 && forwardL != null && reverseL > forwardL;
 
   const volumenAlert = evaluateMetric(forwardL, DEMO_METRIC_RULES.volumenL);
@@ -249,7 +243,16 @@ export default function MeterPlatformDetailPage() {
   const voltageAlert = evaluateMetric(voltage, DEMO_METRIC_RULES.voltage);
   const batteryAlert = evaluateMetric(remaining, DEMO_METRIC_RULES.remainingPower);
   const dailyAlert = evaluateMetric(dailyL, DEMO_METRIC_RULES.consumoDiarioL);
-  const reportAlert = evaluateMetric(reportPct, DEMO_METRIC_RULES.reportOkPct);
+  const reportInfo: MetricAlert = {
+    label: 'Contador de vida',
+    message:
+      'successReportTimes no sube en cada reporte; totalReportTimes sí. No se usa como porcentaje de éxito.',
+    severity: 'info',
+    bgColor: 'info.lighter',
+    borderColor: 'info.main',
+    channel: 'none',
+    level: 'normal',
+  };
   const leakAlert: MetricAlert = latest?.isLeak
     ? ruleToAlert(
         {
@@ -282,7 +285,11 @@ export default function MeterPlatformDetailPage() {
     },
     { metric: 'Batería (V)', alert: voltageAlert, value: voltage != null ? `${voltage.toFixed(3)} V` : '—' },
     { metric: 'Reserva', alert: batteryAlert, value: remaining != null ? `${remaining} %` : '—' },
-    { metric: 'Reportes OK', alert: reportAlert, value: reportPct != null ? `${reportPct.toFixed(1)} %` : '—' },
+    {
+      metric: 'Contadores de reporte',
+      alert: reportInfo,
+      value: latest && latest.total > 0 ? `${latest.success} / ${latest.total}` : '—',
+    },
     { metric: 'Fugas / flags', alert: leakAlert, value: latest?.isLeak ? 'Fuga' : 'OK' },
   ];
 
@@ -303,6 +310,32 @@ export default function MeterPlatformDetailPage() {
   })();
   const company = data?.listRow?.companyId != null ? String(data.listRow.companyId) : '';
 
+  const sensorJson = useMemo(() => {
+    const rows = data?.connRecords?.rows || [];
+    const report =
+      rows.find(
+        (row) =>
+          String(row.direction || '').toLowerCase() === 'client'
+          && String(row.type || '').toLowerCase() === 'report'
+          && (row.analyticalParsed || row.analyticalBody)
+      ) || rows.find((row) => row.analyticalParsed || row.analyticalBody);
+    if (report?.analyticalParsed) return report.analyticalParsed;
+    if (typeof report?.analyticalBody === 'string') {
+      try {
+        return JSON.parse(report.analyticalBody);
+      } catch {
+        return { analyticalBody: report.analyticalBody };
+      }
+    }
+    return {
+      listRow: data?.listRow ?? null,
+      extend: data?.extend ?? null,
+      normalized: data?.normalized ?? null,
+    };
+  }, [data]);
+
+  const sensorJsonText = useMemo(() => JSON.stringify(sensorJson, null, 2), [sensorJson]);
+
   const categories = history.map((p) => chartDayLabel(p.at));
   const forwardSeries = history.map((p) => toLiters(p.forwardM3) ?? 0);
   const reverseSeries = history.map((p) => toLiters(p.reverseM3) ?? 0);
@@ -319,57 +352,106 @@ export default function MeterPlatformDetailPage() {
         <title>{deviceCode ? `Sitio ${deviceCode}` : 'Sitio medidor'} - {CONFIG.appName}</title>
       </Helmet>
 
-      <Box sx={{ px: { xs: 1, md: 2 }, py: 1.5, width: '100%', maxWidth: 'none' }}>
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" sx={{ mb: 1.5 }}>
-          <Button size="small" onClick={() => navigate('/meter-platform')}>
-            ← Sitios
-          </Button>
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="h5" sx={{ fontWeight: 700 }}>
-              {deviceType}
-            </Typography>
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ fontFamily: 'ui-monospace, monospace' }}
-            >
-              {deviceCode} · {deviceType} · {address}
-            </Typography>
-          </Box>
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              px: 2,
-              py: 1,
-              borderRadius: 1,
-              bgcolor: online ? 'success.lighter' : 'error.lighter',
-            }}
-          >
-            <Box
-              sx={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                bgcolor: online ? 'success.main' : 'error.main',
-              }}
+      <Box sx={{ px: { xs: 2, md: 3 }, py: 2.5, width: '100%', maxWidth: 'none' }}>
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          spacing={2}
+          alignItems={{ md: 'center' }}
+          justifyContent="space-between"
+          sx={{ mb: 2.5 }}
+        >
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
+            <Button size="small" onClick={() => navigate('/meter-platform')}>
+              Medidores
+            </Button>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography
+                variant="h4"
+                sx={{ fontWeight: 700, letterSpacing: -0.4, fontFamily: 'ui-monospace, monospace' }}
+              >
+                {deviceCode || 'Medidor'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" noWrap>
+                {deviceType} · {address}
+              </Typography>
+            </Box>
+          </Stack>
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Chip
+              size="small"
+              label={online ? 'En línea' : 'Fuera de línea'}
+              color={online ? 'success' : 'default'}
+              variant={online ? 'filled' : 'outlined'}
             />
-            <Typography variant="body2" fontWeight={700} color={online ? 'success.dark' : 'error.dark'}>
-              {online ? 'ONLINE' : 'OFFLINE'}
-            </Typography>
+            <Chip size="small" variant="outlined" label={valveLabel(latest?.valve || data?.listRow?.valveStatus)} />
             <Typography variant="caption" color="text.secondary">
-              {formatWhen(observedAt)}
+              {formatWhen(data?.listRow?.lastConnTime || observedAt)}
             </Typography>
-          </Box>
-          <Button variant="outlined" onClick={load} disabled={loading}>
-            Actualizar
-          </Button>
+            <Button size="small" variant="outlined" onClick={() => setJsonOpen(true)} disabled={!data || loading}>
+              JSON
+            </Button>
+            <Button size="small" variant="contained" onClick={load} disabled={loading}>
+              Actualizar
+            </Button>
+          </Stack>
         </Stack>
+
+        <Dialog open={jsonOpen} onClose={() => setJsonOpen(false)} fullWidth maxWidth="md">
+          <DialogTitle>JSON del sensor {deviceCode}</DialogTitle>
+          <DialogContent dividers>
+            <Box
+              component="pre"
+              sx={{
+                m: 0,
+                p: 1.5,
+                maxHeight: '70vh',
+                overflow: 'auto',
+                fontSize: 12,
+                lineHeight: 1.5,
+                fontFamily: 'ui-monospace, monospace',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                bgcolor: 'grey.100',
+                borderRadius: 1,
+              }}
+            >
+              {sensorJsonText}
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => {
+                navigator.clipboard?.writeText(sensorJsonText);
+              }}
+            >
+              Copiar
+            </Button>
+            <Button variant="contained" color="inherit" onClick={() => setJsonOpen(false)}>
+              Cerrar
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         {error && (
           <Alert severity="warning" sx={{ mb: 1.5 }}>
             {error}
+          </Alert>
+        )}
+
+        {latest?.volumeScale === 'divided-1000' && (
+          <Alert severity="warning" sx={{ mb: 1.5 }}>
+            El último <strong>currentForwardUsage</strong> llegó como {String(latest.rawForwardM3)}. En los
+            reportes anteriores de este mismo medidor el acumulado está en {latest.forwardM3.toFixed(3)} m³,
+            con el mismo voltaje. Lo mostramos como {latest.forwardM3.toFixed(3)} m³ (
+            {Math.round(latest.forwardM3 * 1000)} L). {volumeScaleLabel(latest.volumeScale)}.
+          </Alert>
+        )}
+
+        {latest?.volumeScale === 'integer-unverified' && (
+          <Alert severity="info" sx={{ mb: 1.5 }}>
+            El acumulado llegó como entero ({String(latest.rawForwardM3)}) y este medidor no tiene lecturas
+            fraccionarias para comparar. Se muestra tal cual: {latest.forwardM3.toFixed(3)} m³ (
+            {Math.round(latest.forwardM3 * 1000)} L).
           </Alert>
         )}
 
@@ -379,7 +461,19 @@ export default function MeterPlatformDetailPage() {
           </Box>
         ) : (
           <>
-            <Card variant="outlined" sx={{ p: 1.5, mb: 1.5 }}>
+            <Tabs
+              value={section}
+              onChange={(_, value: 'lectura' | 'historico' | 'traza') => setSection(value)}
+              sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
+            >
+              <Tab value="lectura" label="Lectura" />
+              <Tab value="historico" label="Histórico" />
+              <Tab value="traza" label="Cómo se muestra" />
+            </Tabs>
+
+            {section === 'lectura' && (
+            <>
+            <Card variant="outlined" sx={{ p: 2, mb: 1.5, borderRadius: 2 }}>
               <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
                 {deviceType}
               </Typography>
@@ -415,10 +509,10 @@ export default function MeterPlatformDetailPage() {
                   alert={batteryAlert}
                 />
                 <MetricBox
-                  title="Reportes OK"
-                  value={reportPct != null ? reportPct.toFixed(1) : '—'}
-                  unit={latest ? `${latest.success}/${latest.total}` : '%'}
-                  alert={reportAlert}
+                  title="Contadores de reporte"
+                  value={latest && latest.total > 0 ? `${latest.success}/${latest.total}` : '—'}
+                  unit="exitosos / intentos"
+                  alert={reportInfo}
                 />
               </Grid>
             </Card>
@@ -441,6 +535,13 @@ export default function MeterPlatformDetailPage() {
                         ['Diámetro', latest?.pipeDiameter ? `${latest.pipeDiameter} mm` : '—'],
                         ['Última lectura', formatWhen(data?.listRow?.lastConnTime || observedAt)],
                         ['Fuga', latest?.isLeak ? 'Sí' : 'No'],
+                        [
+                          'Temperatura',
+                          temperature.celsius != null
+                            ? `${temperature.celsius.toFixed(1)} °C${temperature.scaled ? ` (crudo ${Number(temperature.raw).toFixed(1)})` : ''}`
+                            : '—',
+                        ],
+                        ['Escala de volumen', volumeScaleLabel(latest?.volumeScale)],
                         ...(company ? [['Cliente', company] as [string, string]] : []),
                       ].map(([label, value]) => (
                         <Grid item xs={6} sm={4} key={label}>
@@ -459,13 +560,18 @@ export default function MeterPlatformDetailPage() {
               <Grid item xs={12} md={5}>
                 <Card variant="outlined" sx={{ height: '100%' }}>
                   <CardHeader
-                    title="Alertas según rangos"
-                    subheader="Preventivo vs correo"
+                    title="Fuera de rango"
+                    subheader="El resto de la lectura no dispara alerta"
                     sx={{ pb: 0 }}
                   />
                   <CardContent sx={{ pt: 1.5 }}>
                     <Stack spacing={1}>
-                      {inbox.map((item) => (
+                      {inbox.every((item) => item.alert.level === 'normal') && (
+                        <Typography variant="body2" color="text.secondary">
+                          Esta lectura está dentro de los rangos.
+                        </Typography>
+                      )}
+                      {inbox.filter((item) => item.alert.level !== 'normal').map((item) => (
                         <Box
                           key={item.metric}
                           sx={{
@@ -503,7 +609,10 @@ export default function MeterPlatformDetailPage() {
                 </Card>
               </Grid>
             </Grid>
+            </>
+            )}
 
+            {section === 'historico' && (
             <Grid container spacing={1.5} sx={{ mb: 1.5 }}>
               <Grid item xs={12} md={6}>
                 <SensorFlujoHistoricoChart
@@ -558,6 +667,47 @@ export default function MeterPlatformDetailPage() {
                 />
               </Grid>
             </Grid>
+            )}
+
+            {section === 'traza' && (
+            <>
+            {trace.length > 0 && (
+              <Card variant="outlined" sx={{ mb: 1.5 }}>
+                <CardHeader
+                  title="Cómo se muestra este dato"
+                  subheader="Campo de origen, valor crudo y transformación antes de llegar a la pantalla"
+                  sx={{ pb: 0 }}
+                />
+                <CardContent sx={{ pt: 1.5 }}>
+                  <StyledTableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <StyledTableCellHeader>En pantalla</StyledTableCellHeader>
+                          <StyledTableCellHeader>Campo</StyledTableCellHeader>
+                          <StyledTableCellHeader>Crudo</StyledTableCellHeader>
+                          <StyledTableCellHeader>Transformación</StyledTableCellHeader>
+                          <StyledTableCellHeader>Mostrado</StyledTableCellHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {trace.map((row) => (
+                          <StyledTableRow key={row.label}>
+                            <StyledTableCell>{row.label}</StyledTableCell>
+                            <StyledTableCell sx={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>
+                              {row.source}
+                            </StyledTableCell>
+                            <StyledTableCell>{row.raw}</StyledTableCell>
+                            <StyledTableCell sx={{ maxWidth: 360 }}>{row.transform}</StyledTableCell>
+                            <StyledTableCell>{row.display}</StyledTableCell>
+                          </StyledTableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </StyledTableContainer>
+                </CardContent>
+              </Card>
+            )}
 
             <Card variant="outlined" sx={{ mb: 1.5 }}>
               <CardHeader
@@ -596,18 +746,22 @@ export default function MeterPlatformDetailPage() {
                         <StyledTableCell>&lt; 3.40 V / &lt; 20%</StyledTableCell>
                       </StyledTableRow>
                       <StyledTableRow>
-                        <StyledTableCell>Reportes OK</StyledTableCell>
-                        <StyledTableCell>≥ 90%</StyledTableCell>
-                        <StyledTableCell>70 – 89%</StyledTableCell>
-                        <StyledTableCell>&lt; 70%</StyledTableCell>
+                        <StyledTableCell>Contadores de reporte</StyledTableCell>
+                        <StyledTableCell colSpan={3}>
+                          Se muestran successReportTimes y totalReportTimes. No disparan alerta: en los NB
+                          el primero se queda fijo mientras el segundo sube.
+                        </StyledTableCell>
                       </StyledTableRow>
                     </TableBody>
                   </Table>
                 </StyledTableContainer>
               </CardContent>
             </Card>
+            </>
+            )}
 
-            <Card variant="outlined" sx={{ mb: 1.5 }}>
+            {section === 'historico' && (
+            <Card variant="outlined" sx={{ mb: 1.5, borderRadius: 2 }}>
               <CardHeader
                 title="Histórico de reportes"
                 subheader={`${history.length} lecturas`}
@@ -660,6 +814,7 @@ export default function MeterPlatformDetailPage() {
                 </StyledTableContainer>
               </CardContent>
             </Card>
+            )}
           </>
         )}
       </Box>

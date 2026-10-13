@@ -1,5 +1,8 @@
 /** Fixture + rangos de maqueta (Punto de Venta v2). No envía correos. */
 
+/** How a cumulative m³ figure is shown after comparing it with sibling readings. */
+export type VolumeScale = 'as-reported' | 'divided-1000' | 'integer-unverified';
+
 export type MeterReportPoint = {
   at: string;
   forwardM3: number;
@@ -13,6 +16,19 @@ export type MeterReportPoint = {
   total: number;
   valve?: string;
   pipeDiameter?: number;
+  /** Platform number before any ×1000 correction. */
+  rawForwardM3?: number;
+  volumeScale?: VolumeScale;
+  temperatureRaw?: number;
+  pressureRaw?: number;
+};
+
+export type ReadingTraceRow = {
+  label: string;
+  source: string;
+  raw: string;
+  transform: string;
+  display: string;
 };
 
 export type AlertChannel = 'none' | 'preventivo' | 'correo';
@@ -211,6 +227,8 @@ function pointFromConnRow(row: Record<string, any>): MeterReportPoint | null {
     total: Number(m.totalReportTimes) || 0,
     valve: m.valveDesc ? String(m.valveDesc) : undefined,
     pipeDiameter: Number(m.pipeDiameter) || undefined,
+    temperatureRaw: Number.isFinite(Number(m.temperature)) ? Number(m.temperature) : undefined,
+    pressureRaw: Number.isFinite(Number(m.pressure)) ? Number(m.pressure) : undefined,
   };
 }
 
@@ -291,7 +309,7 @@ export function historyForDevice(
     normalized?: { observedAt?: string; metrics?: Array<{ name: string; value: number }> } | null;
   } | null
 ): MeterReportPoint[] {
-  const fromConn = parseConnRows(data?.connRecords?.rows);
+  const fromConn = applyVolumeScale(parseConnRows(data?.connRecords?.rows));
   if (fromConn.length) return fromConn;
 
   const fromUsage = historyFromUsage(data?.usageBreakdown?.dailyUsageEnriched || undefined);
@@ -329,4 +347,193 @@ export function channelLabel(channel: AlertChannel) {
   if (channel === 'correo') return 'Detonaría correo';
   if (channel === 'preventivo') return 'Alerta preventiva';
   return 'Sin disparo';
+}
+
+function median(values: number[]): number | null {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+}
+
+/**
+ * Live NB meters report cumulative volume in m³ (about 0.47).
+ * One report jumped to 475 — exactly ×1000 the previous 0.475 on the same meter —
+ * with voltage and battery unchanged. Treat ~×1000 vs a fractional baseline as a scale error.
+ * A large integer with no fractional sibling (the 4G meter at 116) stays as reported.
+ */
+export function reconcileCubicMeters(values: Array<number | null | undefined>): Array<{
+  raw: number | null;
+  m3: number | null;
+  scale: VolumeScale;
+}> {
+  const finite = values
+    .map((v) => (v == null || !Number.isFinite(Number(v)) ? null : Number(v)))
+    .filter((v): v is number => v != null && v > 0);
+  const fractional = finite.filter((v) => v < 10);
+  const baseline = median(fractional);
+
+  return values.map((value) => {
+    if (value == null || !Number.isFinite(Number(value))) {
+      return { raw: null, m3: null, scale: 'as-reported' };
+    }
+    const raw = Number(value);
+    const nearInteger = Math.abs(raw - Math.round(raw)) < 1e-6;
+    if (baseline != null && baseline > 0 && raw / baseline >= 800 && raw / baseline <= 1200) {
+      return { raw, m3: raw / 1000, scale: 'divided-1000' };
+    }
+    if (raw >= 50 && nearInteger) {
+      return { raw, m3: raw, scale: 'integer-unverified' };
+    }
+    return { raw, m3: raw, scale: 'as-reported' };
+  });
+}
+
+export function applyVolumeScale(points: MeterReportPoint[]): MeterReportPoint[] {
+  if (!points.length) return points;
+  const reconciled = reconcileCubicMeters(points.map((p) => p.forwardM3));
+  return points.map((point, index) => ({
+    ...point,
+    rawForwardM3: reconciled[index].raw ?? point.forwardM3,
+    forwardM3: reconciled[index].m3 ?? point.forwardM3,
+    volumeScale: reconciled[index].scale,
+  }));
+}
+
+export function displayVolume(rawM3: number | null, peerRawM3: number[]): {
+  raw: number | null;
+  m3: number | null;
+  liters: number | null;
+  scale: VolumeScale;
+} {
+  const peers = peerRawM3.filter((n) => Number.isFinite(n) && n !== rawM3);
+  const self = reconcileCubicMeters([rawM3, ...peers])[0];
+  return {
+    raw: self.raw,
+    m3: self.m3,
+    liters: self.m3 == null ? null : self.m3 * 1000,
+    scale: self.scale,
+  };
+}
+
+export function scaledTemperature(raw: number | null | undefined): {
+  celsius: number | null;
+  raw: number | null;
+  scaled: boolean;
+} {
+  if (raw == null || !Number.isFinite(Number(raw))) {
+    return { celsius: null, raw: null, scaled: false };
+  }
+  const n = Number(raw);
+  if (Math.abs(n) > 200) return { celsius: n / 100, raw: n, scaled: true };
+  return { celsius: n, raw: n, scaled: false };
+}
+
+export function volumeScaleLabel(scale: VolumeScale | undefined): string {
+  if (scale === 'divided-1000') return 'Corregido ÷1000';
+  if (scale === 'integer-unverified') return 'Entero sin referencia';
+  return 'Como llegó';
+}
+
+export function buildReadingTrace(latest: MeterReportPoint | undefined): ReadingTraceRow[] {
+  if (!latest) return [];
+  const rawFwd = latest.rawForwardM3 ?? latest.forwardM3;
+  const shownM3 = latest.forwardM3;
+  const temp = scaledTemperature(latest.temperatureRaw);
+  const scale = latest.volumeScale || 'as-reported';
+  const volumeTransform =
+    scale === 'divided-1000'
+      ? '÷1000: el crudo es ~×1000 el acumulado anterior del mismo medidor. Se muestra en m³ y L = m³ × 1000.'
+      : scale === 'integer-unverified'
+        ? 'Se deja el entero. No hay lectura fraccionaria hermana para confirmar si ya viene en m³.'
+        : 'Sin cambio. L = m³ × 1000.';
+
+  const rows: ReadingTraceRow[] = [
+    {
+      label: 'Volumen acumulado',
+      source: 'conn report → meterReportRequest.currentForwardUsage',
+      raw: String(rawFwd),
+      transform: volumeTransform,
+      display: `${shownM3.toFixed(3)} m³ · ${Math.round(shownM3 * 1000)} L`,
+    },
+    {
+      label: 'Flujo inverso',
+      source: 'meterReportRequest.reverseUsage',
+      raw: String(latest.reverseM3),
+      transform: 'Se toma como m³. L = m³ × 1000.',
+      display: `${(latest.reverseM3 * 1000).toFixed(0)} L`,
+    },
+    {
+      label: 'Batería',
+      source: 'meterReportRequest.voltage',
+      raw: latest.voltage ? String(latest.voltage) : '—',
+      transform: 'Volts tal como llegan (3.7x en los NB).',
+      display: latest.voltage ? `${latest.voltage.toFixed(3)} V` : '—',
+    },
+    {
+      label: 'Reserva',
+      source: 'meterReportRequest.remainingPower',
+      raw: latest.remainingPower ? String(latest.remainingPower) : '—',
+      transform: 'Porcentaje del fabricante, sin conversión.',
+      display: latest.remainingPower ? `${latest.remainingPower} %` : '—',
+    },
+    {
+      label: 'Contadores de reporte',
+      source: 'successReportTimes / totalReportTimes',
+      raw: `${latest.success} / ${latest.total}`,
+      transform:
+        'No es un % de éxito del día. En los NB, success se queda en 3–4 mientras total sube en cada reporte.',
+      display: `${latest.success} marcados exitosos · ${latest.total} intentos de vida`,
+    },
+  ];
+
+  if (temp.raw != null) {
+    rows.push({
+      label: 'Temperatura',
+      source: 'meterReportRequest.temperature',
+      raw: String(temp.raw),
+      transform: temp.scaled
+        ? '÷100 porque el crudo es > 200 (misma regla que el normalizador del API). En los NB el crudo es idéntico (3276.7): probable valor fijo, no una temperatura de sitio.'
+        : 'Sin cambio.',
+      display: temp.celsius != null ? `${temp.celsius.toFixed(1)} °C` : '—',
+    });
+  }
+
+  if (latest.pressureRaw != null) {
+    rows.push({
+      label: 'Presión',
+      source: 'meterReportRequest.pressure',
+      raw: String(latest.pressureRaw),
+      transform: 'Sin cambio.',
+      display: String(latest.pressureRaw),
+    });
+  }
+
+  if (latest.valve) {
+    rows.push({
+      label: 'Válvula',
+      source: 'meterReportRequest.valveDesc',
+      raw: latest.valve,
+      transform: 'Diccionario: 阀门开 → abierta, 阀门关 → cerrada.',
+      display: latest.valve.includes('关') ? 'Cerrada' : latest.valve.includes('开') ? 'Abierta' : latest.valve,
+    });
+  }
+
+  rows.push({
+    label: 'Hora del reporte',
+    source: 'createTime (plataforma) / terminalClock (medidor)',
+    raw: latest.at || '—',
+    transform:
+      'La plataforma manda hora civil sin zona. La lista la muestra tal cual, sin convertirla a la hora del navegador.',
+    display: latest.at || '—',
+  });
+
+  rows.push({
+    label: 'Fugas y errores',
+    source: 'isLeak, isReverseFlow, isOverFlow, alarmMap',
+    raw: `fuga=${latest.isLeak} inverso=${latest.isReverseFlow} overflow=${latest.isOverFlow}`,
+    transform: 'alarmMap llegó vacío y los flags en false en los reportes de hoy.',
+    display: latest.isLeak || latest.isReverseFlow || latest.isOverFlow ? 'Revisar flag' : 'Sin flags activos',
+  });
+
+  return rows;
 }
