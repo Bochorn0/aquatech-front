@@ -10,8 +10,12 @@ import {
   Button,
   Switch,
   Select,
+  Dialog,
   Divider,
   MenuItem,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   TableRow,
   TableBody,
   TableHead,
@@ -29,6 +33,13 @@ import { StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellH
 import { CONFIG } from 'src/config-global';
 
 import { Iconify } from 'src/components/iconify';
+
+const SwalTop = Swal.mixin({
+  didOpen: () => {
+    const container = Swal.getContainer();
+    if (container) container.style.zIndex = '20000';
+  },
+});
 
 type EventType = 'visita_tecnica' | 'instalacion' | 'mantenimiento';
 
@@ -60,10 +71,13 @@ type ScheduledVisit = {
   client_name: string | null;
   punto_venta_name: string | null;
   codigo_tienda: string | null;
+  notes: string | null;
   starts_at: string;
+  ends_at: string | null;
   time_zone: string;
   guests: string[];
   notification_days_before: number;
+  reminder_hour: number;
   meet_link: string | null;
   calendar_link: string | null;
   reminder_sent_at: string | null;
@@ -138,6 +152,34 @@ function countOccurrences(date: string, every: number, horizon: number, unit: 'o
   return count;
 }
 
+function zonedDateTime(iso: string, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timeZone || 'America/Tijuana',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(iso));
+  const get = (type: string) => parts.find((part) => part.type === type)?.value || '';
+  const hour = get('hour') === '24' ? '00' : get('hour');
+  return { date: `${get('year')}-${get('month')}-${get('day')}`, time: `${hour}:${get('minute')}` };
+}
+
+function durationMinutes(startIso: string, endIso: string | null) {
+  if (!endIso) return 60;
+  const mins = Math.round((new Date(endIso).getTime() - new Date(startIso).getTime()) / 60000);
+  if (!Number.isFinite(mins) || mins < 15) return 60;
+  return Math.min(480, mins);
+}
+
+function visitName(visit: ScheduledVisit) {
+  if (visit.client_name) return visit.client_name;
+  const parts = visit.title.split(' — ');
+  return parts.length > 1 ? parts.slice(1).join(' — ') : visit.title;
+}
+
 function formatWhen(iso: string, timeZone: string) {
   return new Intl.DateTimeFormat('es-MX', {
     timeZone: timeZone || 'America/Tijuana',
@@ -161,7 +203,7 @@ function GuestEditor({
     const email = input.trim().toLowerCase();
     if (!email) return;
     if (!EMAIL_RE.test(email)) {
-      Swal.fire({ icon: 'warning', title: 'Correo inválido', text: email });
+      SwalTop.fire({ icon: 'warning', title: 'Correo inválido', text: email });
       return;
     }
     if (!guests.includes(email)) onChange([...guests, email]);
@@ -231,6 +273,21 @@ export function VisitsTab() {
   const [newRule, setNewRule] = useState<RuleDraft>(blankRule);
   const [page, setPage] = useState(0);
   const [guestInput, setGuestInput] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editing, setEditing] = useState<{
+    id: number;
+    series: boolean;
+    name: string;
+    event_type: EventType;
+    date: string;
+    start_time: string;
+    duration_minutes: number;
+    notification_days_before: number;
+    reminder_hour: number;
+    guests: string[];
+    guestInput: string;
+    notes: string;
+  } | null>(null);
   const [schedule, setSchedule] = useState({
     name: '',
     event_type: 'mantenimiento' as EventType,
@@ -270,7 +327,7 @@ export function VisitsTab() {
       setRules(nextRules);
       setDrafts(Object.fromEntries(nextRules.map((rule) => [rule.id, { ...rule, guests: [...rule.guests], guestInput: '' }])));
     } catch (error) {
-      Swal.fire({ icon: 'error', title: 'No se pudieron cargar las reglas', text: error instanceof Error ? error.message : '' });
+      SwalTop.fire({ icon: 'error', title: 'No se pudieron cargar las reglas', text: error instanceof Error ? error.message : '' });
     } finally {
       setLoading(false);
     }
@@ -301,7 +358,7 @@ export function VisitsTab() {
         })));
       } catch (error) {
         if (!cancelled) {
-          Swal.fire({ icon: 'error', title: 'No se pudo cargar los clientes', text: error instanceof Error ? error.message : '' });
+          SwalTop.fire({ icon: 'error', title: 'No se pudo cargar los clientes', text: error instanceof Error ? error.message : '' });
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -314,7 +371,7 @@ export function VisitsTab() {
 
   useEffect(() => {
     loadAgenda().catch((error) => {
-      Swal.fire({ icon: 'error', title: 'No se pudo cargar la agenda', text: error instanceof Error ? error.message : '' });
+      SwalTop.fire({ icon: 'error', title: 'No se pudo cargar la agenda', text: error instanceof Error ? error.message : '' });
     });
   }, [loadAgenda]);
 
@@ -347,9 +404,9 @@ export function VisitsTab() {
         notes: draft.notes || '',
       });
       await loadClient(clientId);
-      Swal.fire({ icon: 'success', title: 'Regla guardada', timer: 1400, showConfirmButton: false });
+      SwalTop.fire({ icon: 'success', title: 'Regla guardada', timer: 1400, showConfirmButton: false });
     } catch (error) {
-      Swal.fire({ icon: 'error', title: 'No se pudo guardar', text: error instanceof Error ? error.message : '' });
+      SwalTop.fire({ icon: 'error', title: 'No se pudo guardar', text: error instanceof Error ? error.message : '' });
     } finally {
       setSavingId(null);
     }
@@ -357,7 +414,7 @@ export function VisitsTab() {
 
   const scheduleVisit = async () => {
     if (!schedule.name.trim() || !schedule.date) {
-      Swal.fire({ icon: 'warning', title: 'Falta información', text: 'Escribe el nombre y la fecha de la cita.' });
+      SwalTop.fire({ icon: 'warning', title: 'Falta información', text: 'Escribe el nombre y la fecha de la cita.' });
       return;
     }
     const periodText = schedule.repeat === 'weeks'
@@ -369,7 +426,7 @@ export function VisitsTab() {
     const ruleText = clientWithoutRules
       ? 'Este cliente no tiene reglas guardadas. No se crean solas: esta cita usa el periodo que elegiste.'
       : 'No se busca una regla. Esta cita usa el periodo que elegiste.';
-    const confirm = await Swal.fire({
+    const confirm = await SwalTop.fire({
       icon: 'question',
       title: occurrenceCount > 1 ? `Se crearán ${occurrenceCount} Google Meets` : 'Se creará un Google Meet',
       text: `${ruleText} Periodo: ${periodText}. ${schedule.guests.length
@@ -405,14 +462,14 @@ export function VisitsTab() {
       setGuestInput('');
       await loadAgenda();
       const first = body.data?.[0];
-      Swal.fire({
+      SwalTop.fire({
         icon: 'success',
         title: body.message || 'Cita creada',
         html: first?.meet_link ? `<a href="${first.meet_link}" target="_blank" rel="noreferrer">${first.meet_link}</a>` : undefined,
       });
     } catch (error) {
       const text = error instanceof Error ? error.message : '';
-      Swal.fire({
+      SwalTop.fire({
         icon: /regla/i.test(text) ? 'info' : 'error',
         title: /regla/i.test(text) ? 'No hace falta una regla' : 'No se pudo agendar',
         text: /regla/i.test(text)
@@ -444,9 +501,9 @@ export function VisitsTab() {
       });
       setNewRule(blankRule());
       await loadClient(clientId);
-      Swal.fire({ icon: 'success', title: 'Regla creada', timer: 1400, showConfirmButton: false });
+      SwalTop.fire({ icon: 'success', title: 'Regla creada', timer: 1400, showConfirmButton: false });
     } catch (error) {
-      Swal.fire({ icon: 'error', title: 'No se pudo crear la regla', text: error instanceof Error ? error.message : '' });
+      SwalTop.fire({ icon: 'error', title: 'No se pudo crear la regla', text: error instanceof Error ? error.message : '' });
     } finally {
       setCreating(false);
     }
@@ -458,16 +515,16 @@ export function VisitsTab() {
     try {
       const body = await apiV2('/visit-rules/defaults', 'POST', { client_id: Number(clientId) });
       await loadClient(clientId);
-      Swal.fire({ icon: 'success', title: body.message || 'Reglas listas', timer: 1600, showConfirmButton: false });
+      SwalTop.fire({ icon: 'success', title: body.message || 'Reglas listas', timer: 1600, showConfirmButton: false });
     } catch (error) {
-      Swal.fire({ icon: 'error', title: 'No se pudieron crear las reglas', text: error instanceof Error ? error.message : '' });
+      SwalTop.fire({ icon: 'error', title: 'No se pudieron crear las reglas', text: error instanceof Error ? error.message : '' });
     } finally {
       setCreating(false);
     }
   };
 
   const deleteRule = async (rule: VisitRule) => {
-    const confirm = await Swal.fire({
+    const confirm = await SwalTop.fire({
       icon: 'warning',
       title: 'Eliminar regla',
       text: rule.label,
@@ -481,12 +538,68 @@ export function VisitsTab() {
       await apiV2(`/visit-rules/${rule.id}`, 'DELETE');
       await loadClient(clientId);
     } catch (error) {
-      Swal.fire({ icon: 'error', title: 'No se pudo eliminar', text: error instanceof Error ? error.message : '' });
+      SwalTop.fire({ icon: 'error', title: 'No se pudo eliminar', text: error instanceof Error ? error.message : '' });
+    }
+  };
+
+  const openEdit = (visit: ScheduledVisit) => {
+    const when = zonedDateTime(visit.starts_at, visit.time_zone);
+    setEditing({
+      id: visit.id,
+      series: Boolean(visit.interval_weeks || visit.interval_months),
+      name: visitName(visit),
+      event_type: visit.event_type,
+      date: when.date,
+      start_time: when.time,
+      duration_minutes: durationMinutes(visit.starts_at, visit.ends_at),
+      notification_days_before: visit.notification_days_before,
+      reminder_hour: visit.reminder_hour ?? 9,
+      guests: [...visit.guests],
+      guestInput: '',
+      notes: visit.notes || '',
+    });
+  };
+
+  const saveEdit = async (scope: 'one' | 'series') => {
+    if (!editing) return;
+    if (!editing.name.trim() || !editing.date) {
+      SwalTop.fire({ icon: 'warning', title: 'Falta información', text: 'Escribe el nombre y la fecha.' });
+      return;
+    }
+    const confirm = await SwalTop.fire({
+      icon: 'question',
+      title: scope === 'series' ? 'Actualizar esta cita y las siguientes' : 'Actualizar esta cita',
+      text: 'También se actualiza el evento de Google Calendar y se avisa a los invitados. El enlace de Meet sigue siendo el mismo.',
+      showCancelButton: true,
+      confirmButtonText: 'Guardar',
+      cancelButtonText: 'Volver',
+    });
+    if (!confirm.isConfirmed) return;
+    setSavingEdit(true);
+    try {
+      const body = await apiV2(`/scheduled-visits/${editing.id}?scope=${scope}`, 'PATCH', {
+        name: editing.name.trim(),
+        event_type: editing.event_type,
+        date: editing.date,
+        start_time: editing.start_time,
+        duration_minutes: Number(editing.duration_minutes),
+        notification_days_before: Number(editing.notification_days_before),
+        reminder_hour: Number(editing.reminder_hour),
+        guests: editing.guests,
+        notes: editing.notes,
+      });
+      setEditing(null);
+      await loadAgenda();
+      SwalTop.fire({ icon: 'success', title: body.message || 'Cita actualizada', timer: 1600, showConfirmButton: false });
+    } catch (error) {
+      SwalTop.fire({ icon: 'error', title: 'No se pudo editar', text: error instanceof Error ? error.message : '' });
+    } finally {
+      setSavingEdit(false);
     }
   };
 
   const cancelVisit = async (visit: ScheduledVisit, scope: 'one' | 'series') => {
-    const confirm = await Swal.fire({
+    const confirm = await SwalTop.fire({
       icon: 'warning',
       title: scope === 'series' ? 'Cancelar toda la serie' : 'Cancelar esta visita',
       text: 'También se borra el evento de Google Calendar y se avisa a los invitados.',
@@ -499,9 +612,9 @@ export function VisitsTab() {
     try {
       const body = await apiV2(`/scheduled-visits/${visit.id}?scope=${scope}`, 'DELETE');
       await loadAgenda();
-      Swal.fire({ icon: 'success', title: body.message || 'Visita cancelada', timer: 1400, showConfirmButton: false });
+      SwalTop.fire({ icon: 'success', title: body.message || 'Visita cancelada', timer: 1400, showConfirmButton: false });
     } catch (error) {
-      Swal.fire({ icon: 'error', title: 'No se pudo cancelar', text: error instanceof Error ? error.message : '' });
+      SwalTop.fire({ icon: 'error', title: 'No se pudo cancelar', text: error instanceof Error ? error.message : '' });
     }
   };
 
@@ -713,6 +826,7 @@ export function VisitsTab() {
                       ) : '-'}
                     </StyledTableCell>
                     <StyledTableCell>
+                      <Button size="small" onClick={() => openEdit(visit)}>Editar</Button>
                       <Button size="small" color="error" onClick={() => cancelVisit(visit, 'one')}>Cancelar</Button>
                       {visit.interval_months || visit.interval_weeks ? (
                         <Button size="small" color="error" onClick={() => cancelVisit(visit, 'series')}>Serie</Button>
@@ -734,6 +848,73 @@ export function VisitsTab() {
           />
         </Paper>
       </StyledTableContainer>
+
+      <Dialog open={Boolean(editing)} onClose={() => !savingEdit && setEditing(null)} fullWidth maxWidth="md">
+        <DialogTitle>Editar cita</DialogTitle>
+        <DialogContent>
+          {editing && (
+            <Grid container spacing={1.5} sx={{ mt: 0.5 }}>
+              <Grid item xs={12} md={6}>
+                <TextField size="small" fullWidth label="Nombre" value={editing.name} onChange={(event) => setEditing({ ...editing, name: event.target.value })} />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Tipo</InputLabel>
+                  <Select label="Tipo" value={editing.event_type} onChange={(event) => setEditing({ ...editing, event_type: event.target.value as EventType })}>
+                    <MenuItem value="visita_tecnica">Visita técnica</MenuItem>
+                    <MenuItem value="instalacion">Instalación</MenuItem>
+                    <MenuItem value="mantenimiento">Mantenimiento</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <TextField size="small" fullWidth type="date" label="Fecha" value={editing.date} onChange={(event) => setEditing({ ...editing, date: event.target.value })} InputLabelProps={{ shrink: true }} />
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <TextField size="small" fullWidth type="time" label="Hora" value={editing.start_time} onChange={(event) => setEditing({ ...editing, start_time: event.target.value })} InputLabelProps={{ shrink: true }} />
+              </Grid>
+              <Grid item xs={6} md={2}>
+                <TextField size="small" fullWidth type="number" label="Duración (min)" value={editing.duration_minutes} onChange={(event) => setEditing({ ...editing, duration_minutes: Number(event.target.value) })} inputProps={{ min: 15, max: 480 }} />
+              </Grid>
+              <Grid item xs={6} md={2}>
+                <TextField size="small" fullWidth type="number" label="Avisar días antes" value={editing.notification_days_before} onChange={(event) => setEditing({ ...editing, notification_days_before: Number(event.target.value) })} inputProps={{ min: 0, max: 90 }} />
+              </Grid>
+              <Grid item xs={6} md={2}>
+                <TextField size="small" fullWidth type="number" label="Hora del correo" value={editing.reminder_hour} onChange={(event) => setEditing({ ...editing, reminder_hour: Number(event.target.value) })} inputProps={{ min: 0, max: 23 }} />
+              </Grid>
+              <Grid item xs={12}>
+                <GuestEditor
+                  guests={editing.guests}
+                  input={editing.guestInput}
+                  onInput={(value) => setEditing({ ...editing, guestInput: value })}
+                  onChange={(guests) => setEditing({ ...editing, guests })}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField size="small" fullWidth multiline minRows={2} label="Notas" value={editing.notes} onChange={(event) => setEditing({ ...editing, notes: event.target.value })} />
+              </Grid>
+              {editing.series && (
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="text.secondary">
+                    Si guardas la serie, las siguientes citas conservan su fecha y toman esta hora, duración, nombre e invitados. El Meet de cada una se actualiza.
+                  </Typography>
+                </Grid>
+              )}
+            </Grid>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditing(null)} disabled={savingEdit}>Cerrar</Button>
+          <Button variant="contained" disabled={savingEdit} onClick={() => saveEdit('one')}>
+            {savingEdit ? 'Guardando…' : 'Guardar esta cita'}
+          </Button>
+          {editing?.series && (
+            <Button variant="outlined" disabled={savingEdit} onClick={() => saveEdit('series')}>
+              Guardar esta y las siguientes
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
 
       <Divider sx={{ my: 3 }} />
       <Typography variant="h6" sx={{ px: 1, mb: 1 }}>Reglas por cliente</Typography>
