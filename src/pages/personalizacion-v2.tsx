@@ -45,6 +45,8 @@ import { CONFIG } from "src/config-global";
 import { Iconify } from 'src/components/iconify';
 import { SvgColor } from 'src/components/svg-color';
 
+import { VisitsTab } from './personalizacion/visits-tab';
+
 import type { City, User, Metric, Cliente, Product, MetricAlert, PuntosVenta, PuntoVentaSourceType } from './types';
 
 // Custom Swal instance with higher z-index to appear above MUI modals (MUI Dialog z-index is 1300)
@@ -1566,8 +1568,9 @@ export function CustomizationPageV2() {
           onChange={(e, newValue) => setTabIndex(newValue)}
           indicatorColor="primary"
           textColor="primary"
-          variant="fullWidth" 
-          centered
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
         >
           <CustomTab label="Métricas" />
           <CustomTab label="Métricas por región" />
@@ -1576,6 +1579,7 @@ export function CustomizationPageV2() {
           {isAdmin && <CustomTab label="Ciudades" />}
           {isAdmin && <CustomTab label="Regiones" />}
           {isAdmin && <CustomTab label="Eventos de prueba" />}
+          {isAdmin && <CustomTab label="Citas" />}
         </CustomTabs>
         
         {tabIndex === 0 && (
@@ -2187,6 +2191,8 @@ export function CustomizationPageV2() {
             </Grid>
           </Grid>
         )}
+
+        {isAdmin && tabIndex === 7 && <VisitsTab />}
 
         {isAdmin && tabIndex === 4 && (
           <Grid container spacing={2}>
