@@ -34,6 +34,7 @@ import {
 
 import { get } from 'src/api/axiosHelper';
 
+import ProductHistoricoReporte from './product-historico-reporte';
 import {
   type HistoricoViewMode,
   buildHistoricoTableRows,
@@ -331,6 +332,7 @@ const ProductHistoricoLogs: React.FC<ProductHistoricoLogsProps> = ({ routineEnab
 
   return (
     <Box sx={{ p: 0, pt: 2 }}>
+      <ProductHistoricoReporte />
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
           Histórico Tuya (totales, flujos y TDS)
