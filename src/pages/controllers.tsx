@@ -31,7 +31,7 @@ import { get, post, patch, remove } from "src/api/axiosHelper";
 
 import { SvgColor } from "src/components/svg-color";
 
-import { ControllerRulesDialog, ControllerRulesFields, defaultRules, rulesFromController, validateControllerRules } from "./controller-rules-dialog";
+import { defaultRules, rulesFromController, ControllerRulesDialog, ControllerRulesFields, validateControllerRules } from "./controller-rules-dialog";
 
 import type { Cliente, Product, Controller } from "./types";
 

@@ -1,5 +1,5 @@
 import Swal from "sweetalert2";
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 
 import {
   Box,
@@ -17,14 +17,15 @@ import {
   CircularProgress,
 } from "@mui/material";
 
+import { fNumber } from "src/utils/format-number";
+
 import { patch } from "src/api/axiosHelper";
 import { get as getV2 } from "src/api/axiosHelperV2";
-import { fNumber } from "src/utils/format-number";
 
 import { toLatinDisplay } from "./meter-platform/latin-display";
 import { displayVolume } from "./meter-platform/meter-platform-demo";
 
-import type { Controller, ControllerFlowRule, ControllerRelayRule, ControllerRules } from "./types";
+import type { Controller, ControllerRules, ControllerFlowRule, ControllerRelayRule } from "./types";
 
 const FLOW_PINS = [4, 5, 15, 18, 19, 21, 22, 23];
 
@@ -120,21 +121,26 @@ export function rulesFromController(rules?: ControllerRules | null): ControllerR
 }
 
 export function validateControllerRules(rules: ControllerRules): string | null {
-  for (const [index, flow] of rules.flows.entries()) {
+  const flowError = rules.flows.reduce<string | null>((found, flow, index) => {
+    if (found) return found;
     const label = `Medidor ${index + 1}`;
     if (flow.origin === "platform") {
-      if (!flow.device_code?.trim()) return `${label}: elige el equipo en Medidores.`;
-      continue;
+      return flow.device_code?.trim() ? null : `${label}: elige el equipo en Medidores.`;
     }
     const pin = Number(flow.pin);
     if (!FLOW_PINS.includes(pin)) return `${label}: elige un pin disponible.`;
-    if (rules.flows.some((other, otherIndex) => otherIndex !== index && other.origin !== "platform" && Number(other.pin) === pin)) {
-      return "Los dos medidores físicos no pueden usar el mismo pin.";
-    }
+    const repeated = rules.flows.some(
+      (other, otherIndex) => otherIndex !== index && other.origin !== "platform" && Number(other.pin) === pin
+    );
+    if (repeated) return "Los dos medidores físicos no pueden usar el mismo pin.";
     const liters = flow.liters_per_pulse ?? 0.1;
     if (liters <= 0 || liters > 100) return `${label}: los litros por pulso van de 0.0001 a 100.`;
-  }
-  for (const relay of rules.relays) {
+    return null;
+  }, null);
+  if (flowError) return flowError;
+
+  return rules.relays.reduce<string | null>((found, relay) => {
+    if (found) return found;
     if (relay.mode === "pressure") {
       if ((relay.min_psi ?? 0) >= (relay.max_psi ?? 0)) {
         return `Relevador ${relay.id}: la presión mínima tiene que ser menor que la máxima.`;
@@ -147,8 +153,8 @@ export function validateControllerRules(rules: ControllerRules): string | null {
       if (hours < 1) return "El flush automático pide al menos 1 hora entre ciclos.";
       if (seconds < 5 || seconds > 180) return "La duración del flush va de 5 a 180 segundos.";
     }
-  }
-  return null;
+    return null;
+  }, null);
 }
 
 type Props = {
@@ -198,7 +204,7 @@ function meterRawM3(row: MeterRow) {
 function meterOptionLabel(row: MeterRow, peerRaw: number[]) {
   const id = String(row.deviceCode || "").trim();
   const name = toLatinDisplay(row.deviceType || row.installAddress, "Medidor");
-  const liters = displayVolume(meterRawM3(row), peerRaw).liters;
+  const { liters } = displayVolume(meterRawM3(row), peerRaw);
   const litersLabel = liters == null ? "—" : `${fNumber(Math.round(liters))} L`;
   const active = meterIsOnline(row) ? "En línea" : "Fuera de línea";
   return `${id} - ${name} - ${litersLabel} - ${active}`;
