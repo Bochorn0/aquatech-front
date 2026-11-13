@@ -304,6 +304,35 @@ export interface Controller {
   flush_time?: number;
   sensor_factor?: number;
   tipo_sensor?: string;
+  rules?: ControllerRules | null;
+}
+
+export interface ControllerFlowRule {
+  name: string;
+  origin: 'pin' | 'platform';
+  pin?: number;
+  liters_per_pulse?: number;
+  device_code?: string;
+}
+
+export interface ControllerRelayRule {
+  id: number;
+  enabled: boolean;
+  mode: 'manual' | 'and_inputs' | 'timer' | 'flow' | 'pressure' | 'off';
+  on?: boolean;
+  sensors?: number[];
+  min_psi?: number;
+  max_psi?: number;
+  meter?: number;
+  min_lpm?: number;
+  interval_ms?: number;
+  duration_ms?: number;
+}
+
+export interface ControllerRules {
+  input_active_low: boolean;
+  flows: ControllerFlowRule[];
+  relays: ControllerRelayRule[];
 }
 
 export type PuntoVentaSourceType = 'mqtt' | 'tuya' | 'hybrid' | 'external';

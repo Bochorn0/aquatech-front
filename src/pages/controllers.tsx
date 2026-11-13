@@ -31,6 +31,8 @@ import { get, post, patch, remove } from "src/api/axiosHelper";
 
 import { SvgColor } from "src/components/svg-color";
 
+import { ControllerRulesDialog, ControllerRulesFields, defaultRules, rulesFromController, validateControllerRules } from "./controller-rules-dialog";
+
 import type { Cliente, Product, Controller } from "./types";
 
 const defaultController: Controller = {
@@ -64,6 +66,7 @@ export default function ControllersPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [controllerForm, setControllerForm] = useState<Controller>(defaultController);
   const [controllerModalOpen, setControllerModalOpen] = useState(false);
+  const [rulesController, setRulesController] = useState<Controller | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Tab 2: inventario
@@ -123,19 +126,25 @@ export default function ControllersPage() {
 
   // Handlers
   const handleControllerEdit = (controller: Controller) => {
-    setControllerForm(controller);
+    setControllerForm({ ...controller, rules: rulesFromController(controller.rules) });
     setControllerModalOpen(true);
   };
 
   const handleControllerSubmit = async () => {
+    const rules = rulesFromController(controllerForm.rules);
+    const message = validateControllerRules(rules);
+    if (message) {
+      Swal.fire({ icon: "warning", title: "Revisa la regla", text: message });
+      return;
+    }
+
     setLoading(true);
 
-    // 🔥 Validación forzada
     let loopTime = Number(controllerForm.loop_time);
     if (loopTime < 1000) loopTime = 1000;
     if (loopTime > 10000) loopTime = 10000;
 
-    const controllerToSubmit = { ...controllerForm, lapso_loop: loopTime };
+    const controllerToSubmit = { ...controllerForm, lapso_loop: loopTime, rules };
 
     try {
       if (controllerForm._id) {
@@ -161,7 +170,7 @@ export default function ControllersPage() {
   };
 
   const handleOpenControllerModal = () => {
-    setControllerForm(defaultController);
+    setControllerForm({ ...defaultController, rules: defaultRules() });
     setControllerModalOpen(true);
   };
 
@@ -212,6 +221,7 @@ export default function ControllersPage() {
                             <StyledTableCellHeader>Reset Pendiente</StyledTableCellHeader>
                             <StyledTableCellHeader>Flush Pendiente</StyledTableCellHeader>
                             <StyledTableCellHeader>Online</StyledTableCellHeader>
+                            <StyledTableCellHeader>Reglas activas</StyledTableCellHeader>
                             <StyledTableCellHeader>Acciones</StyledTableCellHeader>
                           </TableRow>
                         </TableHead>
@@ -229,7 +239,11 @@ export default function ControllersPage() {
                               <StyledTableCell>{ctrl.reset_pending ? "Sí" : "No"}</StyledTableCell>
                               <StyledTableCell>{ctrl.flush_pending ? "Sí" : "No"}</StyledTableCell>
                               <StyledTableCell>{ctrl.online ? "Sí" : "No"}</StyledTableCell>
+                              <StyledTableCell>{ctrl.rules?.relays?.filter((relay) => relay.enabled).length || 0}</StyledTableCell>
                               <StyledTableCell>
+                                <Button size="small" onClick={() => setRulesController(ctrl)}>
+                                  Reglas
+                                </Button>
                                 <IconButton onClick={() => handleControllerEdit(ctrl)}>
                                   <SvgColor src='./assets/icons/actions/edit.svg' />
                                 </IconButton>
@@ -288,8 +302,17 @@ export default function ControllersPage() {
         </Box>
       </Box>
 
+      <ControllerRulesDialog
+        controller={rulesController}
+        onClose={() => setRulesController(null)}
+        onSaved={(updated) => {
+          setControllers((prev) => prev.map((item) => (item._id === updated._id ? { ...item, ...updated } : item)));
+          setRulesController(null);
+        }}
+      />
+
       {/* Modal Crear / Editar Controlador */}
-      <Dialog open={controllerModalOpen} onClose={handleCloseModal} fullWidth maxWidth="sm">
+      <Dialog open={controllerModalOpen} onClose={handleCloseModal} fullWidth maxWidth="md">
         <DialogTitle>{controllerForm._id ? "Editar Controlador" : "Nuevo Controlador"}</DialogTitle>
         <DialogContent>
           <Box display="flex" flexDirection="column" gap={2} mt={1}>
@@ -397,13 +420,15 @@ export default function ControllersPage() {
               </Select>
             </FormControl>
 
-            {/* <FormControl fullWidth>
-              <InputLabel shrink>Online</InputLabel>
-              <Select name="online" value={controllerForm.online ? "true" : "false"} onChange={(e) => setControllerForm({...controllerForm, online: e.target.value === "true"})}>
-                <MenuItem value="true">Sí</MenuItem>
-                <MenuItem value="false">No</MenuItem>
-              </Select>
-            </FormControl> */}
+            <Typography variant="subtitle1">Reglas</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Crear y editar usan estas mismas reglas. El equipo las aplica en su sincronización.
+            </Typography>
+            <ControllerRulesFields
+              rules={rulesFromController(controllerForm.rules)}
+              onChange={(rules) => setControllerForm((prev) => ({ ...prev, rules }))}
+              active={controllerModalOpen}
+            />
           </Box>
         </DialogContent>
         <DialogActions>
