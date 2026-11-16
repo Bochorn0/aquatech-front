@@ -277,6 +277,7 @@ export interface Controller {
   kfactor_tds: number;
   kfactor_flujo: number;
   id: string;
+  device_id?: string;
   ip: string;
   cliente: string;
   product: string;
@@ -307,9 +308,12 @@ export interface Controller {
   rules?: ControllerRules | null;
 }
 
+export type ControllerFlowRole = 'gate' | 'chlorine' | 'calc' | 'read';
+
 export interface ControllerFlowRule {
   name: string;
   origin: 'pin' | 'platform';
+  role?: ControllerFlowRole;
   pin?: number;
   liters_per_pulse?: number;
   device_code?: string;
@@ -318,19 +322,27 @@ export interface ControllerFlowRule {
 export interface ControllerRelayRule {
   id: number;
   enabled: boolean;
-  mode: 'manual' | 'and_inputs' | 'timer' | 'flow' | 'pressure' | 'off';
+  mode: 'manual' | 'and_inputs' | 'timer' | 'flow' | 'pressure' | 'diff' | 'off';
   on?: boolean;
+  input_a?: number;
+  input_b?: number;
   sensors?: number[];
+  sensor_a?: number;
+  sensor_b?: number;
   min_psi?: number;
   max_psi?: number;
+  diff_psi?: number;
+  hyst_psi?: number;
   meter?: number;
   min_lpm?: number;
+  hyst_lpm?: number;
   interval_ms?: number;
   duration_ms?: number;
 }
 
 export interface ControllerRules {
   input_active_low: boolean;
+  description?: string;
   flows: ControllerFlowRule[];
   relays: ControllerRelayRule[];
 }

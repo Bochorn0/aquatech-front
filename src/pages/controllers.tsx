@@ -1,184 +1,103 @@
 import Swal from "sweetalert2";
 import { Helmet } from "react-helmet-async";
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 import {
   Box,
-  Grid,
+  Chip,
   Paper,
   Table,
-  Select,
   Button,
-  Dialog,
+  Select,
   MenuItem,
   TableRow,
   TableBody,
   TableHead,
   TextField,
-  InputLabel,
   IconButton,
   Typography,
+  InputLabel,
   FormControl,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  CircularProgress,
+  TablePagination,
 } from "@mui/material";
 
-import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
-
-import { get, post, patch, remove } from "src/api/axiosHelper";
+import { get, remove } from "src/api/axiosHelper";
 
 import { SvgColor } from "src/components/svg-color";
+import { StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
-import { defaultRules, rulesFromController, ControllerRulesDialog, ControllerRulesFields, validateControllerRules } from "./controller-rules-dialog";
+import { rulesFromController } from "./controller-rules-dialog";
 
-import type { Cliente, Product, Controller } from "./types";
+import type { Cliente, Controller } from "./types";
 
-const defaultController: Controller = {
-  _id: "",
-  name: "",
-  ip: "",
-  id: "",
-  product_type: "",
-  kfactor_tds: 0,
-  kfactor_flujo: 0,
-  cliente: "",
-  product: "",
-  online: false,
-  active_time: 0,
-  create_time: 0,
-  // 🔥 Nuevos
-  reset_pending: false,
-  flush_pending: false,
-  update_controller_time: 10000,
-  loop_time: 1000,
-  flush_time: 20000,
-  sensor_factor: 0,
-  tipo_sensor: "1"
-};
+const RELAY_LABELS = ["Cruda", "Flush", "Cloro", "Pura"];
 
+function clientId(client: Cliente) {
+  return client._id || client.id || "";
+}
+
+function clientName(clients: Cliente[], id?: string) {
+  if (!id) return "Sin cliente";
+  return clients.find((client) => clientId(client) === id)?.name || "Sin cliente";
+}
+
+function deviceKey(controller: Controller) {
+  const device = String(controller.device_id || "").trim();
+  const id = String(controller.id || "").trim();
+  return device || (id && id !== String(controller._id || "") ? id : "") || controller._id;
+}
+
+function controllerPath(controller: Controller) {
+  return `/controladores/${encodeURIComponent(deviceKey(controller))}`;
+}
 
 export default function ControllersPage() {
-  const [tabIndex, setTabIndex] = useState(0);
+  const navigate = useNavigate();
   const [controllers, setControllers] = useState<Controller[]>([]);
   const [clients, setClients] = useState<Cliente[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [controllerForm, setControllerForm] = useState<Controller>(defaultController);
-  const [controllerModalOpen, setControllerModalOpen] = useState(false);
-  const [rulesController, setRulesController] = useState<Controller | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  // Tab 2: inventario
-  // const [inventory, setInventory] = useState([]);
+  const [query, setQuery] = useState("");
+  const [clientFilter, setClientFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
   useEffect(() => {
-    fetchClients();
-    fetchProducts();
-    fetchControllers();
-    fetchInventory();
+    get<Cliente[]>(`/clients`).then(setClients).catch((error) => console.error("Error fetching clients:", error));
+    get<Controller[]>(`/controllers`).then(setControllers).catch((error) => console.error("Error fetching controllers:", error));
   }, []);
 
-  const fetchClients = async () => {
-    try {
-      const response = await get<Cliente[]>(`/clients`);
-      setClients(response);
-    } catch (error) {
-      console.error("Error fetching clients:", error);
-    }
-  };
+  const filtered = useMemo(() => {
+    const text = query.trim().toLowerCase();
+    return controllers.filter((controller) => {
+      if (statusFilter === "online" && !controller.online) return false;
+      if (statusFilter === "offline" && controller.online) return false;
+      if (clientFilter && String(controller.cliente || "") !== clientFilter) return false;
+      if (!text) return true;
+      const haystack = [
+        controller.name,
+        deviceKey(controller),
+        clientName(clients, controller.cliente),
+      ].join(" ").toLowerCase();
+      return haystack.includes(text);
+    });
+  }, [controllers, clients, query, clientFilter, statusFilter]);
 
-  const fetchProducts = async () => {
-    try {
-      const response = await get<Product[]>(`/products`);
-      setProducts(response);
-    } catch (error) {
-      console.error("Error fetching products:", error);
-    }
-  };
+  const safePage = Math.min(page, Math.max(0, Math.ceil(filtered.length / rowsPerPage) - 1));
+  const visible = filtered.slice(safePage * rowsPerPage, safePage * rowsPerPage + rowsPerPage);
 
-  const fetchControllers = async () => {
-    try {
-      const response = await get<Controller[]>(`/controllers`);
-      setControllers(response);
-    } catch (error) {
-      console.error("Error fetching controllers:", error);
-    }
-  };
-
-  const fetchInventory = async () => {
-    try {
-      // const response = await get<InventoryItem[]>(`/inventorys`);
-      // setInventory(response);
-    } catch (error) {
-      console.error("Error fetching inventory:", error);
-    }
-  };
-
-  const confirmationAlert = () => Swal.fire({
-    icon: 'warning',
-    title: 'Advertencia',
-    text: '¿Estás seguro de que deseas eliminar este registro?',
-    showCancelButton: true,
-    confirmButtonText: 'Sí, Continuar',
-    cancelButtonText: 'Cancelar',
-  });
-
-  // Handlers
-  const handleControllerEdit = (controller: Controller) => {
-    setControllerForm({ ...controller, rules: rulesFromController(controller.rules) });
-    setControllerModalOpen(true);
-  };
-
-  const handleControllerSubmit = async () => {
-    const rules = rulesFromController(controllerForm.rules);
-    const message = validateControllerRules(rules);
-    if (message) {
-      Swal.fire({ icon: "warning", title: "Revisa la regla", text: message });
-      return;
-    }
-
-    setLoading(true);
-
-    let loopTime = Number(controllerForm.loop_time);
-    if (loopTime < 1000) loopTime = 1000;
-    if (loopTime > 10000) loopTime = 10000;
-
-    const controllerToSubmit = { ...controllerForm, lapso_loop: loopTime, rules };
-
-    try {
-      if (controllerForm._id) {
-        await patch(`/controllers/${controllerForm._id}`, controllerToSubmit);
-      } else {
-        await post(`/controllers`, controllerToSubmit);
-      }
-      fetchControllers();
-      setControllerModalOpen(false);
-    } catch (error) {
-      console.error("Error submitting controller:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleControllerDelete = async (id: string) => {
-    const result = await confirmationAlert();
-    if (result.isConfirmed) {
-      await remove(`/controllers/${id}`);
-      fetchControllers();
-    }
-  };
-
-  const handleOpenControllerModal = () => {
-    setControllerForm({ ...defaultController, rules: defaultRules() });
-    setControllerModalOpen(true);
-  };
-
-  const handleCloseModal = () => setControllerModalOpen(false);
-
-  const handleControllerChange = (e: any) => {
-    const { name, value } = e.target;
-    setControllerForm((prev) => ({ ...prev, [name]: value }));
+  const removeController = async (controller: Controller) => {
+    const result = await Swal.fire({
+      icon: "warning",
+      title: "Eliminar controlador",
+      text: `Se va a eliminar ${controller.name || "este controlador"}.`,
+      showCancelButton: true,
+      confirmButtonText: "Eliminar",
+      cancelButtonText: "Cancelar",
+    });
+    if (!result.isConfirmed || !controller._id) return;
+    await remove(`/controllers/${controller._id}`);
+    setControllers((prev) => prev.filter((item) => item._id !== controller._id));
   };
 
   return (
@@ -187,257 +106,167 @@ export default function ControllersPage() {
         <title>Controladores</title>
       </Helmet>
 
-      <Box sx={{ p: 2 }}>
-        <CustomTabs value={tabIndex} onChange={(_, newIndex) => setTabIndex(newIndex)}>
-          <CustomTab label="Controladores" />
-          <CustomTab label="Inventario" />
-        </CustomTabs>
-
-        <Box mt={2}>
-          {tabIndex === 0 && (
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                  <Typography variant="h5">Lista de Controladores</Typography>
-                  <Button variant="contained" color="primary" onClick={handleOpenControllerModal}>
-                    Añadir Controlador
-                  </Button>
-                </Box>
-
-                <StyledTableContainer>
-                  <Paper elevation={3}>
-                    <Box sx={{ overflowX: 'auto' }}>
-                      <Table>
-                        <TableHead>
-                          <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
-                            <StyledTableCellHeader>Nombre</StyledTableCellHeader>
-                            <StyledTableCellHeader>IP</StyledTableCellHeader>
-                            <StyledTableCellHeader>Cliente</StyledTableCellHeader>
-                            <StyledTableCellHeader>Producto</StyledTableCellHeader>
-                            <StyledTableCellHeader>Ajuste TDS</StyledTableCellHeader>
-                            <StyledTableCellHeader>Ajuste Flujo</StyledTableCellHeader>
-                            <StyledTableCellHeader>Lapso Actualización</StyledTableCellHeader>
-                            <StyledTableCellHeader>Lapso Loop</StyledTableCellHeader>
-                            <StyledTableCellHeader>Reset Pendiente</StyledTableCellHeader>
-                            <StyledTableCellHeader>Flush Pendiente</StyledTableCellHeader>
-                            <StyledTableCellHeader>Online</StyledTableCellHeader>
-                            <StyledTableCellHeader>Reglas activas</StyledTableCellHeader>
-                            <StyledTableCellHeader>Acciones</StyledTableCellHeader>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {controllers.map((ctrl) => (
-                            <StyledTableRow key={ctrl._id}>
-                              <StyledTableCell>{ctrl.name}</StyledTableCell>
-                              <StyledTableCell>{ctrl.ip}</StyledTableCell>
-                              <StyledTableCell>{clients.find(c => c._id === ctrl.cliente)?.name || ""}</StyledTableCell>
-                              <StyledTableCell>{products.find(p => p._id === ctrl.product)?.name || ""}</StyledTableCell>
-                              <StyledTableCell>{ctrl.kfactor_tds}</StyledTableCell>
-                              <StyledTableCell>{ctrl.kfactor_flujo}</StyledTableCell>
-                              <StyledTableCell>{ctrl.update_controller_time} ms</StyledTableCell>
-                              <StyledTableCell>{ctrl.loop_time} ms</StyledTableCell>
-                              <StyledTableCell>{ctrl.reset_pending ? "Sí" : "No"}</StyledTableCell>
-                              <StyledTableCell>{ctrl.flush_pending ? "Sí" : "No"}</StyledTableCell>
-                              <StyledTableCell>{ctrl.online ? "Sí" : "No"}</StyledTableCell>
-                              <StyledTableCell>{ctrl.rules?.relays?.filter((relay) => relay.enabled).length || 0}</StyledTableCell>
-                              <StyledTableCell>
-                                <Button size="small" onClick={() => setRulesController(ctrl)}>
-                                  Reglas
-                                </Button>
-                                <IconButton onClick={() => handleControllerEdit(ctrl)}>
-                                  <SvgColor src='./assets/icons/actions/edit.svg' />
-                                </IconButton>
-                                <IconButton onClick={() => handleControllerDelete(ctrl._id)}>
-                                  <SvgColor src='./assets/icons/actions/delete.svg' />
-                                </IconButton>
-                              </StyledTableCell>
-                            </StyledTableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </Box>
-                  </Paper>
-                </StyledTableContainer>
-              </Grid>
-            </Grid>
-          )}
-
-          {tabIndex === 1 && (
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <Typography variant="h5" gutterBottom>Inventario</Typography>
-                <StyledTableContainer>
-                  <Paper elevation={3}>
-                    <Box sx={{ overflowX: 'auto' }}>
-                      <Table>
-                        <TableHead>
-                          <TableRow sx={{ backgroundColor: '#f4f6f8' }}>
-                            <StyledTableCellHeader>Nombre Item</StyledTableCellHeader>
-                            <StyledTableCellHeader>Cantidad</StyledTableCellHeader>
-                            <StyledTableCellHeader>Controlador</StyledTableCellHeader>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          Proximament disponible ...
-                          {/* {inventory.map((item) => (
-                            <StyledTableRow key={item._id}>
-                              <StyledTableCell>{item.name}</StyledTableCell>
-                              <StyledTableCell>{item.quantity}</StyledTableCell>
-                              <StyledTableCell>
-                                {item.controllers
-                                  .map(id => controllers.find(c => c._id === id)?.name)
-                                  .filter(Boolean)
-                                  .join(", ")}
-                              </StyledTableCell>
-                            </StyledTableRow>
-                          ))} */}
-                        </TableBody>
-                      </Table>
-                    </Box>
-                  </Paper>
-                </StyledTableContainer>
-              </Grid>
-            </Grid>
-          )}
-        </Box>
-      </Box>
-
-      <ControllerRulesDialog
-        controller={rulesController}
-        onClose={() => setRulesController(null)}
-        onSaved={(updated) => {
-          setControllers((prev) => prev.map((item) => (item._id === updated._id ? { ...item, ...updated } : item)));
-          setRulesController(null);
-        }}
-      />
-
-      {/* Modal Crear / Editar Controlador */}
-      <Dialog open={controllerModalOpen} onClose={handleCloseModal} fullWidth maxWidth="md">
-        <DialogTitle>{controllerForm._id ? "Editar Controlador" : "Nuevo Controlador"}</DialogTitle>
-        <DialogContent>
-          <Box display="flex" flexDirection="column" gap={2} mt={1}>
-            <TextField label="Nombre" name="name" value={controllerForm.name} onChange={handleControllerChange} fullWidth />
-            <TextField label="IP" name="ip" value={controllerForm.ip} onChange={handleControllerChange} fullWidth />
-            <FormControl fullWidth>
-              <InputLabel shrink>Cliente</InputLabel>
-              <Select name="cliente" value={controllerForm.cliente} onChange={handleControllerChange}>
-                {clients.map(c => <MenuItem key={c._id} value={c._id}>{c.name}</MenuItem>)}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth>
-              <InputLabel shrink>Producto</InputLabel>
-              <Select name="product" value={controllerForm.product} onChange={handleControllerChange}>
-                {products.map(p => <MenuItem key={p._id} value={p._id}>{p.name}</MenuItem>)}
-              </Select>
-            </FormControl>
-            <TextField type="number" label="Ajuste TDS" name="kfactor_tds" value={controllerForm.kfactor_tds} onChange={handleControllerChange} fullWidth />
-            <TextField type="number" label="Ajuste Flujo" name="kfactor_flujo" value={controllerForm.kfactor_flujo} onChange={handleControllerChange} fullWidth />
-            <TextField
-              type="number"
-              label="Lapso de Actualización (ms)"
-              name="update_controller_time"
-              value={controllerForm.update_controller_time}
-              onChange={handleControllerChange}
-              fullWidth
-            />
-
-            <TextField
-              type="number"
-              label="Loop Time (ms)  Min: 1s, Max: 10s"
-              name="loop_time"
-              value={controllerForm.loop_time}
-              onChange={handleControllerChange}
-              onBlur={() => {
-                let val = Number(controllerForm.loop_time);
-                if (val < 1000) val = 1000;
-                if (val > 10000) val = 10000;
-                setControllerForm((prev) => ({ ...prev, loop_time: val }));
-              }}
-              fullWidth
-              inputProps={{ min: 1000, max: 10000 }}
-            />
-
-            <TextField
-              type="number"
-              label="Flush (ms)  Min: 20s, Max: 60s"
-              name="flush_time"
-              value={controllerForm.flush_time}
-              onChange={handleControllerChange}
-              onBlur={() => {
-                let val = Number(controllerForm.flush_time);
-                if (val < 20000) val = 20000;
-                if (val > 60000) val = 60000;
-                setControllerForm((prev) => ({ ...prev, flush_time: val }));
-              }}
-              fullWidth
-              inputProps={{ min: 20000, max: 60000 }}
-            />
-            <FormControl fullWidth>
-              <InputLabel shrink>Tipo de Sensor</InputLabel>
-              <Select name="tipo_sensor" value={controllerForm.tipo_sensor} onChange={handleControllerChange}>
-                <MenuItem value="1">Sensor de Presion 1</MenuItem>
-                <MenuItem value="2">Sensor de Presion 2</MenuItem>
-              </Select>
-            </FormControl>
-            <TextField
-              type="number"
-              label="Ajuste Factor de Sensor Presion"
-              name="sensor_factor"
-              value={controllerForm.sensor_factor}
-              onChange={handleControllerChange}
-              fullWidth
-            />
-            <FormControl fullWidth>
-              <InputLabel shrink>Reinicio Remoto</InputLabel>
-              <Select
-                name="reset_pending"
-                value={controllerForm.reset_pending ? "true" : "false"}
-                onChange={(e) =>
-                  setControllerForm({
-                    ...controllerForm,
-                    reset_pending: e.target.value === "true",
-                  })
-                }
-              >
-                <MenuItem value="true">Sí</MenuItem>
-                <MenuItem value="false">No</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl fullWidth>
-              <InputLabel shrink>Flush Remoto</InputLabel>
-              <Select
-                name="flush_pending"
-                value={controllerForm.flush_pending ? "true" : "false"}
-                onChange={(e) =>
-                  setControllerForm({
-                    ...controllerForm,
-                    flush_pending: e.target.value === "true",
-                  })
-                }
-              >
-                <MenuItem value="true">Sí</MenuItem>
-                <MenuItem value="false">No</MenuItem>
-              </Select>
-            </FormControl>
-
-            <Typography variant="subtitle1">Reglas</Typography>
+      <Box sx={{ p: { xs: 1.5, sm: 2, md: 3 }, width: "100%" }}>
+        <Box sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" }, justifyContent: "space-between", alignItems: { xs: "stretch", sm: "flex-end" }, gap: 2, mb: 3 }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="h4">Controladores</Typography>
             <Typography variant="body2" color="text.secondary">
-              Crear y editar usan estas mismas reglas. El equipo las aplica en su sincronización.
+              Bombas de cruda y purificada por interruptor. Flush y cloro por las reglas.
             </Typography>
-            <ControllerRulesFields
-              rules={rulesFromController(controllerForm.rules)}
-              onChange={(rules) => setControllerForm((prev) => ({ ...prev, rules }))}
-              active={controllerModalOpen}
-            />
           </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseModal} color="secondary">Cancelar</Button>
-          <Button onClick={handleControllerSubmit} variant="contained" color="primary" disabled={loading}>
-            {loading ? <CircularProgress size={24} /> : controllerForm._id ? "Actualizar" : "Guardar"}
+          <Button variant="contained" onClick={() => navigate("/controladores/nuevo")} sx={{ alignSelf: { xs: "stretch", sm: "auto" } }}>
+            Nuevo
           </Button>
-        </DialogActions>
-      </Dialog>
+        </Box>
+
+        <Box sx={{ display: "grid", gap: 2, mb: 2, gridTemplateColumns: { xs: "1fr", md: "minmax(220px, 1.4fr) minmax(180px, 1fr) minmax(180px, 1fr)" } }}>
+          <TextField
+            label="Buscar"
+            placeholder="Nombre, id o cliente"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(0);
+            }}
+            fullWidth
+          />
+          <FormControl fullWidth>
+            <InputLabel id="controller-filter-client" shrink>Cliente</InputLabel>
+            <Select
+              labelId="controller-filter-client"
+              label="Cliente"
+              notched
+              displayEmpty
+              value={clientFilter}
+              onChange={(event) => {
+                setClientFilter(String(event.target.value));
+                setPage(0);
+              }}
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {clients.map((client) => (
+                <MenuItem key={clientId(client)} value={clientId(client)}>{client.name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth>
+            <InputLabel id="controller-filter-status" shrink>Estado</InputLabel>
+            <Select
+              labelId="controller-filter-status"
+              label="Estado"
+              notched
+              value={statusFilter}
+              onChange={(event) => {
+                setStatusFilter(String(event.target.value));
+                setPage(0);
+              }}
+            >
+              <MenuItem value="all">Todos</MenuItem>
+              <MenuItem value="online">En línea</MenuItem>
+              <MenuItem value="offline">Fuera de línea</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
+
+        <StyledTableContainer>
+          <Paper elevation={3}>
+            <Box sx={{ overflowX: "auto" }}>
+              <Table sx={{ minWidth: 980 }}>
+                <TableHead>
+                  <TableRow sx={{ backgroundColor: "#f4f6f8" }}>
+                    <StyledTableCellHeader>Nombre</StyledTableCellHeader>
+                    <StyledTableCellHeader>Id</StyledTableCellHeader>
+                    <StyledTableCellHeader>Cliente</StyledTableCellHeader>
+                    <StyledTableCellHeader>Estado</StyledTableCellHeader>
+                    {RELAY_LABELS.map((label) => (
+                      <StyledTableCellHeader key={label}>{label}</StyledTableCellHeader>
+                    ))}
+                    <StyledTableCellHeader>Acciones</StyledTableCellHeader>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {visible.length === 0 ? (
+                    <TableRow>
+                      <StyledTableCell colSpan={9}>
+                        <Typography color="text.secondary">
+                          {controllers.length === 0 ? "Todavía no hay controladores." : "Ningún controlador coincide con los filtros."}
+                        </Typography>
+                      </StyledTableCell>
+                    </TableRow>
+                  ) : visible.map((controller) => {
+                    const flags = rulesFromController(controller.rules).relays.map((relay) => relay.enabled);
+                    return (
+                      <StyledTableRow
+                        key={controller._id}
+                        hover
+                        sx={{ cursor: "pointer" }}
+                        onClick={() => navigate(controllerPath(controller))}
+                      >
+                        <StyledTableCell>{controller.name || "Sin nombre"}</StyledTableCell>
+                        <StyledTableCell sx={{ fontFamily: "ui-monospace, SFMono-Regular, monospace" }}>{deviceKey(controller)}</StyledTableCell>
+                        <StyledTableCell>{clientName(clients, controller.cliente)}</StyledTableCell>
+                        <StyledTableCell>
+                          <Chip
+                            size="small"
+                            label={controller.online ? "En línea" : "Fuera de línea"}
+                            color={controller.online ? "success" : "default"}
+                          />
+                        </StyledTableCell>
+                        {RELAY_LABELS.map((label, index) => (
+                          <StyledTableCell key={label}>
+                            <Chip
+                              size="small"
+                              variant={flags[index] ? "filled" : "outlined"}
+                              color={flags[index] ? "primary" : "default"}
+                              label={flags[index] ? "Activo" : "Apagado"}
+                            />
+                          </StyledTableCell>
+                        ))}
+                        <StyledTableCell>
+                          <IconButton
+                            aria-label="Editar"
+                            sx={{ mr: 1, color: "primary.main" }}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              navigate(controllerPath(controller));
+                            }}
+                          >
+                            <SvgColor src="./assets/icons/actions/edit.svg" />
+                          </IconButton>
+                          <IconButton
+                            aria-label="Eliminar"
+                            sx={{ color: "error.main" }}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              removeController(controller);
+                            }}
+                          >
+                            <SvgColor src="./assets/icons/actions/delete.svg" />
+                          </IconButton>
+                        </StyledTableCell>
+                      </StyledTableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </Box>
+            <TablePagination
+              component="div"
+              count={filtered.length}
+              page={safePage}
+              rowsPerPage={rowsPerPage}
+              onPageChange={(_, nextPage) => setPage(nextPage)}
+              onRowsPerPageChange={(event) => {
+                setRowsPerPage(parseInt(event.target.value, 10));
+                setPage(0);
+              }}
+              rowsPerPageOptions={[10, 25, 50]}
+              labelRowsPerPage="Filas"
+              labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+            />
+          </Paper>
+        </StyledTableContainer>
+      </Box>
     </>
   );
 }
