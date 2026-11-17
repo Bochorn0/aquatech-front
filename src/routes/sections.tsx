@@ -19,6 +19,7 @@ export const DashboardGlobal = lazy(() => import('src/pages/dashboard-global'));
 export const DashboardLanding = lazy(() => import('src/pages/dashboard-landing'));
 export const UserPage = lazy(() => import('src/pages/users'));
 export const Controllers = lazy(() => import('src/pages/controllers'));
+export const ControllerDetail = lazy(() => import('src/pages/controller-detail'));
 export const PuntoVenta = lazy(() => import('src/pages/punto-venta'));
 export const PuntoVentaV2 = lazy(() => import('src/pages/punto-venta-v2'));
 export const PuntoVentaDetalle = lazy(() => import('src/pages/punto-venta/punto-venta-detalle'));
@@ -187,6 +188,16 @@ export function Router() {
             </TokenProtectedRoute>
           ),
           path: 'Controladores',
+        },
+        {
+          element: (
+            <TokenProtectedRoute>
+              <PermissionProtectedRoute requiredPath="/controladores">
+                <ControllerDetail />
+              </PermissionProtectedRoute>
+            </TokenProtectedRoute>
+          ),
+          path: 'controladores/:deviceId',
         },
         {
           element: (
