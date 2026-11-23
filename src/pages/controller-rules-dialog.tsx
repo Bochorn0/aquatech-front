@@ -23,7 +23,7 @@ import { get, patch } from "src/api/axiosHelper";
 import { toLatinDisplay } from "./meter-platform/latin-display";
 import { displayVolume } from "./meter-platform/meter-platform-demo";
 
-import type { Controller, ControllerRules, ControllerFlowRule, ControllerFlowRole, ControllerRelayRule, ControllerPressureAlarms, PressureAlarmChannel } from "./types";
+import type { Controller, ControllerRules, ControllerFlowRule, ControllerFlowRole, ControllerFlowAlarm, ControllerRelayRule, ControllerPressureAlarms, PressureAlarmChannel } from "./types";
 
 const FLOW_PINS = [4, 19];
 const INPUT_PINS = [4, 16, 17, 19, 22];
@@ -221,12 +221,27 @@ function savedRelay(rules: ControllerRules, id: number, legacy: boolean) {
   return purified?.mode === "manual" ? purified : undefined;
 }
 
+function copyFlowAlarm(saved?: ControllerFlowAlarm): ControllerFlowAlarm {
+  const channel: PressureAlarmChannel = saved?.channel === "email" || saved?.channel === "both" ? saved.channel : "portal";
+  const minLpm = Number(saved?.min_lpm);
+  const maxLpm = Number(saved?.max_lpm);
+  const margin = Number(saved?.margin_lpm);
+  return {
+    enabled: Boolean(saved?.enabled),
+    min_lpm: Number.isFinite(minLpm) ? minLpm : 0,
+    max_lpm: Number.isFinite(maxLpm) ? maxLpm : 60,
+    margin_lpm: Number.isFinite(margin) ? margin : 5,
+    channel,
+    email: String(saved?.email || "").trim().slice(0, 80),
+  };
+}
+
 function copyFlow(index: number, saved: ControllerFlowRule | undefined, fallback: ControllerFlowRule): ControllerFlowRule {
   if (!saved) return fallback;
   const generic = !saved.name || /^Medidor \d+$/.test(saved.name);
   const name = (generic ? fallback.name : saved.name).slice(0, 15);
   if (saved.origin === "platform" || (saved.device_code && saved.origin !== "pin")) {
-    return { name, origin: "platform", role: fallback.role, device_code: saved.device_code || "" };
+    return { name, origin: "platform", role: fallback.role, device_code: saved.device_code || "", alarm: copyFlowAlarm(saved.alarm) };
   }
   if (saved.origin === "pin" || saved.pin) {
     const pin = FLOW_PINS.includes(Number(saved.pin)) ? Number(saved.pin) : fallback.pin;
@@ -236,6 +251,7 @@ function copyFlow(index: number, saved: ControllerFlowRule | undefined, fallback
       role: fallback.role,
       pin,
       liters_per_pulse: pulseFactor(saved.liters_per_pulse),
+      alarm: copyFlowAlarm(saved.alarm),
     };
   }
   return { ...fallback, name };
@@ -246,8 +262,8 @@ export function defaultRules(): ControllerRules {
     input_active_low: true,
     flows: FLOWS.map((flow) => (
       flow.origin === "pin"
-        ? { name: flow.name, origin: "pin", role: flow.role, pin: flow.pin, liters_per_pulse: LITERS_PER_PULSE }
-        : { name: flow.name, origin: "platform", role: flow.role, device_code: "" }
+        ? { name: flow.name, origin: "pin", role: flow.role, pin: flow.pin, liters_per_pulse: LITERS_PER_PULSE, alarm: copyFlowAlarm() }
+        : { name: flow.name, origin: "platform", role: flow.role, device_code: "", alarm: copyFlowAlarm() }
     )),
     relays: RELAYS.map((relay) => {
       const base: ControllerRelayRule = { id: relay.id, enabled: false, mode: relay.mode };
@@ -324,6 +340,15 @@ export function validateControllerRules(rules: ControllerRules): string | null {
     if (repeated) return "GPIO 4 y GPIO 19 no se pueden repetir entre flujos.";
     const liters = pulseFactor(flow.liters_per_pulse);
     if (liters <= 0 || liters > 100) return `${label}: el factor de conversión va de 0.0001 a 100 litros por pulso.`;
+    const alarm = flow.alarm;
+    if (alarm?.enabled) {
+      if (!(alarm.min_lpm < alarm.max_lpm)) return `${label}: el mínimo del semáforo tiene que ser menor que el máximo.`;
+      if (alarm.margin_lpm < 0) return `${label}: el margen del semáforo no puede ser negativo.`;
+      if (alarm.margin_lpm * 2 >= alarm.max_lpm - alarm.min_lpm) return `${label}: el margen amarillo tiene que dejar una zona verde.`;
+      if ((alarm.channel === "email" || alarm.channel === "both") && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(alarm.email || "")) {
+        return `${label}: escribe el correo de la alerta.`;
+      }
+    }
     return null;
   }, null);
   if (flowError) return flowError;
@@ -648,6 +673,45 @@ export function ControllerRulesFields({ rules, onChange, active }: FieldsProps) 
                       ))}
                     </TextField>
                   )}
+                  <Box display="flex" alignItems="center" justifyContent="space-between">
+                    <Typography variant="body2">Semaforo</Typography>
+                    <Switch
+                      checked={Boolean(flow.alarm?.enabled)}
+                      onChange={(event) => updateFlow(index, { alarm: { ...copyFlowAlarm(flow.alarm), enabled: event.target.checked } })}
+                    />
+                  </Box>
+                  {flow.alarm?.enabled ? (
+                    <Stack spacing={1}>
+                      <Stack direction="row" spacing={1}>
+                        <TextField type="number" label="Mín. L/min" value={flow.alarm.min_lpm} onChange={(event) => updateFlow(index, { alarm: { ...copyFlowAlarm(flow.alarm), min_lpm: Number(event.target.value) } })} inputProps={{ min: 0, step: 0.1 }} fullWidth />
+                        <TextField type="number" label="Máx. L/min" value={flow.alarm.max_lpm} onChange={(event) => updateFlow(index, { alarm: { ...copyFlowAlarm(flow.alarm), max_lpm: Number(event.target.value) } })} inputProps={{ min: 0, step: 0.1 }} fullWidth />
+                        <TextField type="number" label="Margen" value={flow.alarm.margin_lpm} onChange={(event) => updateFlow(index, { alarm: { ...copyFlowAlarm(flow.alarm), margin_lpm: Number(event.target.value) } })} inputProps={{ min: 0, step: 0.1 }} fullWidth />
+                      </Stack>
+                      <TextField
+                        select
+                        label="Aviso"
+                        value={flow.alarm.channel}
+                        onChange={(event) => updateFlow(index, { alarm: { ...copyFlowAlarm(flow.alarm), channel: event.target.value as PressureAlarmChannel } })}
+                        fullWidth
+                        SelectProps={{ native: true }}
+                        InputLabelProps={{ shrink: true }}
+                        sx={{ "& .MuiNativeSelect-select": { paddingTop: "16px", paddingBottom: "8px" } }}
+                        helperText="Verde, amarillo y rojo son los de las alarmas de presión."
+                      >
+                        <option value="portal">Notificación en el portal</option>
+                        <option value="email">Correo</option>
+                        <option value="both">Portal y correo</option>
+                      </TextField>
+                      {flow.alarm.channel !== "portal" ? (
+                        <TextField
+                          label="Correo"
+                          value={flow.alarm.email || ""}
+                          onChange={(event) => updateFlow(index, { alarm: { ...copyFlowAlarm(flow.alarm), email: event.target.value.trim().slice(0, 80) } })}
+                          fullWidth
+                        />
+                      ) : null}
+                    </Stack>
+                  ) : null}
                   {flow.origin === "platform" && metersError ? (
                     <TextField
                       label="Id del equipo"
@@ -774,7 +838,7 @@ export function ControllerRulesFields({ rules, onChange, active }: FieldsProps) 
         );
       })}
 
-      <MarkedSection mark="4" color="#0F3A5A" title="Alarmas de presión" subtitle="Verde dentro del rango, amarillo cerca del límite y rojo fuera. El controlador pinta el recuadro con estos colores.">
+      <MarkedSection mark="4" color="#0F3A5A" title="Alarmas de presión" subtitle="Estos colores pintan la presión y también los flujos que tengan el semáforo activo.">
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mb: 2 }}>
           {([
             ["color_ok", "Verde, en rango"],
