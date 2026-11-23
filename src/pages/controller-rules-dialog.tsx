@@ -23,12 +23,18 @@ import { get, patch } from "src/api/axiosHelper";
 import { toLatinDisplay } from "./meter-platform/latin-display";
 import { displayVolume } from "./meter-platform/meter-platform-demo";
 
-import type { Controller, ControllerRules, ControllerFlowRule, ControllerFlowRole, ControllerRelayRule } from "./types";
+import type { Controller, ControllerRules, ControllerFlowRule, ControllerFlowRole, ControllerRelayRule, ControllerPressureAlarms, PressureAlarmChannel } from "./types";
 
 const FLOW_PINS = [4, 19];
 const INPUT_PINS = [4, 16, 17, 19, 22];
 
 const FLUSH_EVERY_MS = 12 * 60 * 60 * 1000;
+const LITERS_PER_PULSE = 0.00303;
+
+function pulseFactor(value?: number) {
+  if (value == null || !Number.isFinite(value) || value <= 0 || Math.abs(value - 0.1) < 0.000001) return LITERS_PER_PULSE;
+  return value;
+}
 
 const FLOWS: Array<{
   role: ControllerFlowRole;
@@ -78,6 +84,64 @@ const FLOWS: Array<{
 ];
 
 const RELAY_COLORS = ["#0369A1", "#D97706", "#059669", "#7C3AED"];
+const ALARM_OK = "#059669";
+const ALARM_WARN = "#D97706";
+const ALARM_BAD = "#DC2626";
+
+const PRESSURE_SENSORS = [
+  { sensor: 1, title: "S1 · GPIO 34", hint: "0.812 MPa" },
+  { sensor: 2, title: "S2 · GPIO 35", hint: "1.983 MPa" },
+  { sensor: 3, title: "S3 · GPIO 13", hint: "0.915 MPa" },
+  { sensor: 4, title: "S4 · GPIO 12", hint: "2.327 MPa" },
+];
+
+function hexColor(value: unknown, fallback: string) {
+  const text = String(value || "").trim();
+  return /^#[0-9A-Fa-f]{6}$/.test(text) ? text : fallback;
+}
+
+function defaultPressureAlarms(): ControllerPressureAlarms {
+  return {
+    color_ok: ALARM_OK,
+    color_warn: ALARM_WARN,
+    color_alarm: ALARM_BAD,
+    sensors: PRESSURE_SENSORS.map((item) => ({
+      sensor: item.sensor,
+      enabled: false,
+      min_psi: 20,
+      max_psi: 80,
+      margin_psi: 5,
+      channel: "portal" as PressureAlarmChannel,
+      email: "",
+    })),
+  };
+}
+
+function copyPressureAlarms(saved?: ControllerPressureAlarms | null): ControllerPressureAlarms {
+  const base = defaultPressureAlarms();
+  if (!saved) return base;
+  base.color_ok = hexColor(saved.color_ok, ALARM_OK);
+  base.color_warn = hexColor(saved.color_warn, ALARM_WARN);
+  base.color_alarm = hexColor(saved.color_alarm, ALARM_BAD);
+  base.sensors = base.sensors.map((sensor) => {
+    const found = saved.sensors?.find((item) => item.sensor === sensor.sensor);
+    if (!found) return sensor;
+    const channel: PressureAlarmChannel = found.channel === "email" || found.channel === "both" ? found.channel : "portal";
+    const minPsi = Number(found.min_psi);
+    const maxPsi = Number(found.max_psi);
+    const margin = Number(found.margin_psi);
+    return {
+      ...sensor,
+      enabled: Boolean(found.enabled),
+      min_psi: Number.isFinite(minPsi) ? minPsi : sensor.min_psi,
+      max_psi: Number.isFinite(maxPsi) ? maxPsi : sensor.max_psi,
+      margin_psi: Number.isFinite(margin) ? margin : sensor.margin_psi,
+      channel,
+      email: String(found.email || "").trim().slice(0, 80),
+    };
+  });
+  return base;
+}
 
 export function MarkedSection({
   mark,
@@ -171,7 +235,7 @@ function copyFlow(index: number, saved: ControllerFlowRule | undefined, fallback
       origin: "pin",
       role: fallback.role,
       pin,
-      liters_per_pulse: saved.liters_per_pulse ?? 0.1,
+      liters_per_pulse: pulseFactor(saved.liters_per_pulse),
     };
   }
   return { ...fallback, name };
@@ -182,7 +246,7 @@ export function defaultRules(): ControllerRules {
     input_active_low: true,
     flows: FLOWS.map((flow) => (
       flow.origin === "pin"
-        ? { name: flow.name, origin: "pin", role: flow.role, pin: flow.pin, liters_per_pulse: 0.1 }
+        ? { name: flow.name, origin: "pin", role: flow.role, pin: flow.pin, liters_per_pulse: LITERS_PER_PULSE }
         : { name: flow.name, origin: "platform", role: flow.role, device_code: "" }
     )),
     relays: RELAYS.map((relay) => {
@@ -202,6 +266,7 @@ export function defaultRules(): ControllerRules {
       }
       return base;
     }),
+    pressure_alarms: defaultPressureAlarms(),
   };
 }
 
@@ -211,6 +276,7 @@ export function rulesFromController(rules?: ControllerRules | null): ControllerR
   base.input_active_low = rules.input_active_low !== false;
   base.description = String(rules.description || "").slice(0, 280);
   base.flows = base.flows.map((flow, index) => copyFlow(index, rules.flows?.[index], flow));
+  base.pressure_alarms = copyPressureAlarms(rules.pressure_alarms);
   const legacy = legacyRules(rules);
   const raw = savedRelay(rules, 1, legacy);
   const flush = savedRelay(rules, 2, legacy);
@@ -256,7 +322,7 @@ export function validateControllerRules(rules: ControllerRules): string | null {
       (other, otherIndex) => otherIndex !== index && other.origin !== "platform" && Number(other.pin) === pin
     );
     if (repeated) return "GPIO 4 y GPIO 19 no se pueden repetir entre flujos.";
-    const liters = flow.liters_per_pulse ?? 0.1;
+    const liters = pulseFactor(flow.liters_per_pulse);
     if (liters <= 0 || liters > 100) return `${label}: el factor de conversión va de 0.0001 a 100 litros por pulso.`;
     return null;
   }, null);
@@ -265,6 +331,18 @@ export function validateControllerRules(rules: ControllerRules): string | null {
   const switchPins = rules.relays.filter((relay) => relay.mode === "manual").map((relay) => Number(relay.input_a));
   if (switchPins.some((pin) => !INPUT_PINS.includes(pin))) return "Elige un GPIO válido para cada interruptor.";
   if (new Set(switchPins).size !== switchPins.length) return "La bomba de cruda y la de purificada no pueden usar el mismo interruptor.";
+
+  const alarmError = rules.pressure_alarms.sensors.reduce<string | null>((found, sensor) => {
+    if (found || !sensor.enabled) return found;
+    if (!(sensor.min_psi < sensor.max_psi)) return `S${sensor.sensor}: el mínimo tiene que ser menor que el máximo.`;
+    if (sensor.margin_psi < 0) return `S${sensor.sensor}: el margen no puede ser negativo.`;
+    if (sensor.margin_psi * 2 >= sensor.max_psi - sensor.min_psi) return `S${sensor.sensor}: el margen amarillo tiene que dejar una zona verde.`;
+    if ((sensor.channel === "email" || sensor.channel === "both") && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sensor.email || "")) {
+      return `S${sensor.sensor}: escribe el correo de la alerta.`;
+    }
+    return null;
+  }, null);
+  if (alarmError) return alarmError;
 
   return rules.relays.reduce<string | null>((found, relay) => {
     if (found) return found;
@@ -423,6 +501,23 @@ export function ControllerRulesFields({ rules, onChange, active }: FieldsProps) 
     });
   };
 
+  const updateAlarm = (sensor: number, patchAlarm: Partial<ControllerPressureAlarms["sensors"][number]>) => {
+    onChange({
+      ...rules,
+      pressure_alarms: {
+        ...rules.pressure_alarms,
+        sensors: rules.pressure_alarms.sensors.map((item) => (item.sensor === sensor ? { ...item, ...patchAlarm } : item)),
+      },
+    });
+  };
+
+  const updateAlarmColors = (patchColors: Partial<Pick<ControllerPressureAlarms, "color_ok" | "color_warn" | "color_alarm">>) => {
+    onChange({
+      ...rules,
+      pressure_alarms: { ...rules.pressure_alarms, ...patchColors },
+    });
+  };
+
   const updateFlow = (index: number, patchFlow: Partial<ControllerFlowRule>) => {
     onChange({
       ...rules,
@@ -482,7 +577,7 @@ export function ControllerRulesFields({ rules, onChange, active }: FieldsProps) 
                         origin: "pin",
                         device_code: undefined,
                         pin,
-                        liters_per_pulse: flow.liters_per_pulse ?? 0.1,
+                        liters_per_pulse: pulseFactor(flow.liters_per_pulse),
                       });
                     }}
                     fullWidth
@@ -516,11 +611,11 @@ export function ControllerRulesFields({ rules, onChange, active }: FieldsProps) 
                       <TextField
                         type="number"
                         label="Factor de conversión"
-                        value={flow.liters_per_pulse ?? 0.1}
+                        value={pulseFactor(flow.liters_per_pulse)}
                         onChange={(event) => updateFlow(index, { liters_per_pulse: Number(event.target.value) })}
                         inputProps={{ min: 0.0001, max: 100, step: 0.0001 }}
                         fullWidth
-                        helperText="Litros que suma cada pulso. Equysis: 0.1."
+                        helperText="Sugerido Dragino DW-005: 0.00303 L por pulso. F = 5.5 × L/min."
                       />
                     </Box>
                   ) : (
@@ -669,30 +764,85 @@ export function ControllerRulesFields({ rules, onChange, active }: FieldsProps) 
                     inputProps={{ min: 0, step: 0.1 }}
                     fullWidth
                   />
-                  <TextField
-                    type="number"
-                    label="Factor GPIO 4 (L/pulso)"
-                    value={rules.flows[0]?.liters_per_pulse ?? 0.1}
-                    onChange={(event) => updateFlow(0, { liters_per_pulse: Number(event.target.value) })}
-                    inputProps={{ min: 0.0001, max: 100, step: 0.0001 }}
-                    fullWidth
-                    helperText="Agua cruda. Cada pulso se multiplica por este factor."
-                  />
-                  <TextField
-                    type="number"
-                    label="Factor GPIO 19 (L/pulso)"
-                    value={rules.flows[1]?.liters_per_pulse ?? 0.1}
-                    onChange={(event) => updateFlow(1, { liters_per_pulse: Number(event.target.value) })}
-                    inputProps={{ min: 0.0001, max: 100, step: 0.0001 }}
-                    fullWidth
-                    helperText="Cruda a tienda. Este caudal es el que enciende la bomba."
-                  />
+                  <Typography variant="body2" color="text.secondary" sx={{ gridColumn: "1 / -1" }}>
+                    Factor de conversión: {rules.flows[0]?.name || "Agua cruda"} {pulseFactor(rules.flows[0]?.liters_per_pulse).toFixed(5)} L/pulso · {rules.flows[1]?.name || "Cruda a tienda"} {pulseFactor(rules.flows[1]?.liters_per_pulse).toFixed(5)} L/pulso. Se configura en Flujos y medidores.
+                  </Typography>
                 </Box>
               )}
             </Box>
           </MarkedSection>
         );
       })}
+
+      <MarkedSection mark="4" color="#0F3A5A" title="Alarmas de presión" subtitle="Verde dentro del rango, amarillo cerca del límite y rojo fuera. El controlador pinta el recuadro con estos colores.">
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mb: 2 }}>
+          {([
+            ["color_ok", "Verde, en rango"],
+            ["color_warn", "Amarillo, cerca"],
+            ["color_alarm", "Rojo, fuera"],
+          ] as const).map(([key, label]) => (
+            <TextField
+              key={key}
+              type="color"
+              label={label}
+              value={rules.pressure_alarms[key]}
+              onChange={(event) => updateAlarmColors({ [key]: hexColor(event.target.value, rules.pressure_alarms[key]) })}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+            />
+          ))}
+        </Stack>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 1.5 }}>
+          {rules.pressure_alarms.sensors.map((sensor) => {
+            const meta = PRESSURE_SENSORS.find((item) => item.sensor === sensor.sensor);
+            return (
+              <Box key={sensor.sensor} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, p: 1.5 }}>
+                <Box display="flex" justifyContent="space-between" alignItems="center" gap={1}>
+                  <Box>
+                    <Typography variant="subtitle2">{meta?.title || `S${sensor.sensor}`}</Typography>
+                    <Typography variant="caption" color="text.secondary">{meta?.hint}</Typography>
+                  </Box>
+                  <FormControlLabel
+                    sx={{ mr: 0 }}
+                    control={<Switch checked={sensor.enabled} onChange={(event) => updateAlarm(sensor.sensor, { enabled: event.target.checked })} />}
+                    label={sensor.enabled ? "Activa" : "Apagada"}
+                  />
+                </Box>
+                <Stack spacing={1.25} sx={{ mt: 1.5 }}>
+                  <Stack direction="row" spacing={1}>
+                    <TextField type="number" label="Mínimo (psi)" value={sensor.min_psi} onChange={(event) => updateAlarm(sensor.sensor, { min_psi: Number(event.target.value) })} inputProps={{ min: 0, max: 200, step: 1 }} fullWidth />
+                    <TextField type="number" label="Máximo (psi)" value={sensor.max_psi} onChange={(event) => updateAlarm(sensor.sensor, { max_psi: Number(event.target.value) })} inputProps={{ min: 0, max: 200, step: 1 }} fullWidth />
+                    <TextField type="number" label="Margen (psi)" value={sensor.margin_psi} onChange={(event) => updateAlarm(sensor.sensor, { margin_psi: Number(event.target.value) })} inputProps={{ min: 0, max: 50, step: 1 }} fullWidth helperText="Zona amarilla" />
+                  </Stack>
+                  <TextField
+                    select
+                    label="Aviso"
+                    value={sensor.channel}
+                    onChange={(event) => updateAlarm(sensor.sensor, { channel: event.target.value as PressureAlarmChannel })}
+                    fullWidth
+                    SelectProps={{ native: true }}
+                    InputLabelProps={{ shrink: true }}
+                    sx={{ "& .MuiNativeSelect-select": { paddingTop: "16px", paddingBottom: "8px" } }}
+                  >
+                    <option value="portal">Notificación en el portal</option>
+                    <option value="email">Correo</option>
+                    <option value="both">Portal y correo</option>
+                  </TextField>
+                  {sensor.channel !== "portal" ? (
+                    <TextField
+                      label="Correo"
+                      value={sensor.email || ""}
+                      onChange={(event) => updateAlarm(sensor.sensor, { email: event.target.value.trim().slice(0, 80) })}
+                      fullWidth
+                      helperText="Se envía al salir del rango y al volver."
+                    />
+                  ) : null}
+                </Stack>
+              </Box>
+            );
+          })}
+        </Box>
+      </MarkedSection>
     </Stack>
   );
 }

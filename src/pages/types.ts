@@ -340,11 +340,31 @@ export interface ControllerRelayRule {
   duration_ms?: number;
 }
 
+export type PressureAlarmChannel = 'portal' | 'email' | 'both';
+
+export interface ControllerPressureSensorAlarm {
+  sensor: number;
+  enabled: boolean;
+  min_psi: number;
+  max_psi: number;
+  margin_psi: number;
+  channel: PressureAlarmChannel;
+  email?: string;
+}
+
+export interface ControllerPressureAlarms {
+  color_ok: string;
+  color_warn: string;
+  color_alarm: string;
+  sensors: ControllerPressureSensorAlarm[];
+}
+
 export interface ControllerRules {
   input_active_low: boolean;
   description?: string;
   flows: ControllerFlowRule[];
   relays: ControllerRelayRule[];
+  pressure_alarms: ControllerPressureAlarms;
 }
 
 export type PuntoVentaSourceType = 'mqtt' | 'tuya' | 'hybrid' | 'external';
