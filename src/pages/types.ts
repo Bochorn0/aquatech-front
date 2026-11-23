@@ -310,6 +310,15 @@ export interface Controller {
 
 export type ControllerFlowRole = 'gate' | 'chlorine' | 'calc' | 'read';
 
+export interface ControllerFlowAlarm {
+  enabled: boolean;
+  min_lpm: number;
+  max_lpm: number;
+  margin_lpm: number;
+  channel: PressureAlarmChannel;
+  email?: string;
+}
+
 export interface ControllerFlowRule {
   name: string;
   origin: 'pin' | 'platform';
@@ -317,6 +326,7 @@ export interface ControllerFlowRule {
   pin?: number;
   liters_per_pulse?: number;
   device_code?: string;
+  alarm?: ControllerFlowAlarm;
 }
 
 export interface ControllerRelayRule {
