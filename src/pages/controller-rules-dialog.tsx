@@ -257,7 +257,7 @@ export function validateControllerRules(rules: ControllerRules): string | null {
     );
     if (repeated) return "GPIO 4 y GPIO 19 no se pueden repetir entre flujos.";
     const liters = flow.liters_per_pulse ?? 0.1;
-    if (liters <= 0 || liters > 100) return `${label}: los litros por pulso van de 0.0001 a 100.`;
+    if (liters <= 0 || liters > 100) return `${label}: el factor de conversión va de 0.0001 a 100 litros por pulso.`;
     return null;
   }, null);
   if (flowError) return flowError;
@@ -515,12 +515,12 @@ export function ControllerRulesFields({ rules, onChange, active }: FieldsProps) 
                       </TextField>
                       <TextField
                         type="number"
-                        label="Litros por pulso"
+                        label="Factor de conversión"
                         value={flow.liters_per_pulse ?? 0.1}
                         onChange={(event) => updateFlow(index, { liters_per_pulse: Number(event.target.value) })}
                         inputProps={{ min: 0.0001, max: 100, step: 0.0001 }}
                         fullWidth
-                        helperText="Equysis: 0.1 L por pulso."
+                        helperText="Litros que suma cada pulso. Equysis: 0.1."
                       />
                     </Box>
                   ) : (
@@ -668,6 +668,24 @@ export function ControllerRulesFields({ rules, onChange, active }: FieldsProps) 
                     onChange={(event) => updateRelay(relay.id, { hyst_lpm: Number(event.target.value), meter: 1 })}
                     inputProps={{ min: 0, step: 0.1 }}
                     fullWidth
+                  />
+                  <TextField
+                    type="number"
+                    label="Factor GPIO 4 (L/pulso)"
+                    value={rules.flows[0]?.liters_per_pulse ?? 0.1}
+                    onChange={(event) => updateFlow(0, { liters_per_pulse: Number(event.target.value) })}
+                    inputProps={{ min: 0.0001, max: 100, step: 0.0001 }}
+                    fullWidth
+                    helperText="Agua cruda. Cada pulso se multiplica por este factor."
+                  />
+                  <TextField
+                    type="number"
+                    label="Factor GPIO 19 (L/pulso)"
+                    value={rules.flows[1]?.liters_per_pulse ?? 0.1}
+                    onChange={(event) => updateFlow(1, { liters_per_pulse: Number(event.target.value) })}
+                    inputProps={{ min: 0.0001, max: 100, step: 0.0001 }}
+                    fullWidth
+                    helperText="Cruda a tienda. Este caudal es el que enciende la bomba."
                   />
                 </Box>
               )}
