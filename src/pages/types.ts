@@ -293,6 +293,7 @@ export interface Controller {
   owner_id?: string;
   product_id?: string;
   product_name?: string;
+  product_device_id?: string;
   sub?: boolean;
   time_zone?: string;
   restart?: boolean;               // reinicio remoto

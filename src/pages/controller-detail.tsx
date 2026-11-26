@@ -20,7 +20,7 @@ import { get, post, patch } from "src/api/axiosHelper";
 
 import { defaultRules, rulesFromController, ControllerRulesFields, MarkedSection, validateControllerRules } from "./controller-rules-dialog";
 
-import type { Cliente, Controller } from "./types";
+import type { Cliente, Controller, Product } from "./types";
 
 const emptyController: Controller = {
   _id: "",
@@ -47,6 +47,15 @@ function clientName(clients: Cliente[], id?: string) {
   return clients.find((client) => clientId(client) === id)?.name || "Sin cliente";
 }
 
+function productKey(product: Product) {
+  return String(product._id || "");
+}
+
+function productLabel(product: Product) {
+  const device = String(product.device_id || product.id || "").trim();
+  return device ? `${product.name} · ${device}` : product.name;
+}
+
 function sketchDeviceId(controller: Controller) {
   const device = String(controller.device_id || "").trim();
   if (device) return device;
@@ -60,6 +69,8 @@ export default function ControllerDetailPage() {
   const { deviceId = "" } = useParams();
   const isNew = deviceId === "nuevo";
   const [clients, setClients] = useState<Cliente[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [productsNote, setProductsNote] = useState("Cargando productos…");
   const [form, setForm] = useState<Controller>(emptyController);
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
@@ -67,6 +78,16 @@ export default function ControllerDetailPage() {
 
   useEffect(() => {
     get<Cliente[]>(`/clients`).then(setClients).catch((error) => console.error("Error fetching clients:", error));
+    get<Product[]>(`/products`)
+      .then((rows) => {
+        const list = Array.isArray(rows) ? rows : [];
+        setProducts([...list].sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "es")));
+        setProductsNote(list.length ? "" : "No hay productos.");
+      })
+      .catch((error) => {
+        console.error("Error fetching products:", error);
+        setProductsNote("No se pudieron cargar los productos.");
+      });
   }, []);
 
   useEffect(() => {
@@ -112,7 +133,16 @@ export default function ControllerDetailPage() {
     }
 
     setLoading(true);
-    const payload = { name, cliente: form.cliente || null, time_zone: form.time_zone || "-07:00", rules };
+    const linked = products.find((product) => productKey(product) === String(form.product || ""));
+    const payload = {
+      name,
+      cliente: form.cliente || null,
+      time_zone: form.time_zone || "-07:00",
+      product: form.product || null,
+      product_name: linked?.name || (form.product ? form.product_name || null : null),
+      product_device_id: linked ? String(linked.device_id || linked.id || "") || null : (form.product ? form.product_device_id || null : null),
+      rules,
+    };
     try {
       if (form._id) {
         const updated = await patch<Controller>(`/controllers/${encodeURIComponent(deviceId)}`, payload);
@@ -182,7 +212,7 @@ export default function ControllerDetailPage() {
         ) : (
           <>
             <Stack spacing={2}>
-              <MarkedSection mark="1" color="#1877F2" title="Información del controlador" subtitle="Nombre, cliente y una nota de qué equipo es.">
+              <MarkedSection mark="1" color="#1877F2" title="Información del controlador" subtitle="Nombre, cliente y el producto donde se guardan las métricas.">
                 <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: "1fr", "@container (min-width: 640px)": { gridTemplateColumns: "1fr 1fr" } }}>
                   <TextField
                     label="Nombre"
@@ -213,6 +243,39 @@ export default function ControllerDetailPage() {
                         <MenuItem key={clientId(client)} value={clientId(client)}>{client.name}</MenuItem>
                       ))}
                     </Select>
+                  </FormControl>
+                  <FormControl fullWidth>
+                    <InputLabel id="controller-product" shrink>Producto</InputLabel>
+                    <Select
+                      labelId="controller-product"
+                      label="Producto"
+                      notched
+                      displayEmpty
+                      value={form.product ? String(form.product) : ""}
+                      onChange={(event) => {
+                        const nextId = String(event.target.value);
+                        const linked = products.find((product) => productKey(product) === nextId);
+                        setForm((prev) => ({
+                          ...prev,
+                          product: nextId,
+                          product_name: linked?.name || "",
+                          product_device_id: linked ? String(linked.device_id || linked.id || "") : "",
+                        }));
+                      }}
+                    >
+                      <MenuItem value="">Sin producto</MenuItem>
+                      {form.product && !products.some((product) => productKey(product) === String(form.product)) ? (
+                        <MenuItem value={String(form.product)}>{form.product_name || `Producto ${form.product}`}</MenuItem>
+                      ) : null}
+                      {products.filter((product) => productKey(product)).map((product) => (
+                        <MenuItem key={productKey(product)} value={productKey(product)}>{productLabel(product)}</MenuItem>
+                      ))}
+                    </Select>
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75 }}>
+                      {productsNote || (form.product
+                        ? "Producción y rechazo de este controlador se guardan en los logs de este producto."
+                        : "Sin producto, las métricas de la corrida no tienen dónde guardarse.")}
+                    </Typography>
                   </FormControl>
                   <TextField
                     select
