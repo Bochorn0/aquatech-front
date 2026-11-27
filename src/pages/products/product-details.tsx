@@ -489,7 +489,7 @@ const ProductDetail: React.FC = () => {
           ) : null}
         </Stack>
 
-        <Paper sx={{ p: 3, mb: 4 }}>
+        {!isTodoEnUnoType(product.product_type) && <Paper sx={{ p: 3, mb: 4 }}>
           <Typography variant="h6" gutterBottom textAlign='center'>
             Product Details
           </Typography>
@@ -551,7 +551,7 @@ const ProductDetail: React.FC = () => {
               </Typography>
             </Grid>
           </Grid>
-        </Paper>
+        </Paper>}
         {isTodoEnUnoType(product.product_type) && <TodoEnUnoPanel product={product} />}
         {isSensorFlujoType(product.product_type) && <SensorFlujoPanel product={product} />}
         {product.product_type === 'Nivel' && charData && (
