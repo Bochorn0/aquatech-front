@@ -4,7 +4,17 @@ export const DEFAULT_PRODUCT_TYPES = [
   'Apagador',
   'Pressure',
   'sensor_flujo',
+  'todo_en_uno',
 ] as const;
+
+export function isTodoEnUnoType(value?: string | null): boolean {
+  return normalizeProductTypeKey(value) === 'todo_en_uno';
+}
+
+export function productTypeLabel(value?: string | null): string {
+  if (isTodoEnUnoType(value)) return 'Todo en uno';
+  return String(value || '').trim();
+}
 
 export function normalizeProductTypeKey(value?: string | null): string {
   return String(value || '')

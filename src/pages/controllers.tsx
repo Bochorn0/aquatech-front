@@ -27,7 +27,7 @@ import { get, remove } from "src/api/axiosHelper";
 import { SvgColor } from "src/components/svg-color";
 import { StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
 
-import { rulesFromController } from "./controller-rules-dialog";
+import { rulesFromController } from "./controller-rules-general";
 
 import type { Cliente, Controller } from "./types";
 
