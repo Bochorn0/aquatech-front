@@ -589,12 +589,12 @@ export function ControllerRulesFields({ rules, onChange, active }: FieldsProps) 
 
   const updateFlow = (index: number, patchFlow: Partial<ControllerFlowRule>) => {
     const meta = FLOWS[index];
-    const patch = meta?.origin === "pin"
+    const nextFlow = meta?.origin === "pin"
       ? { ...patchFlow, origin: "pin" as const, role: meta.role, pin: meta.pin, device_code: undefined }
       : patchFlow;
     onChange({
       ...rules,
-      flows: rules.flows.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)),
+      flows: rules.flows.map((item, itemIndex) => (itemIndex === index ? { ...item, ...nextFlow } : item)),
     });
   };
 
