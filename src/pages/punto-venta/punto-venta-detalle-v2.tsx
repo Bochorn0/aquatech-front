@@ -645,8 +645,12 @@ export default function PuntoVentaDetalleV2() {
   const osmosis = osmosisSystems.filter((s: any) => (s.resourceType || '').toString().toLowerCase() === 'osmosis');
   const tiwaterProduct = osmosisSystems.find((s: any) => (s.resourceType || '').toString().toLowerCase() === 'tiwater') || null;
   const productos = punto?.productos || [];
-  const todoEnUnoProduct = productos.find((p: any) => isTodoEnUnoType(p.product_type))
+  const puntoEsTodoEnUno = isTodoEnUnoType(punto?.product_type);
+  const todoDesdeProducto = productos.find((p: any) => isTodoEnUnoType(p.product_type))
     || (isTodoEnUnoType(tiwaterProduct?.product_type) ? tiwaterProduct : null);
+  const todoEnUnoProduct = puntoEsTodoEnUno
+    ? { ...(todoDesdeProducto || tiwaterProduct || {}), product_type: 'todo_en_uno', name: (todoDesdeProducto || tiwaterProduct)?.name || punto?.name }
+    : todoDesdeProducto;
   const niveles = productos.filter((p: any) => p.product_type === 'Nivel');
   const metricas = productos.filter((p: any) => p.product_type === 'Metrica');
   const isTuyaOrigin = usesTuyaSource(punto?.source_type);
