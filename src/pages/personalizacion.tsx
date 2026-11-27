@@ -35,7 +35,7 @@ import {
 } from "@mui/material";
 
 import { CustomTab, CustomTabs, StyledTableRow, StyledTableCell, StyledTableContainer, StyledTableCellHeader } from "src/utils/styles";
-import { mergeProductTypeOptions } from 'src/utils/product-types';
+import { mergeProductTypeOptions, productTypeLabel } from 'src/utils/product-types';
 
 import { CONFIG } from "src/config-global";
 import { get as getV2 } from "src/api/axiosHelperV2";
@@ -1750,7 +1750,7 @@ const handlePvProductosChange = (e: any) => {
                 <InputLabel shrink>Tipo de Producto</InputLabel>
                 <Select value={formData.product_type} name="product_type" onChange={handleChange} fullWidth>
                   {productTypeOptions.map((type) => (
-                    <MenuItem key={type} value={type}>{type}</MenuItem>
+                    <MenuItem key={type} value={type}>{productTypeLabel(type)}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
@@ -1990,7 +1990,7 @@ const handlePvProductosChange = (e: any) => {
                   <TextField
                     {...params}
                     label="Tipo de producto"
-                    helperText="Elige uno o escribe un tipo nuevo. sensor_flujo = medidor Equysis (sin Tuya)."
+                    helperText="Elige uno o escribe un tipo nuevo. sensor_flujo = medidor Equysis. todo_en_uno = cinco presiones, cinco flujos y tres relevadores."
                   />
                 )}
               />

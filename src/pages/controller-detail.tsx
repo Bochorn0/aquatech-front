@@ -17,8 +17,20 @@ import {
 } from "@mui/material";
 
 import { get, post, patch } from "src/api/axiosHelper";
+import { isTodoEnUnoType } from "src/utils/product-types";
 
-import { defaultRules, rulesFromController, ControllerRulesFields, MarkedSection, validateControllerRules } from "./controller-rules-dialog";
+import {
+  MarkedSection,
+  defaultRules as generalDefaultRules,
+  rulesFromController as generalRulesFromController,
+  ControllerRulesFields as GeneralRulesFields,
+  validateControllerRules as generalValidate,
+} from "./controller-rules-general";
+import {
+  rulesFromController as todoRulesFromController,
+  ControllerRulesFields as TodoRulesFields,
+  validateControllerRules as todoValidate,
+} from "./controller-rules-dialog";
 
 import type { Cliente, Controller, Product } from "./types";
 
@@ -92,7 +104,7 @@ export default function ControllerDetailPage() {
 
   useEffect(() => {
     if (isNew) {
-      setForm({ ...emptyController, rules: defaultRules() });
+      setForm({ ...emptyController, rules: generalDefaultRules() });
       setMissing(false);
       setReady(true);
       return undefined;
@@ -104,7 +116,7 @@ export default function ControllerDetailPage() {
     get<Controller>(`/controllers/${encodeURIComponent(deviceId)}`)
       .then((controller) => {
         if (cancelled) return;
-        setForm({ ...controller, rules: rulesFromController(controller.rules) });
+        setForm({ ...controller, rules: controller.rules || null });
         setReady(true);
       })
       .catch((error) => {
@@ -118,6 +130,12 @@ export default function ControllerDetailPage() {
       cancelled = true;
     };
   }, [deviceId, isNew]);
+
+  const linkedProduct = products.find((product) => productKey(product) === String(form.product || ""));
+  const todo = isTodoEnUnoType(linkedProduct?.product_type);
+  const rulesFromController = todo ? todoRulesFromController : generalRulesFromController;
+  const validateControllerRules = todo ? todoValidate : generalValidate;
+  const RulesFields = todo ? TodoRulesFields : GeneralRulesFields;
 
   const save = async () => {
     const name = form.name.trim();
@@ -133,7 +151,7 @@ export default function ControllerDetailPage() {
     }
 
     setLoading(true);
-    const linked = products.find((product) => productKey(product) === String(form.product || ""));
+    const linked = linkedProduct;
     const payload = {
       name,
       cliente: form.cliente || null,
@@ -307,7 +325,7 @@ export default function ControllerDetailPage() {
                 </Box>
               </MarkedSection>
 
-              <ControllerRulesFields
+              <RulesFields
                 rules={rulesFromController(form.rules)}
                 onChange={(rules) => setForm((prev) => ({ ...prev, rules }))}
                 active={ready}

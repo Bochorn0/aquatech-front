@@ -28,12 +28,13 @@ import {
 } from '@mui/material';
 
 import { normalizeProductTypeFromStatus } from 'src/utils/product-apagador';
-import { isSensorFlujoType } from 'src/utils/product-types';
+import { isSensorFlujoType, isTodoEnUnoType } from 'src/utils/product-types';
 
 import { get } from 'src/api/axiosHelper';
 import { CONFIG } from 'src/config-global';
 
 import ProductLogs from './product-logs';
+import { TodoEnUnoPanel } from './todo-en-uno-panel';
 import ProductHistoricoLogs from './product-historico-logs';
 import { MultipleBarChart } from '../charts/multiple-bar-chart';
 import { SensorFlujoHistoricoChart } from '../charts/sensor-flujo-historico-chart';
@@ -551,6 +552,7 @@ const ProductDetail: React.FC = () => {
             </Grid>
           </Grid>
         </Paper>
+        {isTodoEnUnoType(product.product_type) && <TodoEnUnoPanel product={product} />}
         {isSensorFlujoType(product.product_type) && <SensorFlujoPanel product={product} />}
         {product.product_type === 'Nivel' && charData && (
           <Paper sx={{ p: 3, mb: 4 }}>
