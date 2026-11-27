@@ -25,8 +25,7 @@ import { displayVolume } from "./meter-platform/meter-platform-demo";
 
 import type { Controller, ControllerRules, ControllerFlowRule, ControllerFlowRole, ControllerFlowAlarm, ControllerRelayRule, ControllerPressureAlarms, PressureAlarmChannel } from "./types";
 
-const FLOW_PINS = [4, 19];
-const INPUT_PINS = [4, 16, 17, 19, 22];
+const INPUT_PINS = [16, 22];
 
 const FLUSH_EVERY_MS = 12 * 60 * 60 * 1000;
 const LITERS_PER_PULSE = 0.00303;
@@ -45,55 +44,114 @@ const FLOWS: Array<{
   pin?: number;
 }> = [
   {
-    role: "gate",
-    title: "1 · Agua cruda",
-    name: "Agua cruda",
-    help: "Si este medidor no marca flujo, no arranca ningún relevador.",
-    origin: "pin",
-    pin: 4,
+    role: "read",
+    title: "1 · Cruda",
+    name: "Entrada cruda",
+    help: "Medidor digital. Solo informativo.",
+    origin: "platform",
   },
   {
     role: "chlorine",
-    title: "2 · Agua cruda a tienda",
-    name: "Cruda a tienda",
-    help: "Cuando este flujo es mayor a 0, enciende la bomba de cloro.",
+    title: "2 · Cruda tienda",
+    name: "Tienda cruda",
+    help: "Pin físico GPIO 19. No se elige medidor. Con flujo enciende la bomba de cloro.",
     origin: "pin",
     pin: 19,
   },
   {
     role: "calc",
-    title: "3 · Rechazo",
-    name: "Rechazo",
-    help: "Se lee para cálculo. No enciende relevadores.",
-    origin: "platform",
+    title: "3 · Producción",
+    name: "Produccion",
+    help: "Pin físico GPIO 4. No se elige medidor.",
+    origin: "pin",
+    pin: 4,
   },
   {
     role: "calc",
-    title: "4 · Producción",
-    name: "Produccion",
-    help: "Se lee para cálculo. No enciende relevadores.",
-    origin: "platform",
+    title: "4 · Rechazo",
+    name: "Rechazo",
+    help: "Pin físico GPIO 17. No se elige medidor.",
+    origin: "pin",
+    pin: 17,
   },
   {
     role: "read",
-    title: "5 · Agua purificada a tienda",
-    name: "Pura a tienda",
-    help: "Lectura del agua que sale a la tienda. La bomba se enciende con su interruptor.",
+    title: "5 · Tienda purificada",
+    name: "Tda purificada",
+    help: "Medidor digital. Solo informativo.",
     origin: "platform",
   },
 ];
 
-const RELAY_COLORS = ["#0369A1", "#D97706", "#059669", "#7C3AED"];
+const RELAY_COLORS = ["#0369A1", "#059669", "#D97706"];
 const ALARM_OK = "#059669";
 const ALARM_WARN = "#D97706";
 const ALARM_BAD = "#DC2626";
 
 const PRESSURE_SENSORS = [
-  { sensor: 1, title: "S1 · GPIO 34", hint: "0.812 MPa" },
-  { sensor: 2, title: "S2 · GPIO 35", hint: "1.983 MPa" },
-  { sensor: 3, title: "S3 · GPIO 13", hint: "0.915 MPa" },
+  { sensor: 1, title: "S1 · GPIO 26", hint: "0.812 MPa" },
+  { sensor: 2, title: "S2 · GPIO 27", hint: "1.983 MPa" },
+  { sensor: 3, title: "S3 · GPIO 14", hint: "0.915 MPa" },
   { sensor: 4, title: "S4 · GPIO 12", hint: "2.327 MPa" },
+  { sensor: 5, title: "S5 · GPIO 13", hint: "0.915 MPa" },
 ];
+
+function thresholdText(value: number) {
+  if (!Number.isFinite(value)) return "—";
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+function SemaphoreLegend({
+  min,
+  max,
+  margin,
+  ok,
+  warn,
+  alarm,
+}: {
+  min: number;
+  max: number;
+  margin: number;
+  ok: string;
+  warn: string;
+  alarm: string;
+}) {
+  const low = Number(min);
+  const high = Number(max);
+  const edge = Number(margin);
+  const ready = Number.isFinite(low) && Number.isFinite(high) && Number.isFinite(edge) && high > low && edge >= 0;
+  if (!ready) {
+    return (
+      <Typography variant="caption" color="text.secondary">
+        El mínimo tiene que ser menor que el máximo.
+      </Typography>
+    );
+  }
+  const innerLow = Math.min(high, low + edge);
+  const innerHigh = Math.max(low, high - edge);
+  const hasGreen = innerLow < innerHigh;
+  const bands = [
+    { color: alarm, text: `menos de ${thresholdText(low)} y más de ${thresholdText(high)}` },
+    ...(edge > 0 ? [{
+      color: warn,
+      text: hasGreen
+        ? `${thresholdText(low)} a ${thresholdText(innerLow)} y ${thresholdText(innerHigh)} a ${thresholdText(high)}`
+        : `${thresholdText(low)} a ${thresholdText(high)}`,
+    }] : []),
+    ...(hasGreen ? [{ color: ok, text: `${thresholdText(innerLow)} a ${thresholdText(innerHigh)}` }] : []),
+  ];
+  return (
+    <Box sx={{ display: "flex", flexWrap: "wrap", columnGap: 1.75, rowGap: 0.5, alignItems: "center" }}>
+      {bands.map((band) => (
+        <Box key={band.text} sx={{ display: "inline-flex", alignItems: "center", gap: 0.7 }}>
+          <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: band.color, flexShrink: 0 }} />
+          <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.3 }}>{band.text}</Typography>
+        </Box>
+      ))}
+    </Box>
+  );
+}
 
 function hexColor(value: unknown, fallback: string) {
   const text = String(value || "").trim();
@@ -175,29 +233,23 @@ export function MarkedSection({
 const RELAYS: Array<{ id: number; title: string; mode: ControllerRelayRule["mode"]; help: string; defaultPin?: number }> = [
   {
     id: 1,
-    title: "1 · Válvula y bomba de agua cruda",
+    title: "1 · Bomba",
     mode: "manual",
     defaultPin: 16,
-    help: "El interruptor de baja y llenado abre la válvula solenoide. La válvula enciende la bomba.",
+    help: "El interruptor físico enciende la bomba. Relevador GPIO 32.",
   },
   {
     id: 2,
-    title: "2 · Flush",
-    mode: "timer",
-    help: "Corre solo. El periodo sale de esta pantalla. Si no se cambia, el flush es cada 12 horas.",
+    title: "2 · Bomba de cloro",
+    mode: "flow",
+    help: "Enciende cuando hay flujo en tienda cruda. Relevador GPIO 33.",
   },
   {
     id: 3,
-    title: "3 · Bomba de cloro",
-    mode: "flow",
-    help: "Enciende cuando el agua cruda a tienda es mayor a 0. Sin flujo de agua cruda permanece apagada.",
-  },
-  {
-    id: 4,
-    title: "4 · Bomba de agua purificada",
-    mode: "manual",
+    title: "3 · Flush",
+    mode: "timer",
     defaultPin: 22,
-    help: "Un interruptor físico enciende la bomba. No usa el mismo pin que la bomba de agua cruda.",
+    help: "Periodo de esta pantalla, o el interruptor físico. Relevador GPIO 25.",
   },
 ];
 
@@ -236,25 +288,23 @@ function copyFlowAlarm(saved?: ControllerFlowAlarm): ControllerFlowAlarm {
   };
 }
 
-function copyFlow(index: number, saved: ControllerFlowRule | undefined, fallback: ControllerFlowRule): ControllerFlowRule {
+function copyFlow(_index: number, saved: ControllerFlowRule | undefined, fallback: ControllerFlowRule): ControllerFlowRule {
   if (!saved) return fallback;
   const generic = !saved.name || /^Medidor \d+$/.test(saved.name);
   const name = (generic ? fallback.name : saved.name).slice(0, 15);
-  if (saved.origin === "platform" || (saved.device_code && saved.origin !== "pin")) {
-    return { name, origin: "platform", role: fallback.role, device_code: saved.device_code || "", alarm: copyFlowAlarm(saved.alarm) };
-  }
-  if (saved.origin === "pin" || saved.pin) {
-    const pin = FLOW_PINS.includes(Number(saved.pin)) ? Number(saved.pin) : fallback.pin;
+  const alarm = copyFlowAlarm(saved.alarm);
+  if (fallback.origin === "pin") {
     return {
       name,
       origin: "pin",
       role: fallback.role,
-      pin,
+      pin: fallback.pin,
       liters_per_pulse: pulseFactor(saved.liters_per_pulse),
-      alarm: copyFlowAlarm(saved.alarm),
+      alarm,
     };
   }
-  return { ...fallback, name };
+  const deviceCode = saved.origin === "platform" || saved.device_code ? saved.device_code || "" : "";
+  return { name, origin: "platform", role: fallback.role, device_code: deviceCode, alarm };
 }
 
 export function defaultRules(): ControllerRules {
@@ -274,6 +324,7 @@ export function defaultRules(): ControllerRules {
       if (relay.mode === "timer") {
         base.interval_ms = FLUSH_EVERY_MS;
         base.duration_ms = 30000;
+        base.input_a = relay.defaultPin ?? 22;
       }
       if (relay.mode === "flow") {
         base.meter = 1;
@@ -293,33 +344,30 @@ export function rulesFromController(rules?: ControllerRules | null): ControllerR
   base.description = String(rules.description || "").slice(0, 280);
   base.flows = base.flows.map((flow, index) => copyFlow(index, rules.flows?.[index], flow));
   base.pressure_alarms = copyPressureAlarms(rules.pressure_alarms);
-  const legacy = legacyRules(rules);
-  const raw = savedRelay(rules, 1, legacy);
-  const flush = savedRelay(rules, 2, legacy);
-  const chlorine = savedRelay(rules, 3, legacy);
-  const purified = savedRelay(rules, 4, legacy);
+  const list = rules.relays || [];
+  const find = (id: number) => list.find((relay) => relay.id === id);
+  const oldShape = find(2)?.mode === "timer" && find(3)?.mode === "flow";
+  const raw = legacyRules(rules) ? savedRelay(rules, 1, true) : find(1);
+  const chlorine = legacyRules(rules) ? savedRelay(rules, 3, true) : (oldShape ? find(3) : find(2));
+  const flush = legacyRules(rules) ? savedRelay(rules, 2, true) : (oldShape ? find(2) : find(3));
   if (raw) {
     base.relays[0].enabled = Boolean(raw.enabled);
     base.relays[0].on = Boolean(raw.on);
     base.relays[0].input_a = INPUT_PINS.includes(Number(raw.input_a)) ? Number(raw.input_a) : 16;
   }
-  if (flush?.mode === "timer" || flush?.interval_ms || flush?.duration_ms) {
-    base.relays[1].enabled = Boolean(flush.enabled);
-    if (flush.interval_ms) base.relays[1].interval_ms = flush.interval_ms;
-    if (flush.duration_ms) base.relays[1].duration_ms = flush.duration_ms;
-  }
   if (chlorine?.mode === "flow" || chlorine?.min_lpm != null || chlorine?.meter != null) {
-    base.relays[2].enabled = Boolean(chlorine.enabled);
-    base.relays[2].meter = 1;
-    base.relays[2].min_lpm = Number(chlorine.min_lpm) || 0;
-    base.relays[2].hyst_lpm = Number(chlorine.hyst_lpm) || 0;
+    base.relays[1].enabled = Boolean(chlorine.enabled);
+    base.relays[1].meter = 1;
+    base.relays[1].min_lpm = Number(chlorine.min_lpm) || 0;
+    base.relays[1].hyst_lpm = Number(chlorine.hyst_lpm) || 0;
   }
-  if (purified) {
-    base.relays[3].enabled = Boolean(purified.enabled);
-    base.relays[3].on = Boolean(purified.on);
-    const pin = Number(purified.input_a);
+  if (flush?.mode === "timer" || flush?.interval_ms || flush?.duration_ms) {
+    base.relays[2].enabled = Boolean(flush.enabled);
+    if (flush.interval_ms) base.relays[2].interval_ms = flush.interval_ms;
+    if (flush.duration_ms) base.relays[2].duration_ms = flush.duration_ms;
+    const savedPin = oldShape ? Number(find(4)?.input_a) : Number(flush.input_a);
     const rawPin = Number(base.relays[0].input_a);
-    base.relays[3].input_a = INPUT_PINS.includes(pin) && pin !== rawPin ? pin : 22;
+    base.relays[2].input_a = INPUT_PINS.includes(savedPin) && savedPin !== rawPin ? savedPin : 22;
   }
   return base;
 }
@@ -329,15 +377,11 @@ export function validateControllerRules(rules: ControllerRules): string | null {
     if (found) return found;
     const label = FLOWS[index]?.title || `Flujo ${index + 1}`;
     if (flow.origin === "platform") {
-      const optional = flow.role === "calc" || flow.role === "read";
-      return optional || flow.device_code?.trim() ? null : `${label}: elige el equipo en Medidores.`;
+      return flow.role === "read" || flow.device_code?.trim() ? null : `${label}: elige el equipo en Medidores.`;
     }
     const pin = Number(flow.pin);
-    if (!FLOW_PINS.includes(pin)) return `${label}: elige GPIO 4 o GPIO 19.`;
-    const repeated = rules.flows.some(
-      (other, otherIndex) => otherIndex !== index && other.origin !== "platform" && Number(other.pin) === pin
-    );
-    if (repeated) return "GPIO 4 y GPIO 19 no se pueden repetir entre flujos.";
+    const expected = Number(FLOWS[index]?.pin);
+    if (pin !== expected) return `${label}: este flujo va en GPIO ${expected}.`;
     const liters = pulseFactor(flow.liters_per_pulse);
     if (liters <= 0 || liters > 100) return `${label}: el factor de conversión va de 0.0001 a 100 litros por pulso.`;
     const alarm = flow.alarm;
@@ -353,9 +397,9 @@ export function validateControllerRules(rules: ControllerRules): string | null {
   }, null);
   if (flowError) return flowError;
 
-  const switchPins = rules.relays.filter((relay) => relay.mode === "manual").map((relay) => Number(relay.input_a));
+  const switchPins = rules.relays.filter((relay) => relay.mode === "manual" || relay.mode === "timer").map((relay) => Number(relay.input_a));
   if (switchPins.some((pin) => !INPUT_PINS.includes(pin))) return "Elige un GPIO válido para cada interruptor.";
-  if (new Set(switchPins).size !== switchPins.length) return "La bomba de cruda y la de purificada no pueden usar el mismo interruptor.";
+  if (new Set(switchPins).size !== switchPins.length) return "La bomba y el flush no pueden usar el mismo interruptor.";
 
   const alarmError = rules.pressure_alarms.sensors.reduce<string | null>((found, sensor) => {
     if (found || !sensor.enabled) return found;
@@ -544,29 +588,31 @@ export function ControllerRulesFields({ rules, onChange, active }: FieldsProps) 
   };
 
   const updateFlow = (index: number, patchFlow: Partial<ControllerFlowRule>) => {
+    const meta = FLOWS[index];
+    const patch = meta?.origin === "pin"
+      ? { ...patchFlow, origin: "pin" as const, role: meta.role, pin: meta.pin, device_code: undefined }
+      : patchFlow;
     onChange({
       ...rules,
-      flows: rules.flows.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patchFlow } : item)),
+      flows: rules.flows.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)),
     });
   };
 
   const flowRole = (index: number) => {
-    if (index <= 1) return "Arranque";
-    if (index <= 3) return "Cálculo";
+    if (index === 1) return "Arranque";
+    if (index === 2 || index === 3) return "Cálculo";
     return "Lectura";
   };
 
   return (
     <Stack spacing={2.5}>
-      <MarkedSection mark="2" color="#0891B2" title="Flujos y medidores" subtitle="Pin físico en el controlador, o medidor digital guardado en la base.">
+      <MarkedSection mark="2" color="#0891B2" title="Flujos y medidores" subtitle="1 cruda y 5 tienda purificada son medidores digitales. 2 cruda tienda es GPIO 19, 3 producción es GPIO 4 y 4 rechazo es GPIO 17.">
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
           {metersLoading ? "Cargando medidores guardados…" : metersNote}
         </Typography>
         <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "1fr", "@container (min-width: 720px)": { gridTemplateColumns: "1fr 1fr" }, "@container (min-width: 1100px)": { gridTemplateColumns: "1fr 1fr 1fr" } }}>
           {rules.flows.map((flow, index) => {
-            const takenPins = rules.flows
-              .filter((other, otherIndex) => otherIndex !== index && other.origin === "pin")
-              .map((other) => Number(other.pin));
+            const fixedPin = FLOWS[index]?.origin === "pin";
             return (
               <Box key={index} sx={{ containerType: "inline-size", minWidth: 0, p: 1.5, borderRadius: 1.5, bgcolor: "#F0FDFA", border: "1px solid #99F6E4" }}>
                 <Box display="flex" flexWrap="wrap" alignItems="center" gap={1} mb={1}>
@@ -584,55 +630,12 @@ export function ControllerRulesFields({ rules, onChange, active }: FieldsProps) 
                     fullWidth
                     helperText="Máximo 15 caracteres."
                   />
-                  <TextField
-                    select
-                    label="Origen"
-                    value={flow.origin}
-                    onChange={(event) => {
-                      const origin = event.target.value === "platform" ? "platform" : "pin";
-                      if (origin === "platform") {
-                        updateFlow(index, { origin, pin: undefined });
-                        return;
-                      }
-                      const current = Number(flow.pin);
-                      const pin = FLOW_PINS.includes(current) && !takenPins.includes(current)
-                        ? current
-                        : FLOW_PINS.find((item) => !takenPins.includes(item));
-                      updateFlow(index, {
-                        origin: "pin",
-                        device_code: undefined,
-                        pin,
-                        liters_per_pulse: pulseFactor(flow.liters_per_pulse),
-                      });
-                    }}
-                    fullWidth
-                    SelectProps={{ native: true }}
-                    InputLabelProps={{ shrink: true }}
-                    sx={{ "& .MuiNativeSelect-select": { paddingTop: "16px", paddingBottom: "8px" } }}
-                  >
-                    <option value="pin">Pin físico</option>
-                    <option value="platform">Medidor digital</option>
-                  </TextField>
-                  {flow.origin === "pin" ? (
+                  {fixedPin ? (
                     <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: "1fr", "@container (min-width: 480px)": { gridTemplateColumns: "1fr 1fr" } }}>
-                      <TextField
-                        select
-                        label="Pin"
-                        value={flow.pin ?? ""}
-                        onChange={(event) => updateFlow(index, { pin: Number(event.target.value) })}
-                        fullWidth
-                        SelectProps={{ native: true }}
-                        InputLabelProps={{ shrink: true }}
-                    sx={{ "& .MuiNativeSelect-select": { paddingTop: "16px", paddingBottom: "8px" } }}
-                        helperText="Por omisión, agua cruda en GPIO 4 y cruda a tienda en GPIO 19."
-                      >
-                        <option value="">Elige un pin</option>
-                        {FLOW_PINS.map((pin) => (
-                          <option key={pin} value={pin} disabled={takenPins.includes(pin)}>
-                            GPIO {pin}{takenPins.includes(pin) ? " · ocupado" : ""}
-                          </option>
-                        ))}
-                      </TextField>
+                      <Box sx={{ px: 1.5, py: 1.25, borderRadius: 1, bgcolor: "#CCFBF1", border: "1px solid #5EEAD4" }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>GPIO {FLOWS[index]?.pin}</Typography>
+                        <Typography variant="caption" color="text.secondary">Pin físico. Este flujo no lleva medidor digital.</Typography>
+                      </Box>
                       <TextField
                         type="number"
                         label="Factor de conversión"
@@ -687,6 +690,14 @@ export function ControllerRulesFields({ rules, onChange, active }: FieldsProps) 
                         <TextField type="number" label="Máx. L/min" value={flow.alarm.max_lpm} onChange={(event) => updateFlow(index, { alarm: { ...copyFlowAlarm(flow.alarm), max_lpm: Number(event.target.value) } })} inputProps={{ min: 0, step: 0.1 }} fullWidth />
                         <TextField type="number" label="Margen" value={flow.alarm.margin_lpm} onChange={(event) => updateFlow(index, { alarm: { ...copyFlowAlarm(flow.alarm), margin_lpm: Number(event.target.value) } })} inputProps={{ min: 0, step: 0.1 }} fullWidth />
                       </Stack>
+                      <SemaphoreLegend
+                        min={flow.alarm.min_lpm}
+                        max={flow.alarm.max_lpm}
+                        margin={flow.alarm.margin_lpm}
+                        ok={rules.pressure_alarms.color_ok}
+                        warn={rules.pressure_alarms.color_warn}
+                        alarm={rules.pressure_alarms.color_alarm}
+                      />
                       <TextField
                         select
                         label="Aviso"
@@ -756,10 +767,10 @@ export function ControllerRulesFields({ rules, onChange, active }: FieldsProps) 
                     SelectProps={{ native: true }}
                     InputLabelProps={{ shrink: true }}
                     sx={{ "& .MuiNativeSelect-select": { paddingTop: "16px", paddingBottom: "8px" } }}
-                    helperText="Se cierra a GND. En esta placa: 4, 16, 17, 19 o 22."
+                    helperText="Se cierra a GND. 16 es la bomba y 22 el flush."
                   >
                     {INPUT_PINS.map((pin) => {
-                      const taken = rules.relays.some((other) => other.mode === "manual" && other.id !== relay.id && Number(other.input_a) === pin);
+                      const taken = rules.relays.some((other) => other.id !== relay.id && (other.mode === "manual" || other.mode === "timer") && Number(other.input_a) === pin);
                       return (
                         <option key={pin} value={pin} disabled={taken}>
                           GPIO {pin}{taken ? " · ocupado" : ""}
@@ -790,6 +801,26 @@ export function ControllerRulesFields({ rules, onChange, active }: FieldsProps) 
               {relay.mode === "timer" && (
                 <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: "1fr", "@container (min-width: 520px)": { gridTemplateColumns: "1fr 1fr" } }}>
                   <TextField
+                    select
+                    label="Pin del interruptor"
+                    value={relay.input_a ?? meta?.defaultPin ?? 22}
+                    onChange={(event) => updateRelay(relay.id, { input_a: Number(event.target.value) })}
+                    fullWidth
+                    SelectProps={{ native: true }}
+                    InputLabelProps={{ shrink: true }}
+                    sx={{ "& .MuiNativeSelect-select": { paddingTop: "16px", paddingBottom: "8px" }, gridColumn: "1 / -1" }}
+                    helperText="El flush también enciende si este interruptor se cierra a GND."
+                  >
+                    {INPUT_PINS.map((pin) => {
+                      const taken = rules.relays.some((other) => other.id !== relay.id && (other.mode === "manual" || other.mode === "timer") && Number(other.input_a) === pin);
+                      return (
+                        <option key={pin} value={pin} disabled={taken}>
+                          GPIO {pin}{taken ? " · ocupado" : ""}
+                        </option>
+                      );
+                    })}
+                  </TextField>
+                  <TextField
                     type="number"
                     label="Cada cuántos minutos"
                     value={(relay.interval_ms || 0) / 60000}
@@ -818,7 +849,7 @@ export function ControllerRulesFields({ rules, onChange, active }: FieldsProps) 
                     onChange={(event) => updateRelay(relay.id, { min_lpm: Number(event.target.value), meter: 1 })}
                     inputProps={{ min: 0, step: 0.1 }}
                     fullWidth
-                    helperText={`Sigue ${rules.flows[1]?.name || "Cruda a tienda"}. 0 enciende al haber flujo.`}
+                    helperText={`Sigue ${rules.flows[1]?.name || "Tienda cruda"} en GPIO 19. 0 enciende al haber flujo.`}
                   />
                   <TextField
                     type="number"
@@ -829,7 +860,7 @@ export function ControllerRulesFields({ rules, onChange, active }: FieldsProps) 
                     fullWidth
                   />
                   <Typography variant="body2" color="text.secondary" sx={{ gridColumn: "1 / -1" }}>
-                    Factor de conversión: {rules.flows[0]?.name || "Agua cruda"} {pulseFactor(rules.flows[0]?.liters_per_pulse).toFixed(5)} L/pulso · {rules.flows[1]?.name || "Cruda a tienda"} {pulseFactor(rules.flows[1]?.liters_per_pulse).toFixed(5)} L/pulso. Se configura en Flujos y medidores.
+                    Factor de {rules.flows[1]?.name || "Tienda cruda"}: {pulseFactor(rules.flows[1]?.liters_per_pulse).toFixed(5)} L/pulso. Se configura en Flujos y medidores.
                   </Typography>
                 </Box>
               )}
@@ -876,8 +907,16 @@ export function ControllerRulesFields({ rules, onChange, active }: FieldsProps) 
                   <Stack direction="row" spacing={1}>
                     <TextField type="number" label="Mínimo (psi)" value={sensor.min_psi} onChange={(event) => updateAlarm(sensor.sensor, { min_psi: Number(event.target.value) })} inputProps={{ min: 0, max: 200, step: 1 }} fullWidth />
                     <TextField type="number" label="Máximo (psi)" value={sensor.max_psi} onChange={(event) => updateAlarm(sensor.sensor, { max_psi: Number(event.target.value) })} inputProps={{ min: 0, max: 200, step: 1 }} fullWidth />
-                    <TextField type="number" label="Margen (psi)" value={sensor.margin_psi} onChange={(event) => updateAlarm(sensor.sensor, { margin_psi: Number(event.target.value) })} inputProps={{ min: 0, max: 50, step: 1 }} fullWidth helperText="Zona amarilla" />
+                    <TextField type="number" label="Margen (psi)" value={sensor.margin_psi} onChange={(event) => updateAlarm(sensor.sensor, { margin_psi: Number(event.target.value) })} inputProps={{ min: 0, max: 50, step: 1 }} fullWidth />
                   </Stack>
+                  <SemaphoreLegend
+                    min={sensor.min_psi}
+                    max={sensor.max_psi}
+                    margin={sensor.margin_psi}
+                    ok={rules.pressure_alarms.color_ok}
+                    warn={rules.pressure_alarms.color_warn}
+                    alarm={rules.pressure_alarms.color_alarm}
+                  />
                   <TextField
                     select
                     label="Aviso"
