@@ -408,6 +408,8 @@ export interface PuntosVenta {
     metric_status?: 'critico' | 'preventivo' | 'normal';
     /** Data origin: mqtt (default), tuya (Tuya products), hybrid */
     source_type?: PuntoVentaSourceType;
+    /** Store layout. todo_en_uno shows five pressures, five flows and three relays. */
+    product_type?: string | null;
     /** From API: count of linked Tuya products (via V1 shadow) */
     products_count?: number;
     /** From API: when metric_status is critico/preventivo, brief detail for tooltip (from punto or region metrics) */

@@ -29,6 +29,7 @@ import {
 } from '@mui/material';
 
 import { fNumber } from 'src/utils/format-number';
+import { isTodoEnUnoType } from 'src/utils/product-types';
 import { getDashboardVersion } from 'src/utils/permissions';
 import { usesMqttSource , usesTuyaSource, resolveHistoricoResourceId } from 'src/utils/punto-venta-source';
 import {
@@ -644,6 +645,12 @@ export default function PuntoVentaDetalleV2() {
   const osmosis = osmosisSystems.filter((s: any) => (s.resourceType || '').toString().toLowerCase() === 'osmosis');
   const tiwaterProduct = osmosisSystems.find((s: any) => (s.resourceType || '').toString().toLowerCase() === 'tiwater') || null;
   const productos = punto?.productos || [];
+  const puntoEsTodoEnUno = isTodoEnUnoType(punto?.product_type);
+  const todoDesdeProducto = productos.find((p: any) => isTodoEnUnoType(p.product_type))
+    || (isTodoEnUnoType(tiwaterProduct?.product_type) ? tiwaterProduct : null);
+  const todoEnUnoProduct = puntoEsTodoEnUno
+    ? { ...(todoDesdeProducto || tiwaterProduct || {}), product_type: 'todo_en_uno', name: (todoDesdeProducto || tiwaterProduct)?.name || punto?.name }
+    : todoDesdeProducto;
   const niveles = productos.filter((p: any) => p.product_type === 'Nivel');
   const metricas = productos.filter((p: any) => p.product_type === 'Metrica');
   const isTuyaOrigin = usesTuyaSource(punto?.source_type);
@@ -1001,16 +1008,21 @@ export default function PuntoVentaDetalleV2() {
               latestSensorTimestamp={latestSensorTimestamp}
               osmosis={osmosis}
               metricas={metricas}
-              tiwaterData={tiwaterData}
-              tiwaterProduct={tiwaterProduct}
+              tiwaterData={todoEnUnoProduct ? null : tiwaterData}
+              tiwaterProduct={todoEnUnoProduct ? null : tiwaterProduct}
               metricsConfig={metricsConfig}
               onLocationUpdated={handleLocationUpdated}
             />
             </PvDetalleErrorBoundary>
           </Grid>
 
-          {/* Middle: Máquinas + Almacenamiento (MQTT / hybrid) */}
-          {isMqttOrigin && (
+          {/* Middle: equipo hidráulico, o máquinas y almacenamiento del TIWater clásico */}
+          {isMqttOrigin && todoEnUnoProduct && (
+            <Grid item xs={12}>
+              <TodoEnUnoReadingsCard product={todoEnUnoProduct} />
+            </Grid>
+          )}
+          {isMqttOrigin && !todoEnUnoProduct && (
             <>
               <Grid item xs={12}>
                 <MaquinasCard 
@@ -2464,6 +2476,79 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
           </Button>
         </DialogActions>
       </Dialog>
+    </Card>
+  );
+}
+
+const TODO_EN_UNO_GROUPS = [
+  {
+    title: 'Presiones',
+    rows: [
+      { label: 'Presión 1 entrada', codes: ['pressure_in', 'presion_in'] },
+      { label: 'Presión 2', codes: ['pressure_2', 'presion_2'] },
+      { label: 'Presión 3', codes: ['pressure_3', 'presion_3'] },
+      { label: 'Presión 4', codes: ['pressure_4', 'presion_4'] },
+      { label: 'Presión 5', codes: ['pressure_5', 'presion_5'] },
+    ],
+  },
+  {
+    title: 'Flujos',
+    rows: [
+      { label: 'Flujo 1 entrada cruda', codes: ['flujo_entrada', 'caudal_entrada'] },
+      { label: 'Flujo 2 tienda cruda', codes: ['caudal_cruda', 'caudal_cruda_lmin'] },
+      { label: 'Flujo 3 producción', codes: ['flujo_produccion', 'flowrate_speed_1'] },
+      { label: 'Flujo 4 rechazo', codes: ['flujo_rechazo', 'flowrate_speed_2'] },
+      { label: 'Flujo 5 tienda purificada', codes: ['flujo_purificada', 'caudal_purificada'] },
+    ],
+  },
+  {
+    title: 'Relevadores',
+    rows: [
+      { label: 'Relevador 1 bomba', codes: ['relay_1', 'bomba'] },
+      { label: 'Relevador 2 cloro', codes: ['relay_2', 'cloro'] },
+      { label: 'Relevador 3 flush', codes: ['relay_3', 'flush'] },
+    ],
+  },
+];
+
+function todoEnUnoReading(product: any, codes: string[]) {
+  const status = Array.isArray(product?.status) ? product.status : [];
+  const found = status.find((sensor: any) => codes.some((code) => safeLower(sensor?.code) === code || safeLower(sensor?.label) === code));
+  if (found?.value == null || found.value === '') return null;
+  return found.value;
+}
+
+function TodoEnUnoReadingsCard({ product }: { product: any }) {
+  const acumulado = todoEnUnoReading(product, ['acumulado_cruda']);
+  return (
+    <Card variant="outlined" sx={{ p: 2 }}>
+      <Typography variant="h6">Todo en uno</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        {safeDisplayText(product?.name, 'Equipo hidráulico')}. Cinco presiones, cinco flujos y tres relevadores.
+      </Typography>
+      <Grid container spacing={2}>
+        {TODO_EN_UNO_GROUPS.map((group) => (
+          <Grid item xs={12} md={4} key={group.title}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>{group.title}</Typography>
+            {group.rows.map((row) => {
+              const value = todoEnUnoReading(product, row.codes);
+              return (
+                <Box key={row.label} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, py: 0.75 }}>
+                  <Typography variant="body2">{row.label}</Typography>
+                  <Typography variant="body2" fontWeight="bold">
+                    {value == null ? 'Sin lectura' : fNumber(value)}
+                  </Typography>
+                </Box>
+              );
+            })}
+          </Grid>
+        ))}
+      </Grid>
+      {acumulado != null && (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+          Acumulado cruda: {fNumber(acumulado)} L
+        </Typography>
+      )}
     </Card>
   );
 }

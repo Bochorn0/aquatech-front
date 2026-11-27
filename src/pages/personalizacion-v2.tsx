@@ -232,7 +232,7 @@ interface SensorConfig {
   };
 }
 
-const defaultPv = { _id: '', name: '' , codigo_tienda: '', client_name:'', cliente: defaultclient, city: defaultCity, city_name: '', productos: [], lat: '' as any, long: '' as any, source_type: 'mqtt' as PuntoVentaSourceType }
+const defaultPv = { _id: '', name: '' , codigo_tienda: '', client_name:'', cliente: defaultclient, city: defaultCity, city_name: '', productos: [], lat: '' as any, long: '' as any, source_type: 'mqtt' as PuntoVentaSourceType, product_type: '' }
 
 // Helper function to make v2.0 API calls
 const apiV2Call = async (endpoint: string, method: string = 'GET', data?: any) => {
@@ -882,6 +882,7 @@ export function CustomizationPageV2() {
         city: pv.city?._id || pv.city || pv.ciudad?.id || '',
         city_name: pv.city?.city || pv.ciudad?.name || '',
         source_type: (pv.source_type || 'mqtt') as PuntoVentaSourceType,
+        product_type: pv.product_type || '',
         products_count: pv.products_count ?? 0,
         productos: Array.isArray(pv.productos)
           ? pv.productos.map((p: any) => (typeof p === 'object' && p != null ? String(p.id ?? p._id ?? '') : String(p)))
@@ -1185,6 +1186,7 @@ export function CustomizationPageV2() {
       ...pv,
       devMode: devModeValue,
       source_type: (pv.source_type || 'mqtt') as PuntoVentaSourceType,
+      product_type: pv.product_type || '',
       productos: productIds,
     });
     setEditPvId(pvId ? String(pvId) : null);
@@ -1488,6 +1490,7 @@ export function CustomizationPageV2() {
         city: pvFormData.city,
         cliente: pvFormData.cliente,
         source_type: sourceType,
+        product_type: pvFormData.product_type || '',
         devMode: devModeEnabled,
         productos: productIds,
       };
@@ -3525,6 +3528,17 @@ export function CustomizationPageV2() {
                     <MenuItem value="tuya">Tuya (productos)</MenuItem>
                     <MenuItem value="hybrid">Híbrido (MQTT + Tuya)</MenuItem>
                     <MenuItem value="external">Externo (medidores / push API)</MenuItem>
+                  </Select>
+                </FormControl>
+                <FormControl fullWidth>
+                  <InputLabel shrink>Tipo de punto</InputLabel>
+                  <Select
+                    name="product_type"
+                    value={pvFormData.product_type || ''}
+                    onChange={handlePvChange}
+                  >
+                    <MenuItem value="">Actual</MenuItem>
+                    <MenuItem value="todo_en_uno">Todo en uno</MenuItem>
                   </Select>
                 </FormControl>
                 {usesMqttSource(pvFormData.source_type) && (
