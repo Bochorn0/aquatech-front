@@ -25,6 +25,8 @@ import {
   FormControl,
   DialogActions,
   DialogContent,
+  ToggleButton,
+  ToggleButtonGroup,
   CircularProgress
 } from '@mui/material';
 
@@ -1010,6 +1012,11 @@ export default function PuntoVentaDetalleV2() {
               metricas={metricas}
               tiwaterData={todoEnUnoProduct ? null : tiwaterData}
               tiwaterProduct={todoEnUnoProduct ? null : tiwaterProduct}
+              hydraulicSummary={todoEnUnoProduct ? {
+                presion: hydraulicNumber(todoEnUnoReading(todoEnUnoProduct, ['pressure_in', 'presion_in'])),
+                caudal: hydraulicNumber(todoEnUnoReading(todoEnUnoProduct, ['caudal_cruda', 'caudal_cruda_lmin'])),
+                acumulado: hydraulicNumber(todoEnUnoReading(todoEnUnoProduct, ['acumulado_cruda'])),
+              } : null}
               metricsConfig={metricsConfig}
               onLocationUpdated={handleLocationUpdated}
             />
@@ -1019,7 +1026,7 @@ export default function PuntoVentaDetalleV2() {
           {/* Middle: equipo hidráulico, o máquinas y almacenamiento del TIWater clásico */}
           {isMqttOrigin && todoEnUnoProduct && (
             <Grid item xs={12}>
-              <TodoEnUnoReadingsCard product={todoEnUnoProduct} />
+              <TodoEnUnoReadingsCard product={todoEnUnoProduct} puntoId={id} />
             </Grid>
           )}
           {isMqttOrigin && !todoEnUnoProduct && (
@@ -1953,7 +1960,36 @@ function getPuntoVentaMapCoords(punto: any): { lat: number; lng: number } {
   return { lat: 29.0729, lng: -110.9559 };
 }
 
-function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, metricas, tiwaterData, tiwaterProduct, metricsConfig, onLocationUpdated }: any) {
+function HydraulicHeadline({ summary }: { summary: { presion: number | null; caudal: number | null; acumulado: number | null } }) {
+  const items = [
+    { label: 'Presión entrada', value: summary.presion, unit: 'PSI' },
+    { label: 'Caudal cruda', value: summary.caudal, unit: 'L/MIN' },
+    { label: 'Acumulado', value: summary.acumulado, unit: 'L' },
+  ];
+  return (
+    <>
+      <Typography variant="subtitle1" fontWeight="600" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+        Equipo hidráulico
+      </Typography>
+      <Grid container spacing={2}>
+        {items.map((item) => (
+          <Grid item xs={4} key={item.label}>
+            <Box sx={{ p: 2, borderRadius: 1, bgcolor: 'grey.100', textAlign: 'center' }}>
+              <Typography variant="caption" color="text.secondary" display="block">{item.label}</Typography>
+              <Typography variant="h5" fontWeight="600">{item.value == null ? '--' : fNumber(item.value)}</Typography>
+              <Typography variant="caption" color="text.secondary">{item.unit}</Typography>
+            </Box>
+            <Alert severity="success" icon={false} sx={{ mt: 1, py: 0.5, fontSize: '0.875rem', bgcolor: 'success.lighter', borderLeft: '4px solid', borderColor: 'success.main' }}>
+              <strong>valores normales</strong> (sin metricas definidas)
+            </Alert>
+          </Grid>
+        ))}
+      </Grid>
+    </>
+  );
+}
+
+function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, metricas, tiwaterData, tiwaterProduct, hydraulicSummary, metricsConfig, onLocationUpdated }: any) {
   // State to force re-render every minute
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [editLocationOpen, setEditLocationOpen] = useState(false);
@@ -2297,6 +2333,7 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
       <Grid container spacing={3}>
         {/* Left: Osmosis Metrics with Alerts - EXPANDED */}
         <Grid item xs={12} md={9}>
+          {hydraulicSummary ? <HydraulicHeadline summary={hydraulicSummary} /> : <>
           <Typography variant="subtitle1" fontWeight="600" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
             💧 Osmosis Inversa
           </Typography>
@@ -2397,6 +2434,7 @@ function UnifiedOverviewCard({ punto, puntoId, latestSensorTimestamp, osmosis, m
               )}
             </Grid>
           </Grid>
+          </>}
         </Grid>
         
         {/* Right: Map - FULL HEIGHT */}
@@ -2518,37 +2556,117 @@ function todoEnUnoReading(product: any, codes: string[]) {
   return found.value;
 }
 
-function TodoEnUnoReadingsCard({ product }: { product: any }) {
-  const acumulado = todoEnUnoReading(product, ['acumulado_cruda']);
+function hydraulicNumber(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+const HYDRAULIC_CHARTS = [
+  { type: 'presion_in', title: 'Histórico de presión de entrada', unit: 'PSI', color: 'primary' as const },
+  { type: 'caudal_cruda', title: 'Histórico de caudal cruda', unit: 'L/min', color: 'info' as const },
+  { type: 'acumulado_cruda', title: 'Histórico de acumulado cruda', unit: 'L', color: 'success' as const },
+];
+
+function TodoEnUnoReadingsCard({ product, puntoId }: { product: any; puntoId?: string }) {
+  const [range, setRange] = useState<'today' | 'week'>('today');
+  const [loading, setLoading] = useState(false);
+  const [sensors, setSensors] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!puntoId) return undefined;
+    let cancelled = false;
+    setLoading(true);
+    fetch(`${CONFIG.API_BASE_URL_V2}/puntoVentas/${encodeURIComponent(String(puntoId))}/sensors/readings?timeRange=${range}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+    })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((payload) => {
+        if (!cancelled) setSensors(Array.isArray(payload) ? payload : []);
+      })
+      .catch(() => {
+        if (!cancelled) setSensors([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [puntoId, range]);
+
+  const chartOf = (sensorType: string) => {
+    const sensor = sensors.find((item) => safeLower(item.sensorType) === sensorType);
+    const points = (Array.isArray(sensor?.readings) ? sensor.readings : [])
+      .map((reading: any) => ({ at: new Date(reading.timestamp || reading.createdAt), value: hydraulicNumber(reading.value) }))
+      .filter((point: { at: Date; value: number | null }) => !Number.isNaN(point.at.getTime()) && point.value != null)
+      .sort((a: { at: Date }, b: { at: Date }) => a.at.getTime() - b.at.getTime());
+    const lastPoint = points.length ? points[points.length - 1].value : null;
+    return {
+      current: hydraulicNumber(sensor?.latestReading?.value) ?? lastPoint,
+      chart: {
+        categories: points.map((point: { at: Date }) => point.at.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Hermosillo' })),
+        series: [{ name: sensor?.label || sensorType, data: points.map((point: { value: number }) => point.value) }],
+      },
+    };
+  };
+
   return (
     <Card variant="outlined" sx={{ p: 2 }}>
-      <Typography variant="h6">Todo en uno</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        {safeDisplayText(product?.name, 'Equipo hidráulico')}. Cinco presiones, cinco flujos y tres relevadores.
-      </Typography>
-      <Grid container spacing={2}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+        <Box>
+          <Typography variant="h6">Histórico</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {safeDisplayText(product?.name, 'Equipo hidráulico')}. Misma lectura por hora del punto de venta.
+          </Typography>
+        </Box>
+        <ToggleButtonGroup exclusive size="small" value={range} onChange={(_event, value) => value && setRange(value)}>
+          <ToggleButton value="today">Hoy</ToggleButton>
+          <ToggleButton value="week">7 días</ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress size={28} /></Box>
+      ) : (
+        <Grid container spacing={2}>
+          {HYDRAULIC_CHARTS.map((item) => {
+            const series = chartOf(item.type);
+            return (
+              <Grid item xs={12} md={4} key={item.type}>
+                <Typography variant="subtitle1" fontWeight="600" gutterBottom>{item.title.replace('Histórico de ', '')}</Typography>
+                <Alert severity="success" icon={false} sx={{ mb: 2, py: 0.5, fontSize: '0.875rem', bgcolor: 'success.lighter', borderLeft: '4px solid', borderColor: 'success.main' }}>
+                  valores normales (sin metricas definidas)
+                </Alert>
+                <Box sx={{ p: 2.5, borderRadius: 2, bgcolor: `${item.color}.lighter`, border: '1px solid', borderColor: `${item.color}.main`, height: '100%' }}>
+                  <Typography variant="h4" fontWeight="700">
+                    {series.current == null ? '--' : fNumber(series.current)}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">{item.unit}</Typography>
+                  <Box sx={{ mt: 2, height: 200 }}>
+                    <NivelMiniChart chart={series.chart} title={item.title} unit={item.unit} autoScale />
+                  </Box>
+                </Box>
+              </Grid>
+            );
+          })}
+        </Grid>
+      )}
+      <Grid container spacing={2} sx={{ mt: 1 }}>
         {TODO_EN_UNO_GROUPS.map((group) => (
           <Grid item xs={12} md={4} key={group.title}>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>{group.title}</Typography>
             {group.rows.map((row) => {
-              const value = todoEnUnoReading(product, row.codes);
+              const value = hydraulicNumber(todoEnUnoReading(product, row.codes));
               return (
-                <Box key={row.label} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, py: 0.75 }}>
+                <Box key={row.label} sx={{ p: 1.25, mb: 1, borderRadius: 1, bgcolor: 'grey.100', display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                   <Typography variant="body2">{row.label}</Typography>
-                  <Typography variant="body2" fontWeight="bold">
-                    {value == null ? 'Sin lectura' : fNumber(value)}
-                  </Typography>
+                  <Typography variant="body2" fontWeight="700">{value == null ? 'Sin lectura' : fNumber(value)}</Typography>
                 </Box>
               );
             })}
           </Grid>
         ))}
       </Grid>
-      {acumulado != null && (
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          Acumulado cruda: {fNumber(acumulado)} L
-        </Typography>
-      )}
     </Card>
   );
 }
@@ -2918,7 +3036,7 @@ function getColorForValueFromRules(theme: any, value: number, metricRules: Array
   return theme.palette.success.main;
 }
 
-function NivelMiniChart({ chart, title, metricRules }: { chart: any; title: string; metricRules?: Array<{ min?: number | null; max?: number | null; color?: string; label?: string; severity?: string }> }) {
+function NivelMiniChart({ chart, title, metricRules, unit = '%', autoScale = false }: { chart: any; title: string; metricRules?: Array<{ min?: number | null; max?: number | null; color?: string; label?: string; severity?: string }>; unit?: string; autoScale?: boolean }) {
   const theme = useTheme();
 
   const hasData = chart && chart.categories && chart.categories.length > 0 && chart.series && chart.series.length > 0;
@@ -2976,10 +3094,9 @@ function NivelMiniChart({ chart, title, metricRules }: { chart: any; title: stri
         style: {
           fontSize: '11px',
         },
-        formatter: (value: number) => `${value.toFixed(0)}%`,
+        formatter: (value: number) => autoScale ? `${fNumber(value)}` : `${value.toFixed(0)}%`,
       },
-      min: 0,
-      max: 100,
+      ...(autoScale ? {} : { min: 0, max: 100 }),
     },
     tooltip: {
       enabled: true,
@@ -2987,13 +3104,14 @@ function NivelMiniChart({ chart, title, metricRules }: { chart: any; title: stri
       intersect: false,
       y: {
         formatter: (value: number) => {
-          if (!hasRules) return `${value.toFixed(1)}%`;
+          const formatted = autoScale ? `${fNumber(value)} ${unit}` : `${value.toFixed(1)}%`;
+          if (!hasRules) return formatted;
           const rule = metricRules!.find((r) => {
             const min = r.min != null ? Number(r.min) : null;
             const max = r.max != null ? Number(r.max) : null;
             return (min === null || value >= min) && (max === null || value <= max);
           });
-          return safeDisplayText(rule?.label) ? `${value.toFixed(1)}% — ${safeDisplayText(rule?.label)}` : `${value.toFixed(1)}%`;
+          return safeDisplayText(rule?.label) ? `${formatted} — ${safeDisplayText(rule?.label)}` : formatted;
         },
       },
     },
